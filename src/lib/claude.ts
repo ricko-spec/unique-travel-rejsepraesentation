@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 export const SYSTEM_PROMPT = `Du er en præcis dataekstraktor for Unique Travel. Du modtager en TravelWire rejseplan-PDF og skal returnere struktureret JSON.
 
