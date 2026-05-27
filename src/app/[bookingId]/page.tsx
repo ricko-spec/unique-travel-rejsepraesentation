@@ -66,10 +66,10 @@ export default async function TripPage({ params }: { params: { bookingId: string
 
   const accessCookie = cookies().get(`trip_access_${params.bookingId}`);
   if (accessCookie?.value !== row.booking_no) {
-    return <AccessGate slug={params.bookingId}
-
-  const destination = await getDestination(row.destination); destination={row.destination} />;
+    return <AccessGate slug={params.bookingId} destination={row.destination} />;
   }
+
+  const destination = await getDestination(row.destination);
 
   const parsed = tripSchema.safeParse(row.data);
   if (!parsed.success) {
