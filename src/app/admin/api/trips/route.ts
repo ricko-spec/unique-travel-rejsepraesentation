@@ -136,7 +136,6 @@ export async function POST(req: Request) {
       .upsert(
         {
           booking_no: trip.bookingNo,
-          slug,
           destination: trip.destination,
           customer_name: customerName ?? null,
           data: trip,
