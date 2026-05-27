@@ -16,6 +16,7 @@ const createSchema = z.object({
   heroPhoto: z.string().url().optional().nullable(),
   customerName: z.string().optional().nullable(),
   slugOverride: z.string().optional().nullable(),
+  rawPdfText: z.string().optional().nullable(),
 });
 
 function slugify(input: string): string {
@@ -142,6 +143,7 @@ export async function POST(req: Request) {
           hero_photo: heroPhoto ?? null,
           // Re-uploading a PDF is an implicit "make this live" signal; lift any
           // prior soft-delete so the customer link works again.
+          raw_pdf_text: body.rawPdfText ?? null,
           active: true,
         },
         { onConflict: "booking_no" },
