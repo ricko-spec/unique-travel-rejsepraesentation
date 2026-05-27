@@ -24,27 +24,27 @@ export function AccessGate({ slug, destination }: Props) {
   }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-stone-50 px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-stone-200 p-8">
-        <div className="text-center mb-6">
-          <p className="text-xs tracking-widest uppercase text-stone-500 mb-3">
+    <main className="min-h-screen flex items-center justify-center bg-sand-page px-4 py-12">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-md border border-sand p-8 md:p-10">
+        <div className="text-center mb-8">
+          <p className="text-xs tracking-[0.2em] uppercase text-gold mb-3 font-medium">
             Unique Travel
           </p>
-          <h1 className="text-2xl font-serif text-stone-900 mb-2">
+          <h1 className="font-serif text-3xl md:text-4xl text-rainforest mb-3 leading-tight">
             {destination
               ? `Jeres rejse til ${destination}`
               : "Jeres rejse venter"}
           </h1>
-          <p className="text-sm text-stone-600">
+          <p className="text-sm text-grey-text">
             Indtast jeres adgangskode for at se rejseplanen.
           </p>
         </div>
 
-        <form action={handleSubmit} className="space-y-4">
+        <form action={handleSubmit} className="space-y-5">
           <div>
             <label
               htmlFor="access-code"
-              className="block text-xs uppercase tracking-wider text-stone-500 mb-2"
+              className="block text-xs uppercase tracking-wider text-rainforest/70 mb-2 font-medium"
             >
               Adgangskode
             </label>
@@ -56,17 +56,17 @@ export function AccessGate({ slug, destination }: Props) {
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="Booking-nummer"
-              className="w-full px-4 py-3 border border-stone-300 rounded-lg text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent"
+              className="w-full px-4 py-3 border border-sand rounded-lg text-rainforest placeholder:text-grey-text/50 focus:outline-none focus:ring-2 focus:ring-rainforest/40 focus:border-rainforest transition-colors"
               required
               disabled={pending}
             />
-            <p className="mt-2 text-xs text-stone-500">
+            <p className="mt-2 text-xs text-grey-text">
               Find koden i jeres email fra Unique Travel.
             </p>
           </div>
 
           {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+            <div className="text-sm text-rust bg-rust/10 border border-rust/30 px-3 py-2 rounded-lg">
               {error}
             </div>
           )}
@@ -74,13 +74,13 @@ export function AccessGate({ slug, destination }: Props) {
           <button
             type="submit"
             disabled={pending || !code.trim()}
-            className="w-full bg-stone-900 text-white font-medium py-3 rounded-lg hover:bg-stone-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full bg-rainforest text-gold font-medium tracking-wider uppercase text-sm py-3 rounded-full hover:bg-rainforest-deep disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {pending ? "Tjekker..." : "Se rejsen"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-stone-500">
+        <p className="mt-8 text-center text-xs text-grey-text">
           Spørgsmål? Kontakt jeres rejserådgiver hos Unique Travel.
         </p>
       </div>
