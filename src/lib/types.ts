@@ -269,20 +269,23 @@ function normalizeItineraryItem(item: ItineraryItem, index: number): ItineraryIt
         const flynummer = pickStr(flight.flynummer);
         if (flynummer) rows.push({ label: "Flynummer", value: flynummer });
         if (operator) rows.push({ label: "Selskab", value: operator });
-        if (fly) {
-          const dato = pickStr(fly.dato);
-          const afgang = pickStr(fly.afgang);
-          const ankomst = pickStr(fly.ankomst);
-          const fra = pickStr(fly.fra);
-          const til = pickStr(fly.til);
-          if (fra) {
-            const val = [fra, dato, afgang].filter(Boolean).join(" · ");
-            if (val) rows.push({ label: "Afgang", value: val });
-          }
-          if (til) {
-            const val = [til, dato, ankomst].filter(Boolean).join(" · ");
-            if (val) rows.push({ label: "Ankomst", value: val });
-          }
+
+        // afgang/ankomst kan ligge top-level på flight (Maldiverne-shape: pre-formatteret streng)
+        // eller inde i fly[0] (Hanne Krogh-shape: kun tid-suffix der skal join'es med fra/dato).
+        const topAfgang = pickStr(flight.afgang);
+        const topAnkomst = pickStr(flight.ankomst);
+        if (fly || topAfgang || topAnkomst) {
+          const dato = pickStr(fly?.dato);
+          const fra = pickStr(fly?.fra);
+          const til = pickStr(fly?.til);
+          const flyAfgang = pickStr(fly?.afgang);
+          const flyAnkomst = pickStr(fly?.ankomst);
+          const afgangValue =
+            topAfgang || (fra ? [fra, dato, flyAfgang].filter(Boolean).join(" · ") : "");
+          const ankomstValue =
+            topAnkomst || (til ? [til, dato, flyAnkomst].filter(Boolean).join(" · ") : "");
+          if (afgangValue) rows.push({ label: "Afgang", value: afgangValue });
+          if (ankomstValue) rows.push({ label: "Ankomst", value: ankomstValue });
         }
         const varighed = pickStr(flight.varighed);
         if (varighed) rows.push({ label: "Varighed", value: varighed });
