@@ -179,6 +179,20 @@ export type TripRow = {
 };
 
 // Post-validate normalization: ensure every itinerary item has a stable, unique id.
+function pickStr(...vals: unknown[]): string {
+  for (const v of vals) {
+    if (typeof v === "string" && v.trim().length > 0) return v;
+  }
+  return "";
+}
+
+function pickNum(...vals: unknown[]): number {
+  for (const v of vals) {
+    if (typeof v === "number" && v > 0) return v;
+  }
+  return 0;
+}
+
 export function normalizeTrip(trip: Trip): Trip {
   return {
     ...trip,
@@ -186,5 +200,18 @@ export function normalizeTrip(trip: Trip): Trip {
       ...item,
       id: item.id && item.id > 0 ? item.id : i + 1,
     })),
+    hotels: (trip.hotels ?? []).map((h) => {
+      const anyH = h as Record<string, unknown>;
+      return {
+        ...h,
+        name: pickStr(h.name, anyH.navn),
+        location: pickStr(h.location, anyH.lokation),
+        nights: pickNum(h.nights, anyH["n\u00e6tter"]),
+        room: pickStr(h.room, anyH["v\u00e6relse"]),
+        meals: pickStr(h.meals, anyH["m\u00e5ltider"]),
+        checkIn: pickStr(h.checkIn, anyH.checkInd),
+        checkOut: pickStr(h.checkOut, anyH.checkUd),
+      };
+    }),
   };
 }
