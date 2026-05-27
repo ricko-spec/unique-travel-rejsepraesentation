@@ -24,7 +24,15 @@ export function TripDetails({ trip }: { trip: Trip }) {
               if (names.length <= 1) return t;
               return (
                 <>
-                  {names.map((n, i) => <div key={i}>{n}</div>)}
+                  <div
+                    className={
+                      names.length > 6
+                        ? "grid grid-cols-1 sm:grid-cols-2 gap-x-4 text-base"
+                        : ""
+                    }
+                  >
+                    {names.map((n, i) => <div key={i}>{n}</div>)}
+                  </div>
                   {summary && <div className="mt-2 text-sm opacity-70">({summary})</div>}
                 </>
               );
