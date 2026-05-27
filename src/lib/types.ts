@@ -137,6 +137,23 @@ export const hotelSchema = z
     checkOut: looseStr.optional().default(""),
     roomAllocations: z.array(looseStr).optional().default([]),
     alternative: alternativeHotelSchema.nullable().optional(),
+    isPackage: z.boolean().optional().default(false),
+    subHotels: z
+      .array(
+        z
+          .object({
+            name: looseStr,
+            location: looseStr.optional().default(""),
+            room: looseStr.optional().default(""),
+            nights: looseNum.optional().default(0),
+          })
+          .passthrough(),
+      )
+      .optional()
+      .default([]),
+    included: z.array(looseStr).optional().default([]),
+    notIncluded: z.array(looseStr).optional().default([]),
+    notes: z.array(looseStr).optional().default([]),
   })
   .passthrough();
 
