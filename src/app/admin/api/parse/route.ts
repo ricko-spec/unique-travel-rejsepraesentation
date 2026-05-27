@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/admin-auth";
-import { parsePdfWithClaude } from "@/lib/claude";
+import { parsePdfWithClaude, extractPdfRawText } from "@/lib/claude";
 import { tripSchema, normalizeTrip } from "@/lib/types";
 
 export const runtime = "nodejs";
