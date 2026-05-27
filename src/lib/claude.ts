@@ -105,3 +105,41 @@ export async function parsePdfWithClaude(pdfBase64: string): Promise<unknown> {
     throw new Error("Claude returnerede ikke gyldig JSON. Forsøg igen.");
   }
 }
+
+
+export async function extractPdfRawText(pdfBase64: string): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY ikke konfigureret");
+
+  const client = new Anthropic({ apiKey });
+
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    system:
+      "Du modtager en PDF og returnerer KUN den rå tekst, eksakt som den fremgår. Bevar linjeskift mellem afsnit. Tilføj IKKE kommentarer, overskrifter eller forklaringer.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: pdfBase64,
+            },
+          },
+          {
+            type: "text",
+            text: "Returnér PDF'ens fulde rå tekst.",
+          },
+        ],
+      },
+    ],
+  });
+
+  const textBlock = message.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") return "";
+  return textBlock.text.trim();
+}
