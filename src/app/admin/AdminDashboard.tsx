@@ -144,7 +144,11 @@ export function AdminDashboard() {
 
   function copyLink(slug: string) {
     const url = `${window.location.origin}/${slug}`;
-    navigator.clipboard.writeText(url).then(() => showToast("Link kopieret"));
+    const matchedTrip = trips.find((t) => t.slug === slug);
+    const text = matchedTrip
+      ? `Link: ${url}\nAdgangskode: ${matchedTrip.booking_no}`
+      : url;
+    navigator.clipboard.writeText(text).then(() => showToast("Link og kode kopieret"));
   }
 
   function resetUpload() {
