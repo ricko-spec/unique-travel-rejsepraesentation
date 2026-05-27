@@ -1,5 +1,7 @@
 "use client";
 
+import { DestinationManager } from "./DestinationManager";
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Trip } from "@/lib/types";
@@ -424,6 +426,8 @@ export function AdminDashboard() {
       </div>
 
       {toast && <div className="admin-toast">{toast}</div>}
+
+    <DestinationManager />
     </div>
   );
 }
