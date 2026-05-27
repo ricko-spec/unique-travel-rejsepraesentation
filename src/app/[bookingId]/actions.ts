@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createServiceClient } from "@/lib/supabase/server";
+import { getSupabaseService } from "@/lib/supabase/server";
 
 export type UnlockResult = { error: string } | void;
 
@@ -15,7 +15,7 @@ export async function unlockTrip(
     return { error: "Indtast venligst en kode." };
   }
 
-  const supabase = createServiceClient();
+  const supabase = getSupabaseService();
   const { data, error } = await supabase
     .from("trips")
     .select("booking_no")
