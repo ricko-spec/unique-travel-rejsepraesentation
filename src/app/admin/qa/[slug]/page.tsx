@@ -78,7 +78,7 @@ export default async function QaPage({
               Rå PDF-tekst
             </h2>
             <p className="text-xs text-grey-text mb-3">
-              Sådan ser PDF'en ud før Claude tolker den. Brug denne kolonne til at se hvad der står på papiret.
+              Sådan ser PDF’en ud før Claude tolker den. Brug denne kolonne til at se hvad der står på papiret.
             </p>
             <pre className="text-xs whitespace-pre-wrap font-mono bg-sand/40 border border-sand rounded-lg p-4 max-h-[70vh] overflow-auto text-stone-800">
               {rawText}
