@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { DestinationManager } from "./DestinationManager";
 
 import { useEffect, useRef, useState } from "react";
@@ -33,6 +35,7 @@ export function AdminDashboard() {
   const [heroPhoto, setHeroPhoto] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [slugOverride, setSlugOverride] = useState("");
+  const [rawPdfText, setRawPdfText] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
@@ -82,6 +85,7 @@ export function AdminDashboard() {
     }
     const j = await res.json();
     setTrip(j.trip as Trip);
+    setRawPdfText((j.rawPdfText as string | undefined) ?? "");
     setCustomerName((j.trip as Trip).travellers ?? "");
     setSlugOverride((j.trip as Trip).bookingNo ?? "");
   }
@@ -108,6 +112,7 @@ export function AdminDashboard() {
         heroPhoto: heroPhoto.trim() || null,
         customerName: customerName.trim() || null,
         slugOverride: slugOverride.trim() || null,
+        rawPdfText,
       }),
     });
     setCreating(false);
@@ -417,6 +422,12 @@ export function AdminDashboard() {
                           >
                             Åbn
                           </a>
+                        <Link
+                          href={`/admin/qa/${t.slug}`}
+                          className="admin-btn admin-btn-secondary"
+                        >
+                          Sammenlign
+                        </Link>
                           <button
                             className="admin-btn admin-btn-danger"
                             onClick={() => toggleActive(t.id, t.active)}
