@@ -116,6 +116,16 @@ export const itineraryItemSchema = z
   })
   .passthrough();
 
+export const alternativeHotelSchema = z
+  .object({
+    name: looseStr,
+    description: looseStr.optional().default(""),
+    nights: looseNum.optional().default(0),
+    meals: looseStr.optional().default(""),
+    savings: looseStr.optional().default(""),
+  })
+  .passthrough();
+
 export const hotelSchema = z
   .object({
     name: looseStr,
@@ -125,6 +135,8 @@ export const hotelSchema = z
     meals: looseStr.optional().default(""),
     checkIn: looseStr.optional().default(""),
     checkOut: looseStr.optional().default(""),
+    roomAllocations: z.array(looseStr).optional().default([]),
+    alternative: alternativeHotelSchema.nullable().optional(),
   })
   .passthrough();
 
