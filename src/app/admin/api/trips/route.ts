@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { trip, heroPhoto, customerName, slugOverride } = parsed.data;
+  const { trip, heroPhoto, customerName, slugOverride, rawPdfText } = parsed.data;
   const slug = slugOverride?.trim() || slugify(trip.bookingNo) || slugify(trip.destination);
   if (!slug) {
     return NextResponse.json({ error: "Kunne ikke generere et gyldigt slug" }, { status: 400 });
@@ -143,7 +143,7 @@ export async function POST(req: Request) {
           hero_photo: heroPhoto ?? null,
           // Re-uploading a PDF is an implicit "make this live" signal; lift any
           // prior soft-delete so the customer link works again.
-          raw_pdf_text: body.rawPdfText ?? null,
+          raw_pdf_text: rawPdfText ?? null,
           active: true,
         },
         { onConflict: "booking_no" },
