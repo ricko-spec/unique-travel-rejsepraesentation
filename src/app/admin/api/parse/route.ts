@@ -26,7 +26,10 @@ export async function POST(req: Request) {
 
   let raw: unknown;
   try {
-    raw = await parsePdfWithClaude(base64);
+    [raw, rawPdfText] = await Promise.all([
+      parsePdfWithClaude(base64),
+      extractPdfRawText(base64).catch(() => ""),
+    ]);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Ukendt fejl ved parsing";
     return NextResponse.json({ error: msg }, { status: 500 });
