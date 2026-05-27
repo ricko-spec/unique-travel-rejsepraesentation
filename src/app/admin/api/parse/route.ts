@@ -25,6 +25,7 @@ export async function POST(req: Request) {
   const base64 = Buffer.from(arrayBuffer).toString("base64");
 
   let raw: unknown;
+  let rawPdfText = "";
   try {
     [raw, rawPdfText] = await Promise.all([
       parsePdfWithClaude(base64),
@@ -55,5 +56,5 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ trip: normalizeTrip(parsed.data) });
+  return NextResponse.json({ trip: normalizeTrip(parsed.data), rawPdfText });
 }
