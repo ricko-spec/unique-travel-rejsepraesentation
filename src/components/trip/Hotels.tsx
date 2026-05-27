@@ -4,7 +4,7 @@ import { SectionHeader } from "./SectionHeader";
 export function Hotels({ hotels }: { hotels: Hotel[] }) {
   return (
     <section className="hotels">
-      <SectionHeader>Jeres hoteller</SectionHeader>
+      <SectionHeader label="Jeres hoteller" />
       <div className="hotels-grid">
         {hotels.map((h, i) => (
           <div className="hotel" key={i}>
