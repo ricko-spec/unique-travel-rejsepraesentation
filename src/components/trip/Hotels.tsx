@@ -5,7 +5,6 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
   return (
     <section className="hotels">
       <SectionHeader label="Jeres hoteller" />
-      <div className="hotels-grid">
         {hotels.map((h, i) => (
           <div className="hotel" key={i}>
             <div className="hotel-head">
@@ -84,7 +83,6 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
             )}
           </div>
         ))}
-      </div>
     </section>
   );
 }
