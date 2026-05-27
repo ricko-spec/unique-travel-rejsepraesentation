@@ -154,19 +154,10 @@ export function AdminDashboard() {
     const destination = matchedTrip.destination;
     const code = matchedTrip.booking_no;
     const emailText = [
-      "Hej",
-      "",
-      `Jeres rejse til ${destination} er nu klar online.`,
-      "",
       "Klik på linket nedenfor og indtast adgangskoden — så åbnes en oversigt over hele rejsen med dag-for-dag rejseplan, hoteller og fly.",
       "",
       url,
       `Adgangskode: ${code}`,
-      "",
-      "Vi glæder os til at høre, hvad I synes — og står klar til at justere noget, hvis I har spørgsmål eller ønsker undervejs.",
-      "",
-      "Med venlig hilsen",
-      "Unique Travel",
     ].join("\n");
     navigator.clipboard.writeText(emailText).then(() => showToast("Email-tekst kopieret"));
   }
