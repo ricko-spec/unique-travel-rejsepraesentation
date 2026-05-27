@@ -4,7 +4,7 @@ import { AccessGate } from "./AccessGate";
 import { DestinationGallery } from "@/components/trip/DestinationGallery";
 import type { Metadata } from "next";
 import { getSupabaseService } from "@/lib/supabase/server";
-import { tripSchema, type TripRow } from "@/lib/types";
+import { tripSchema, normalizeTrip, type TripRow } from "@/lib/types";
 import { Hero } from "@/components/trip/Hero";
 import { TripDetails } from "@/components/trip/TripDetails";
 import { Timeline } from "@/components/trip/Timeline";
@@ -90,7 +90,7 @@ export default async function TripPage({ params }: { params: { bookingId: string
     );
   }
 
-  const trip = parsed.data;
+  const trip = normalizeTrip(parsed.data);
 
   return (
     <div className="page">
