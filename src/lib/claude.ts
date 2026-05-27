@@ -27,30 +27,25 @@ Eksempel struktur:
 - disclaimer: kort dansk standardforbehold fra PDF'ens forbeholds-side.
 - documentType: 'rejseforslag' eller 'faktura' (kig efter ordet 'Faktura:' øverst i PDF).
 
-For itinerary items gælder:
-- type: 'flight' | 'transfer' | 'ferry' | 'hotel' | 'activity'
-- timeLabel: fx 'FLY · DAG 1' eller 'HOTEL · 5 NÆTTER · DAG 5–9'
+For itinerary items gælder (BRUG DISSE EKSAKTE FELT-NAVNE — ingen andre):
+- type: 'flight' | 'transfer' | 'hotel' | 'activity' (kun disse fire)
+- typeLabel: kort label-tekst, fx 'FLY · DAG 1' eller 'HOTEL · 5 NÆTTER · DAG 5–9' eller 'SAFARI · 4 DAGE / 3 NÆTTER · DAG 3–6'
 - title: kort titel, fx 'Copenhagen → Koh Samui' eller 'Mará Hotel, Koh Lanta'
-- summary: én linje med relevant indhold (rute, fly nr, varighed, måltider)
-- times: array af korte informationer (fx ['Via Singapore', '##t ##m', 'Emirates Flight'])
-- info: lang tekst hvis der er ekstra praktiske oplysninger fra PDF'en (fx ankomstinstruktion, hotel nævner gebyr, eksisterende notater), eventuelt som { title, body }. Ellers null.
+- details: én linje med kort, læsbar oversigt (fx 'EK152 · Afgang lør. 6. feb. kl. 14:45 · Ankomst søn. 7. feb. kl. 00:10 · Rejsetid: 6t 25m')
+- chips: array af 2-5 korte nøgleord (fx ['Emirates Air', 'EK152', '6t 25m', 'Via Dubai'] eller ['Halvpension', '7 nætter', 'Sea View Villa'])
+- obs: { title, text } hvis PDF'en har en relevant note (OBS!, ankomstinstruktion, måltids-info, bagage-begrænsninger, tidevands-info). null ellers.
 - isOptional: true hvis aktiviteten har 'Tilkøb:' prefix (valgfri ekstra). False ellers.
-- flight + travel: laver ÉN af nedenstående — baseret hvad PDF noterer:
+- expandKind + expand: definerer det udvidelige indhold under itemet. Vælg én kombination, eller udelad begge (sæt til null) hvis intet at udvide (typisk simple transfers).
 
-  a) 'flight' → brug HVIS aktiviteten er ÉN specifikke fly/transfer (privat eller del-til-del transfer). Fx 'Operating Carrier — Bangkok' der bører over # park. Format: { fly: [{fra, til, dato?}], operator: [...] }. Skal kunne match med fly-numre i PDF'en endda hvis opérated under et code-share (fx '(PG) = Denne flyvning opereres af Bangkok Airways', '(TR): Denne flyning opereres af Scoot', '*Betjenes af SAS').
+  a) expandKind: "flight" → for fly-elementer. expand: { details: [{label, value}] } med rækker som:
+     ['Flynummer','EK152'], ['Selskab','Emirates Air'], ['Afgang','Copenhagen (CPH) · lørdag 6. februar 2027 kl. 14:45'], ['Ankomst','Dubai (DXB) · søndag 7. februar 2027 kl. 00:10'], ['Varighed','6 timer, 25 min'], evt. ['Mellemlanding','Dubai (DXB), 2 timer 50 min stop'], evt. ['Bagage','20 kg pr. person (standard)'], evt. ['Note','(PG) Denne flyvning opereres af Bangkok Airways' / '*Betjenes af SAS' / '(TR) Denne flyvning opereres af Scoot'].
 
-  b) 'turprogram' → brug HVIS aktiv pår udsgørendes FLERE forskellige aktiviteter eller den nævne udflugt (Sri Lanka rundrejse, Safari, Orangutang Search etc.) der erstatter ophold på et hotel. Format:
-    VIGTIGT: hvis aktiviteten har 'X dage/Y nætter (KODE)' og inkluderer sub-hoteller, læg den i hotels (med isPackage=true), IKKE 'turprogram' for én aktivitet.
+  b) expandKind: "program" → for udflugter/safari/rundrejser som ÉN aktivitet med flere dages program. expand: { days: [{label, text, meal?}], included: [string] }.
+     VIGTIGT: hvis aktiviteten er en pakke-rejse med sub-hoteller (Sri Lanka rundrejse, Halong Cruise, Sumatra-tur etc. med 'X dage/Y nætter (KODE)' og navngivne overnatningssteder), placér den i hotels[] med isPackage=true i stedet for itinerary.
 
-  c) 'aktivitet' → brug ALTID for type=activity udflugter. Format: { stations: [{titel, varighed}, ...] }.
-    Parsér aktivitet med kode som det står i PDF'en spec som (uden nogen variation per):
-      - 'Flynummer' (fx 'SQ###')
-      - 'Selskab' (fx 'Singapore Airlines')
-      - 'Afgang' (fx 'København · 6. februar 2027 kl. 14:45')
-      - 'Ankomst' (fx 'Singapore · 7. februar 2027 kl. 06:25')
-      - 'Varighed' (fx '12 timer, 30 min')
-      - Eventuelt 'Mellemlanding' (fx '1 time, 30 min')
-      - Eventuelt note (fx 'OBS! Denne strækning flyves af Bangkok Airways' eller '(PG) Denne flyvning opereres af Bangkok Airways').
+  c) expandKind: "activities" → for udflugts-blokke med flere uafhængige aktiviteter at vælge mellem. expand: { activities: [{title, desc}] }.
+
+ALDRIG brug felt-navnene 'times', 'summary', 'timeLabel', 'info', eller læg fly-/program-/aktivitets-data i sibling-keys ('flight', 'turprogram', 'aktivitet') på itemet. Alt udvideligt indhold SKAL ligge i 'expand'-objektet og være parret med en 'expandKind'.
 
 Skriv ALT på dansk. Returnér KUN det rene JSON-objekt.`;
 

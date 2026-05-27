@@ -222,13 +222,111 @@ function pickNum(...vals: unknown[]): number {
   return 0;
 }
 
+// Map legacy itinerary-item shapes (times/summary/timeLabel/info/flight-sibling)
+// back to the canonical chips/details/typeLabel/obs/expandKind+expand fields the
+// renderer expects. Lets existing trips with the older shape render correctly
+// without re-parsing the PDF.
+function normalizeItineraryItem(item: ItineraryItem, index: number): ItineraryItem {
+  const raw = item as Record<string, unknown>;
+
+  const typeLabel = pickStr(item.typeLabel, raw.timeLabel);
+  const details = pickStr(item.details, raw.summary);
+  const chips =
+    item.chips && item.chips.length > 0
+      ? item.chips
+      : Array.isArray(raw.times) && raw.times.length > 0
+        ? (raw.times.filter((x) => typeof x === "string") as string[])
+        : (item.chips ?? null);
+
+  let obs = item.obs ?? null;
+  if (!obs && raw.info && typeof raw.info === "object") {
+    const info = raw.info as Record<string, unknown>;
+    const t = pickStr(info.title);
+    const x = pickStr(info.text, info.body);
+    if (t || x) obs = { title: t, text: x };
+  }
+
+  let expandKind = item.expandKind ?? null;
+  let expand = item.expand ?? null;
+
+  if (!expandKind) {
+    const flight = raw.flight as Record<string, unknown> | undefined;
+    const turprogram = raw.turprogram as Record<string, unknown> | undefined;
+    const aktivitet = raw.aktivitet as Record<string, unknown> | undefined;
+
+    if (flight && typeof flight === "object") {
+      const detaljer = (flight.detaljer ?? flight.details) as unknown;
+      if (Array.isArray(detaljer) && detaljer.length > 0) {
+        expandKind = "flight";
+        expand = { details: detaljer as { label: string; value: string }[] };
+      } else {
+        const rows: { label: string; value: string }[] = [];
+        const flyArr = Array.isArray(flight.fly) ? flight.fly : [];
+        const fly = (flyArr[0] as Record<string, unknown> | undefined) ?? undefined;
+        const operator = Array.isArray(flight.operator)
+          ? flight.operator.filter((x) => typeof x === "string").join(" · ")
+          : pickStr(flight.operator);
+        const flynummer = pickStr(flight.flynummer);
+        if (flynummer) rows.push({ label: "Flynummer", value: flynummer });
+        if (operator) rows.push({ label: "Selskab", value: operator });
+        if (fly) {
+          const dato = pickStr(fly.dato);
+          const afgang = pickStr(fly.afgang);
+          const ankomst = pickStr(fly.ankomst);
+          const fra = pickStr(fly.fra);
+          const til = pickStr(fly.til);
+          if (fra) {
+            const val = [fra, dato, afgang].filter(Boolean).join(" · ");
+            if (val) rows.push({ label: "Afgang", value: val });
+          }
+          if (til) {
+            const val = [til, dato, ankomst].filter(Boolean).join(" · ");
+            if (val) rows.push({ label: "Ankomst", value: val });
+          }
+        }
+        const varighed = pickStr(flight.varighed);
+        if (varighed) rows.push({ label: "Varighed", value: varighed });
+        const mellemlanding = pickStr(flight.mellemlanding);
+        if (mellemlanding) rows.push({ label: "Mellemlanding", value: mellemlanding });
+        if (rows.length > 0) {
+          expandKind = "flight";
+          expand = { details: rows };
+        }
+      }
+    } else if (turprogram && typeof turprogram === "object") {
+      expandKind = "program";
+      expand = turprogram as Record<string, unknown>;
+    } else if (aktivitet && typeof aktivitet === "object") {
+      const stations = Array.isArray(aktivitet.stations) ? aktivitet.stations : [];
+      const activities = stations
+        .filter((s): s is Record<string, unknown> => !!s && typeof s === "object")
+        .map((s) => ({
+          title: pickStr(s.title, s.titel),
+          desc: pickStr(s.desc, s.varighed, s.beskrivelse),
+        }));
+      if (activities.length > 0) {
+        expandKind = "activities";
+        expand = { activities };
+      }
+    }
+  }
+
+  return {
+    ...item,
+    id: item.id && item.id > 0 ? item.id : index + 1,
+    typeLabel,
+    details,
+    chips,
+    obs,
+    expandKind,
+    expand,
+  };
+}
+
 export function normalizeTrip(trip: Trip): Trip {
   return {
     ...trip,
-    itinerary: trip.itinerary.map((item, i) => ({
-      ...item,
-      id: item.id && item.id > 0 ? item.id : i + 1,
-    })),
+    itinerary: trip.itinerary.map(normalizeItineraryItem),
     hotels: (trip.hotels ?? []).map((h) => {
       const anyH = h as Record<string, unknown>;
       return {
