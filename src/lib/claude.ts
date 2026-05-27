@@ -11,7 +11,9 @@ Ekstraher følgende:
 - heroPhoto: sæt til null — den sættes manuelt af rådgiver
 - intro: skriv en kort, stemningsfuld introduktionstekst på dansk (2-3 linjer) der beskriver rejsen som helhed — uden at opfinde detaljer der ikke fremgår af PDF'en
 - itinerary: array af alle elementer i kronologisk rækkefølge (fly, transfer, hotel, aktivitet/turprogram, fridag). Hvert element skal have et unikt id (1, 2, 3, ...).
-- hotels: array af alle hoteller med navn, lokation, nætter, værelse, måltider, check-in, check-ud
+- hotels: array af alle hoteller med navn, lokation, nætter, værelse, måltider, check-in, check-ud, samt:
+  * roomAllocations: array af strenge med værelsesfordeling fra PDF, fx ["Værelse 1: 2 voksne", "Værelse 2: 2 voksne", "Værelse 3: 3 voksne"]. Tom array hvis PDF ikke specificerer hvor mange der bor i hvert værelse.
+  * alternative: hvis PDF nævner et alternativt hotel (typisk efter sætning som "Dette resort kunne måske også være noget for jer:"), så et objekt { name, description, nights, meals, savings } hvor description er værelsestype/beskrivelse (fx "6x Superior Building + 2x ekstra opredninger"), savings er besparelsen som tekst (fx "ca. 12.000 kr."). null hvis intet alternativ nævnt
 - price: { total, perPerson, note } — total fx "83.045 kr.", perPerson fx "41.523 kr. pr. person · 2 voksne", note kort beskrivelse af hvad der er inkluderet
 - practicalNote: eventuelle bemærkninger fra prissiden om vejledende priser og ikke-bekræftede elementer. Hvis ingen, returnér tom streng.
 
