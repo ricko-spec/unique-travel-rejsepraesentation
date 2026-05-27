@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
+import { AccessGate } from "./AccessGate";
 import type { Metadata } from "next";
 import { getSupabaseService } from "@/lib/supabase/server";
 import { tripSchema, type TripRow } from "@/lib/types";
@@ -46,6 +48,11 @@ export async function generateMetadata({
 export default async function TripPage({ params }: { params: { bookingId: string } }) {
   const row = await loadTrip(params.bookingId);
   if (!row) notFound();
+
+  const accessCookie = cookies().get(`trip_access_${params.bookingId}`);
+  if (accessCookie?.value !== row.booking_no) {
+    return <AccessGate slug={params.bookingId} destination={row.destination} />;
+  }
 
   const parsed = tripSchema.safeParse(row.data);
   if (!parsed.success) {
