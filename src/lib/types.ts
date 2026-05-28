@@ -325,18 +325,8 @@ function normalizeItineraryItem(
   const typeLabel = pickStr(item.typeLabel, raw.timeLabel);
   const computed = computeDateLabel(typeLabel, departure);
   const dateLabel = pickStr(item.dateLabel, computed);
-  if (index < 2) {
-    console.error("[DBG dateLabel]", JSON.stringify({
-      index,
-      departure,
-      typeLabel,
-      raw_typeLabel: raw.typeLabel,
-      raw_timeLabel: raw.timeLabel,
-      raw_dateLabel: raw.dateLabel,
-      item_dateLabel: item.dateLabel,
-      computed,
-      dateLabel,
-    }));
+  if (index === 0) {
+    console.error(`DBG dep=[${departure}] tl=[${typeLabel}] cmp=[${computed}] out=[${dateLabel}]`);
   }
   const details = pickStr(item.details, raw.summary);
   const chips =
