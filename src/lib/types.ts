@@ -323,8 +323,7 @@ function normalizeItineraryItem(
   const raw = item as Record<string, unknown>;
 
   const typeLabel = pickStr(item.typeLabel, raw.timeLabel);
-  const computed = computeDateLabel(typeLabel, departure);
-  const dateLabel = pickStr(item.dateLabel, computed);
+  const dateLabel = pickStr(item.dateLabel, computeDateLabel(typeLabel, departure));
   const details = pickStr(item.details, raw.summary);
   const chips =
     item.chips && item.chips.length > 0
@@ -409,7 +408,7 @@ function normalizeItineraryItem(
     }
   }
 
-  const result = {
+  return {
     ...item,
     id: item.id && item.id > 0 ? item.id : index + 1,
     typeLabel,
@@ -420,12 +419,6 @@ function normalizeItineraryItem(
     expandKind,
     expand,
   };
-  if (index === 0) {
-    console.error(
-      `DBG out keys=${Object.keys(result).join(",")} dL=[${result.dateLabel}] typeOf=${typeof result.dateLabel}`,
-    );
-  }
-  return result;
 }
 
 export function normalizeTrip(trip: Trip): Trip {
