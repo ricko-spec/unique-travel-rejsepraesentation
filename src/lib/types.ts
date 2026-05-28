@@ -113,6 +113,7 @@ export const itineraryItemSchema = z
       .optional()
       .nullable(),
     expand: expandSchema.optional().nullable(),
+    dateLabel: looseStr.optional().default(""),
   })
   .passthrough();
 
@@ -222,14 +223,107 @@ function pickNum(...vals: unknown[]): number {
   return 0;
 }
 
+// ----- Danish date helpers (for itinerary dateLabel fallback) -----
+const DK_WEEKDAYS = ["SØN", "MAN", "TIR", "ONS", "TOR", "FRE", "LØR"] as const;
+const DK_MONTHS_FULL = [
+  "januar",
+  "februar",
+  "marts",
+  "april",
+  "maj",
+  "juni",
+  "juli",
+  "august",
+  "september",
+  "oktober",
+  "november",
+  "december",
+];
+const DK_MONTHS_ABBR = [
+  "JAN",
+  "FEB",
+  "MAR",
+  "APR",
+  "MAJ",
+  "JUN",
+  "JUL",
+  "AUG",
+  "SEP",
+  "OKT",
+  "NOV",
+  "DEC",
+] as const;
+
+function parseDanishDate(s: string): Date | null {
+  // Matches '27. december 2026' (evt. med ugedag eller komma foran).
+  const m = s.match(/(\d{1,2})\.\s*([a-zæøå]+)\s+(\d{4})/i);
+  if (!m) return null;
+  const day = parseInt(m[1], 10);
+  const monthIdx = DK_MONTHS_FULL.indexOf(m[2].toLowerCase());
+  const year = parseInt(m[3], 10);
+  if (monthIdx < 0 || !Number.isFinite(day) || !Number.isFinite(year)) return null;
+  const d = new Date(Date.UTC(year, monthIdx, day));
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function addDaysUTC(d: Date, days: number): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days));
+}
+
+function formatShortDateDK(d: Date, withMonth: boolean): string {
+  const wd = DK_WEEKDAYS[d.getUTCDay()];
+  const day = d.getUTCDate();
+  if (!withMonth) return `${wd} ${day}.`;
+  const mon = DK_MONTHS_ABBR[d.getUTCMonth()];
+  return `${wd} ${day}. ${mon}`;
+}
+
+function parseDayRangeFromTypeLabel(label: string): { start: number; end: number } | null {
+  const range = label.match(/DAG\s+(\d+)\s*[–-]\s*(\d+)/i);
+  if (range) {
+    return { start: parseInt(range[1], 10), end: parseInt(range[2], 10) };
+  }
+  const single = label.match(/DAG\s+(\d+)/i);
+  if (single) {
+    const n = parseInt(single[1], 10);
+    return { start: n, end: n };
+  }
+  return null;
+}
+
+function computeDateLabel(typeLabel: string, departure: string): string {
+  if (!typeLabel || !departure) return "";
+  const range = parseDayRangeFromTypeLabel(typeLabel);
+  if (!range) return "";
+  const start = parseDanishDate(departure);
+  if (!start) return "";
+  const startDate = addDaysUTC(start, range.start - 1);
+  const endDate = addDaysUTC(start, range.end - 1);
+  if (range.start === range.end) {
+    return formatShortDateDK(startDate, true);
+  }
+  const sameMonth =
+    startDate.getUTCFullYear() === endDate.getUTCFullYear() &&
+    startDate.getUTCMonth() === endDate.getUTCMonth();
+  if (sameMonth) {
+    return `${formatShortDateDK(startDate, false)} – ${formatShortDateDK(endDate, true)}`;
+  }
+  return `${formatShortDateDK(startDate, true)} – ${formatShortDateDK(endDate, true)}`;
+}
+
 // Map legacy itinerary-item shapes (times/summary/timeLabel/info/flight-sibling)
 // back to the canonical chips/details/typeLabel/obs/expandKind+expand fields the
 // renderer expects. Lets existing trips with the older shape render correctly
 // without re-parsing the PDF.
-function normalizeItineraryItem(item: ItineraryItem, index: number): ItineraryItem {
+function normalizeItineraryItem(
+  item: ItineraryItem,
+  index: number,
+  departure: string,
+): ItineraryItem {
   const raw = item as Record<string, unknown>;
 
   const typeLabel = pickStr(item.typeLabel, raw.timeLabel);
+  const dateLabel = pickStr(item.dateLabel, computeDateLabel(typeLabel, departure));
   const details = pickStr(item.details, raw.summary);
   const chips =
     item.chips && item.chips.length > 0
@@ -318,6 +412,7 @@ function normalizeItineraryItem(item: ItineraryItem, index: number): ItineraryIt
     ...item,
     id: item.id && item.id > 0 ? item.id : index + 1,
     typeLabel,
+    dateLabel,
     details,
     chips,
     obs,
@@ -327,9 +422,10 @@ function normalizeItineraryItem(item: ItineraryItem, index: number): ItineraryIt
 }
 
 export function normalizeTrip(trip: Trip): Trip {
+  const departure = trip.departure ?? "";
   return {
     ...trip,
-    itinerary: trip.itinerary.map(normalizeItineraryItem),
+    itinerary: trip.itinerary.map((item, i) => normalizeItineraryItem(item, i, departure)),
     hotels: (trip.hotels ?? []).map((h) => {
       const anyH = h as Record<string, unknown>;
       return {

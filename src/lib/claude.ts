@@ -30,6 +30,11 @@ Eksempel struktur:
 For itinerary items gælder (BRUG DISSE EKSAKTE FELT-NAVNE — ingen andre):
 - type: 'flight' | 'transfer' | 'hotel' | 'activity' (kun disse fire)
 - typeLabel: kort label-tekst, fx 'FLY · DAG 1' eller 'HOTEL · 5 NÆTTER · DAG 5–9' eller 'SAFARI · 4 DAGE / 3 NÆTTER · DAG 3–6'
+- dateLabel: kompakt dato-label så kunden ikke skal regne ud hvilken dato 'DAG N' er. Format:
+  * Single dag (FLY/TRANSFER/ACTIVITY): '<UGEDAG> <DAG>. <MÅNED>', fx 'SØN 27. DEC' eller 'TOR 31. DEC'.
+  * Range over flere dage (HOTEL/SAFARI), samme måned: '<UGEDAG1> <DAG1>. – <UGEDAG2> <DAG2>. <MÅNED>', fx 'MAN 28. – TOR 31. DEC'.
+  * Range der krydser månedsskifte: '<UGEDAG1> <DAG1>. <MÅNED1> – <UGEDAG2> <DAG2>. <MÅNED2>', fx 'ONS 30. DEC – SØN 3. JAN'.
+  Ugedage (3 bogstaver versaler): MAN, TIR, ONS, TOR, FRE, LØR, SØN. Måneder (3 bogstaver versaler): JAN, FEB, MAR, APR, MAJ, JUN, JUL, AUG, SEP, OKT, NOV, DEC. Brug PDF'ens faktiske datoer til at finde ugedag korrekt.
 - title: kort titel, fx 'Copenhagen → Koh Samui' eller 'Mará Hotel, Koh Lanta'
 - details: én linje med kort, læsbar oversigt (fx 'EK152 · Afgang lør. 6. feb. kl. 14:45 · Ankomst søn. 7. feb. kl. 00:10 · Rejsetid: 6t 25m')
 - chips: array af 2-5 korte nøgleord (fx ['Emirates Air', 'EK152', '6t 25m', 'Via Dubai'] eller ['Halvpension', '7 nætter', 'Sea View Villa'])
