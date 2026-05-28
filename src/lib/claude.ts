@@ -62,7 +62,7 @@ export async function parsePdfWithClaude(pdfBase64: string): Promise<unknown> {
 
   const message = await client.messages.create({
     model: MODEL,
-    max_tokens: 8000,
+    max_tokens: 16000,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -100,7 +100,11 @@ export async function parsePdfWithClaude(pdfBase64: string): Promise<unknown> {
   try {
     return JSON.parse(stripped);
   } catch {
-    throw new Error("Claude returnerede ikke gyldig JSON. Forsøg igen.");
+    const err = new Error("Claude returnerede ikke gyldig JSON. Forsøg igen.") as Error & {
+      rawResponse?: string;
+    };
+    err.rawResponse = raw;
+    throw err;
   }
 }
 

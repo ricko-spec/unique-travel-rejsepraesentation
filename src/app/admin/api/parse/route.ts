@@ -32,6 +32,14 @@ export async function POST(req: Request) {
       extractPdfRawText(base64).catch(() => ""),
     ]);
   } catch (e) {
+    const rawResp = (e as Error & { rawResponse?: string }).rawResponse;
+    if (typeof rawResp === "string") {
+      console.error("[parse] Claude returned invalid JSON", {
+        totalLength: rawResp.length,
+        first500: rawResp.slice(0, 500),
+        last500: rawResp.slice(-500),
+      });
+    }
     const msg = e instanceof Error ? e.message : "Ukendt fejl ved parsing";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
