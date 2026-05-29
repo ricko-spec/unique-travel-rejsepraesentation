@@ -1,4 +1,4 @@
-import type { Hotel } from "@/lib/types";
+import { type Hotel, formatLongDateDK } from "@/lib/types";
 import { SectionHeader } from "./SectionHeader";
 
 export function Hotels({ hotels }: { hotels: Hotel[] }) {
@@ -30,11 +30,11 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
               </div>
               <div>
                 <div className="hotel-field-label">Check-in</div>
-                <div className="hotel-field-value">{h.checkIn}</div>
+                <div className="hotel-field-value">{formatLongDateDK(h.checkIn)}</div>
               </div>
               <div>
                 <div className="hotel-field-label">Check-ud</div>
-                <div className="hotel-field-value">{h.checkOut}</div>
+                <div className="hotel-field-value">{formatLongDateDK(h.checkOut)}</div>
               </div>
             </div>
             {h.roomAllocations && h.roomAllocations.length > 0 && (

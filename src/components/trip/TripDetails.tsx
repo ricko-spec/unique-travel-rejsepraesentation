@@ -1,4 +1,4 @@
-import type { Trip } from "@/lib/types";
+import { type Trip, formatLongDateDK } from "@/lib/types";
 
 export function TripDetails({ trip }: { trip: Trip }) {
   return (
@@ -6,11 +6,11 @@ export function TripDetails({ trip }: { trip: Trip }) {
       <div className="details-grid">
         <div>
           <div className="meta-label">Afrejse</div>
-          <div className="meta-value">{trip.departure}</div>
+          <div className="meta-value">{formatLongDateDK(trip.departure)}</div>
         </div>
         <div>
           <div className="meta-label">Hjemkomst</div>
-          <div className="meta-value">{trip.return}</div>
+          <div className="meta-value">{formatLongDateDK(trip.return)}</div>
         </div>
         <div>
           <div className="meta-label">Rejsende</div>

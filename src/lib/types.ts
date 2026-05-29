@@ -225,6 +225,15 @@ function pickNum(...vals: unknown[]): number {
 
 // ----- Danish date helpers (for itinerary dateLabel fallback) -----
 const DK_WEEKDAYS = ["SØN", "MAN", "TIR", "ONS", "TOR", "FRE", "LØR"] as const;
+const DK_WEEKDAYS_FULL = [
+  "søndag",
+  "mandag",
+  "tirsdag",
+  "onsdag",
+  "torsdag",
+  "fredag",
+  "lørdag",
+] as const;
 const DK_MONTHS_FULL = [
   "januar",
   "februar",
@@ -266,6 +275,32 @@ function parseDanishDate(s: string): Date | null {
   return Number.isFinite(d.getTime()) ? d : null;
 }
 
+// Parser både ISO ('2027-03-31') og dansk ('31. marts 2027') dato-streng til en
+// UTC Date. Returnerer null hvis ingen af formerne matcher.
+function parseFlexibleDate(s: string): Date | null {
+  const trimmed = s.trim();
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    const y = parseInt(iso[1], 10);
+    const m = parseInt(iso[2], 10) - 1;
+    const d = parseInt(iso[3], 10);
+    if (m < 0 || m > 11) return null;
+    const date = new Date(Date.UTC(y, m, d));
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+  return parseDanishDate(trimmed);
+}
+
+// Format dato som 'torsdag 21. november 2025' (dansk langform med ugedag).
+// Falder tilbage til original streng hvis input ikke kan parses.
+export function formatLongDateDK(s: string | null | undefined): string {
+  if (!s) return "";
+  const date = parseFlexibleDate(s);
+  if (!date) return s;
+  const wd = DK_WEEKDAYS_FULL[date.getUTCDay()];
+  return `${wd} ${date.getUTCDate()}. ${DK_MONTHS_FULL[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
+}
+
 function addDaysUTC(d: Date, days: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days));
 }
@@ -295,7 +330,7 @@ function computeDateLabel(typeLabel: string, departure: string): string {
   if (!typeLabel || !departure) return "";
   const range = parseDayRangeFromTypeLabel(typeLabel);
   if (!range) return "";
-  const start = parseDanishDate(departure);
+  const start = parseFlexibleDate(departure);
   if (!start) return "";
   const startDate = addDaysUTC(start, range.start - 1);
   const endDate = addDaysUTC(start, range.end - 1);
