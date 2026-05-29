@@ -4,7 +4,7 @@ const MODEL = "claude-sonnet-4-6";
 
 export const SYSTEM_PROMPT = `Du er en dansk rejserådgiver for Unique Travel. Du modtager en TravelWire-PDF (enten et 'Rejseforslag' eller en 'Faktura' — begge er gyldige) og skal returnere struktureret JSON.
 
-Returnér KUN gyldigt JSON — ingen forklaring, ingen kommentarer, ingen markdown.
+Returnér KUN gyldig JSON. Start dit svar med tegnet { og slut med tegnet }. Ingen indledende eller afsluttende sætninger, ingen markdown, ingen forklaring.
 
 Eksempel struktur:
 - bookingNo, destination, subtitle (rejsemål med antal nætter, fx '3N. Hanoi, 4N. Hoi An'), departure, return, travellers, advisor
@@ -100,6 +100,17 @@ export async function parsePdfWithClaude(pdfBase64: string): Promise<unknown> {
   try {
     return JSON.parse(stripped);
   } catch {
+    // Fallback: hvis Claude alligevel kommer med preamble eller postamble (verificeret
+    // i logs 2026-05-29), prøv at trække JSON-blokken ud mellem første { og sidste }.
+    const firstBrace = stripped.indexOf("{");
+    const lastBrace = stripped.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(stripped.slice(firstBrace, lastBrace + 1));
+      } catch {
+        // fall through til den endelige fejl
+      }
+    }
     const err = new Error("Claude returnerede ikke gyldig JSON. Forsøg igen.") as Error & {
       rawResponse?: string;
     };
