@@ -1,4 +1,6 @@
 import { createSessionClient } from "./supabase/auth";
+import { getSupabaseService } from "./supabase/server";
+import type { Trip } from "./types";
 
 export type Profile = {
   id: string;
@@ -65,4 +67,46 @@ export async function updateOwnProfile(
     return { ok: false, status: 500, error: error.message };
   }
   return { ok: true, profile: (data as Profile | null) ?? null };
+}
+
+// Slår trip.advisor (navnet fra TravelWire-PDF'en) op i profiles.advisor_match_name
+// (case-insensitivt) og kopierer email + phone ind på trip'en. Bruger service-role,
+// fordi RLS ellers kun ville give adgang til den indloggede brugers egen profil.
+// Ingen match → felterne sættes til null + en warning logges.
+export async function enrichAdvisorContact(trip: Trip): Promise<Trip> {
+  const advisor = (trip.advisor ?? "").trim();
+  if (!advisor) {
+    return { ...trip, advisorEmail: null, advisorPhone: null };
+  }
+
+  try {
+    const supabase = getSupabaseService();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("email, phone, advisor_match_name")
+      .ilike("advisor_match_name", advisor)
+      .limit(1);
+
+    if (error) {
+      console.warn(`[enrichAdvisorContact] Opslag fejlede for "${advisor}": ${error.message}`);
+      return { ...trip, advisorEmail: null, advisorPhone: null };
+    }
+
+    const match = data?.[0] as { email: string | null; phone: string | null } | undefined;
+    if (!match) {
+      console.warn(
+        `[enrichAdvisorContact] Ingen profil matcher advisor "${advisor}" (booking ${trip.bookingNo}) — advisorEmail/advisorPhone sat til null.`,
+      );
+      return { ...trip, advisorEmail: null, advisorPhone: null };
+    }
+
+    return {
+      ...trip,
+      advisorEmail: match.email ?? null,
+      advisorPhone: match.phone ?? null,
+    };
+  } catch (e) {
+    console.warn(`[enrichAdvisorContact] Uventet fejl for "${advisor}":`, e);
+    return { ...trip, advisorEmail: null, advisorPhone: null };
+  }
 }

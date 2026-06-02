@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/supabase/auth";
 import { parsePdfWithClaude } from "@/lib/claude";
+import { enrichAdvisorContact } from "@/lib/profiles";
 import { tripSchema, normalizeTrip } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -52,5 +53,6 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ trip: normalizeTrip(parsed.data) });
+  const trip = await enrichAdvisorContact(normalizeTrip(parsed.data));
+  return NextResponse.json({ trip });
 }

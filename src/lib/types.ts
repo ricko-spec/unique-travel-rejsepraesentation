@@ -137,6 +137,10 @@ export const tripSchema = z
     return: looseStr.optional().default(""),
     travellers: looseStr.optional().default(""),
     advisor: looseStr.optional().default(""),
+    // Udfyldes server-side efter parse via opslag i profiles.advisor_match_name.
+    // null = ingen matchende profil.
+    advisorEmail: z.string().nullable().optional(),
+    advisorPhone: z.string().nullable().optional(),
     heroPhoto: looseStr.optional().nullable(),
     intro: looseStr.optional().default(""),
     itinerary: z.array(itineraryItemSchema).default([]),
