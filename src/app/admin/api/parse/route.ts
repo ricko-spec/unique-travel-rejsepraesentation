@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { getSessionUser } from "@/lib/supabase/auth";
 import { parsePdfWithClaude } from "@/lib/claude";
 import { tripSchema, normalizeTrip } from "@/lib/types";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  if (!isAdminAuthenticated()) {
+  if (!(await getSessionUser())) {
     return NextResponse.json({ error: "Ikke logget ind" }, { status: 401 });
   }
 

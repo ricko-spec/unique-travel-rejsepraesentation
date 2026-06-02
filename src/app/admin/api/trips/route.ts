@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { getSessionUser } from "@/lib/supabase/auth";
 import {
   getSupabaseService,
   describeFetchError,
@@ -27,7 +27,7 @@ function slugify(input: string): string {
 }
 
 export async function GET() {
-  if (!isAdminAuthenticated()) {
+  if (!(await getSessionUser())) {
     return NextResponse.json({ error: "Ikke logget ind" }, { status: 401 });
   }
 
@@ -60,7 +60,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!isAdminAuthenticated()) {
+  if (!(await getSessionUser())) {
     return NextResponse.json({ error: "Ikke logget ind" }, { status: 401 });
   }
 

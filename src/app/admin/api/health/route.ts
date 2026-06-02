@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { getSessionUser } from "@/lib/supabase/auth";
 import {
   envDiagnostics,
   getSupabaseService,
@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!isAdminAuthenticated()) {
+  if (!(await getSessionUser())) {
     return NextResponse.json({ error: "Ikke logget ind" }, { status: 401 });
   }
 

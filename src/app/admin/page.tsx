@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { getSessionUser } from "@/lib/supabase/auth";
 import { AdminLogin } from "./AdminLogin";
 import { AdminDashboard } from "./AdminDashboard";
 
@@ -10,9 +10,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function AdminPage() {
-  if (!isAdminAuthenticated()) {
+export default async function AdminPage() {
+  const user = await getSessionUser();
+  if (!user) {
     return <AdminLogin />;
   }
-  return <AdminDashboard />;
+  return <AdminDashboard userEmail={user.email ?? ""} />;
 }

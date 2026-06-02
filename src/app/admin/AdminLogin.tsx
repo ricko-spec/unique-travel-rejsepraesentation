@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 export function AdminLogin() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,7 +17,7 @@ export function AdminLogin() {
     const res = await fetch("/admin/api/auth", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ email, password }),
     });
     setLoading(false);
     if (!res.ok) {
@@ -35,6 +36,21 @@ export function AdminLogin() {
         {error && <div className="admin-error">{error}</div>}
         <form onSubmit={submit}>
           <div className="admin-form-row">
+            <label className="admin-label" htmlFor="email">
+              Email
+            </label>
+            <input
+              id="email"
+              className="admin-input"
+              type="email"
+              autoFocus
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="admin-form-row">
             <label className="admin-label" htmlFor="pw">
               Adgangskode
             </label>
@@ -42,7 +58,6 @@ export function AdminLogin() {
               id="pw"
               className="admin-input"
               type="password"
-              autoFocus
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

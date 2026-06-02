@@ -15,7 +15,7 @@ type TripListItem = {
   created_at: string;
 };
 
-export function AdminDashboard() {
+export function AdminDashboard({ userEmail }: { userEmail?: string }) {
   const router = useRouter();
   const [trips, setTrips] = useState<TripListItem[]>([]);
   const [loadingList, setLoadingList] = useState(true);
@@ -174,9 +174,17 @@ export function AdminDashboard() {
             <div className="admin-title">Rejsepræsentationer</div>
             <div className="admin-sub">Unique Travel · Administration</div>
           </div>
-          <button className="admin-btn admin-btn-secondary" onClick={logout}>
-            Log ud
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            {userEmail && (
+              <span style={{ fontSize: 12, color: "var(--grey-text)" }}>{userEmail}</span>
+            )}
+            <a className="admin-btn admin-btn-secondary" href="/admin/profil">
+              Min profil
+            </a>
+            <button className="admin-btn admin-btn-secondary" onClick={logout}>
+              Log ud
+            </button>
+          </div>
         </div>
 
         <div className="admin-card">

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { getSessionUser } from "@/lib/supabase/auth";
 import { describeFetchError, getSupabaseService } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -12,7 +12,7 @@ const patchSchema = z.object({
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  if (!isAdminAuthenticated()) {
+  if (!(await getSessionUser())) {
     return NextResponse.json({ error: "Ikke logget ind" }, { status: 401 });
   }
   const json = await req.json().catch(() => null);

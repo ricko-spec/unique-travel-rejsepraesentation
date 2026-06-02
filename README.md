@@ -16,18 +16,17 @@ Kopiér `.env.example` til `.env.local` og udfyld:
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
-NEXT_PUBLIC_SUPABASE_URL=https://ocxrvkrggzppyhgyambj.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://iunixfpthdftmkgpugex.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
-ADMIN_PASSWORD=...
 ```
 
-- Hent Supabase-nøgler i [Supabase dashboard](https://supabase.com/dashboard/project/ocxrvkrggzppyhgyambj/settings/api) → Project Settings → API.
-- `ADMIN_PASSWORD` vælger du selv — det bruges på `/admin`.
+- Hent Supabase-nøgler i [Supabase dashboard](https://supabase.com/dashboard/project/iunixfpthdftmkgpugex/settings/api) → Project Settings → API.
+- Adgang til `/admin` styres af individuelle Supabase Auth-logins (email + password) — ikke en delt kode. Opret medarbejdere i Supabase → Authentication → Add user; en `profiles`-række oprettes automatisk.
 
-### 3. Kør SQL-migrationen
+### 3. Kør SQL-migrationerne
 
-Åbn [SQL Editor](https://supabase.com/dashboard/project/ocxrvkrggzppyhgyambj/sql/new) i Supabase og kør indholdet af `supabase/schema.sql`.
+Åbn [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdftmkgpugex/sql/new) i Supabase og kør `supabase/schema.sql` (trips) og `supabase/profiles.sql` (profiles + auth).
 
 ### 4. Start dev server
 
@@ -35,7 +34,7 @@ ADMIN_PASSWORD=...
 npm run dev
 ```
 
-- `/admin` — log ind med `ADMIN_PASSWORD`, upload PDF, opret link.
+- `/admin` — log ind med din email + adgangskode, upload PDF, opret link. `/admin/profil` — rediger eget navn, telefon og rådgivernavn.
 - `/[slug]` — den genererede kundeside (slug = booking-nr).
 
 ## Stack
@@ -56,7 +55,9 @@ src/
     [bookingId]/loading.tsx   skeleton mens data henter
     [bookingId]/not-found.tsx fejlside ved ugyldigt link
     admin/page.tsx            login + dashboard
-    admin/api/auth            login/logout
+    admin/profil/page.tsx     profil-redigeringsside (eget navn/telefon/rådgivernavn)
+    admin/api/auth            login/logout (Supabase Auth)
+    admin/api/profile         egen profil (GET/PATCH)
     admin/api/parse           PDF → Claude → JSON
     admin/api/trips           CRUD
     layout.tsx                root layout + fonts
@@ -65,9 +66,12 @@ src/
   lib/
     types.ts                  Zod-schemas + Trip-typer
     claude.ts                 Anthropic-klient + systemprompt
-    supabase/server.ts        Supabase-klient (service role)
-    admin-auth.ts             cookie-baseret login
-supabase/schema.sql           DB-skema
+    supabase/server.ts        Supabase-klient (service role) til data
+    supabase/auth.ts          session-klient (@supabase/ssr) + getSessionUser
+    profiles.ts               profil-opslag/-opdatering (RLS self-only)
+  middleware.ts               holder Supabase-session frisk på /admin
+supabase/schema.sql           trips-skema
+supabase/profiles.sql         profiles + auth (RLS, triggers)
 reference/                    designreferencer (uændret)
 ```
 
