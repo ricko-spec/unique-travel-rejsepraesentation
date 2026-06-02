@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/supabase/auth";
-import { parsePdfWithClaude } from "@/lib/claude";
+import { parsePdfWithClaude, extractPdfRawText } from "@/lib/claude";
 import { enrichAdvisorContact } from "@/lib/profiles";
 import { tripSchema, normalizeTrip } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   if (!(await getSessionUser())) {
@@ -26,9 +26,21 @@ export async function POST(req: Request) {
   const base64 = Buffer.from(arrayBuffer).toString("base64");
 
   let raw: unknown;
+  let rawPdfText = "";
   try {
-    raw = await parsePdfWithClaude(base64);
+    [raw, rawPdfText] = await Promise.all([
+      parsePdfWithClaude(base64),
+      extractPdfRawText(base64).catch(() => ""),
+    ]);
   } catch (e) {
+    const rawResp = (e as Error & { rawResponse?: string }).rawResponse;
+    if (typeof rawResp === "string") {
+      console.error("[parse] Claude returned invalid JSON", {
+        totalLength: rawResp.length,
+        first500: rawResp.slice(0, 500),
+        last500: rawResp.slice(-500),
+      });
+    }
     const msg = e instanceof Error ? e.message : "Ukendt fejl ved parsing";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
@@ -54,5 +66,5 @@ export async function POST(req: Request) {
   }
 
   const trip = await enrichAdvisorContact(normalizeTrip(parsed.data));
-  return NextResponse.json({ trip });
+  return NextResponse.json({ trip, rawPdfText });
 }

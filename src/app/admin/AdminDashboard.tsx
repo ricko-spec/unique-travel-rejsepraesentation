@@ -1,5 +1,9 @@
 "use client";
 
+import Link from "next/link";
+
+import { DestinationManager } from "./DestinationManager";
+
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Trip } from "@/lib/types";
@@ -31,6 +35,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
   const [heroPhoto, setHeroPhoto] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [slugOverride, setSlugOverride] = useState("");
+  const [rawPdfText, setRawPdfText] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
@@ -80,6 +85,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     }
     const j = await res.json();
     setTrip(j.trip as Trip);
+    setRawPdfText((j.rawPdfText as string | undefined) ?? "");
     setCustomerName((j.trip as Trip).travellers ?? "");
     setSlugOverride((j.trip as Trip).bookingNo ?? "");
   }
@@ -106,6 +112,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
         heroPhoto: heroPhoto.trim() || null,
         customerName: customerName.trim() || null,
         slugOverride: slugOverride.trim() || null,
+        rawPdfText,
       }),
     });
     setCreating(false);
@@ -144,7 +151,20 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
 
   function copyLink(slug: string) {
     const url = `${window.location.origin}/${slug}`;
-    navigator.clipboard.writeText(url).then(() => showToast("Link kopieret"));
+    const matchedTrip = trips.find((t) => t.slug === slug);
+    if (!matchedTrip) {
+      navigator.clipboard.writeText(url).then(() => showToast("Link kopieret"));
+      return;
+    }
+    const destination = matchedTrip.destination;
+    const code = matchedTrip.booking_no;
+    const emailText = [
+      "Klik på linket nedenfor og indtast adgangskoden — så åbnes en oversigt over hele rejsen med dag-for-dag rejseplan, hoteller og fly.",
+      "",
+      url,
+      `Adgangskode: ${code}`,
+    ].join("\n");
+    navigator.clipboard.writeText(emailText).then(() => showToast("Email-tekst kopieret"));
   }
 
   function resetUpload() {
@@ -410,6 +430,12 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                           >
                             Åbn
                           </a>
+                        <Link
+                          href={`/admin/qa/${t.slug}`}
+                          className="admin-btn admin-btn-secondary"
+                        >
+                          Sammenlign
+                        </Link>
                           <button
                             className="admin-btn admin-btn-danger"
                             onClick={() => toggleActive(t.id, t.active)}
@@ -428,6 +454,8 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
       </div>
 
       {toast && <div className="admin-toast">{toast}</div>}
+
+    <DestinationManager />
     </div>
   );
 }

@@ -1,56 +1,62 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
-export const SYSTEM_PROMPT = `Du er en præcis dataekstraktor for Unique Travel. Du modtager en TravelWire rejseplan-PDF og skal returnere struktureret JSON.
+export const SYSTEM_PROMPT = `Du er en dansk rejserådgiver for Unique Travel. Du modtager en TravelWire-PDF (enten et 'Rejseforslag' eller en 'Faktura' — begge er gyldige) og skal returnere struktureret JSON.
 
-Returnér KUN gyldig JSON — ingen markdown, ingen forklaringer, ingen kodeblokke.
+Returnér KUN gyldig JSON. Start dit svar med tegnet { og slut med tegnet }. Ingen indledende eller afsluttende sætninger, ingen markdown, ingen forklaring.
 
-Ekstraher følgende:
-- bookingNo, destination, subtitle (byerne adskilt med ·), departure, return, travellers (fx "2 voksne" eller "Susanne og Finn Bastegaard"), advisor
-- heroPhoto: sæt til null — den sættes manuelt af rådgiver
-- intro: skriv en kort, stemningsfuld introduktionstekst på dansk (2-3 linjer) der beskriver rejsen som helhed — uden at opfinde detaljer der ikke fremgår af PDF'en
-- itinerary: array af alle elementer i kronologisk rækkefølge (fly, transfer, hotel, aktivitet/turprogram, fridag). Hvert element skal have et unikt id (1, 2, 3, ...).
-- hotels: array af alle hoteller med navn, lokation, nætter, værelse, måltider, check-in, check-ud
-- price: { total, perPerson, note } — total fx "83.045 kr.", perPerson fx "41.523 kr. pr. person · 2 voksne", note kort beskrivelse af hvad der er inkluderet
-- practicalNote: eventuelle bemærkninger fra prissiden om vejledende priser og ikke-bekræftede elementer. Hvis ingen, returnér tom streng.
+Eksempel struktur:
+- bookingNo, destination, subtitle (rejsemål med antal nætter, fx '3N. Hanoi, 4N. Hoi An'), departure, return, travellers, advisor
+- destination kan være 1-3 lande, separeret med ' & ' (fx 'Sri Lanka & Maldiverne', 'Vietnam & Cambodia & Thailand'). Bevar formatet som det står i PDF'en.
+- subtitle kan indeholde '0N. [By]' for transit-stops uden overnatning, og 'XN turprogram' eller 'XD turprogram' for pakke-rejse-dele.
+- travellers: navne i en kort, læsbar streng. Hvis PDF har 'Efternavn/Fornavn (mellem)'-format (fx 'Schlie/Fie Vesti'), så VEND til naturlig rækkefølge ('Fie Vesti Schlie'). Hvis PDF allerede har naturlig rækkefølge ('Herdis Bach Madsen'), bevar som-er. Inkluder børne-aldre i parentes ('Olivia Flyvholm (6 år)'). Slut med samlet antal i parentes ('(6 voksne)' eller '(2 voksne + 2 børn)'). Eksempel: 'Christian Herskind Dam, Pernille Brandt, Michael Kaas Jensen og 3 andre (6 voksne)' eller 'Lene Nielsen, Lars Korsholm Nielsen, Pia Pugdahl Byskov, Jan Byskov (4 voksne)'.
+- advisor: navnet fra 'Vores ref:' linjen (fx 'Sebastian Kehler', 'Gustav Gotfredsen', 'Randi Jensen').
+- heroPhoto: lad det være null — brugeren vælger billede selv.
+- intro: 4-5 sætningers velkomsttekst på dansk i Unique Travels brand-tone. Personlig, inspirerende, i øjenhøjde — som noget en menneskelig rådgiver kunne have skrevet, ikke en katalogtekst. Indhold:
+  * Træk konkrete højdepunkter fra netop denne rejse: bynavne, særlige hoteller (fx flydende bungalows, jungle-resort, beach-villa, tree house, krydstogtskøjte), signaturoplevelser (kajak, lokale markeder, solnedgang, rismarker), naturattraktioner, særlige stemninger.
+  * KRITISK FORANKRING: hvert konkret højdepunkt skal være direkte forankret i PDF'ens faktiske indhold — hotelnavne, rumtyper, udflugter, beskrivelser. OPFIND ALDRIG detaljer. Hvis PDF'en ikke nævner 'tree house' eller 'kajak', må intro'en heller ikke. Hvis i tvivl, brug en mere generel formulering der stadig er sand (fx 'strandresort' i stedet for at gætte på en specifik rumtype).
+  * Kilder: PDF'ens egen prosa, subtitle og itinerary. Ikke generiske vendinger som 'rejsen byder på det hele', 'en perfekt blanding', 'noget for enhver smag'.
+  * Skriv som én flydende tekstblok i rute-rækkefølge: kort åbningsvelkomst → konkrete højdepunkter undervejs → let afrunding. Ingen bullet-liste.
+  * FORBUDT: nævn ALDRIG specifikt antal dage eller nætter (fx '23 dage' eller 'tre nætter'). Det står allerede præcist i subtitle og hotel-datoer.
+  Eksempel-stil (Thailand familie, Bangkok + Khao Sok + Koh Lanta + Koh Ngai): "Velkommen til Thailand — en rejse, der byder på det hele for hele familien. I starter med pulserende Bangkok, hvor I møder storbyen fra kanaler, tuk-tuks og lokale tog. Derfra fortsætter I ind i Khao Soks tætte regnskov med overnatning i flydende bungalows på den magiske Cheow Lan Lake. Rejsen rundes af med strandliv på de smukke øer Koh Lanta og Koh Ngai — paradis for jer, der elsker hvide strande og krystalklart vand."
+- itinerary: liste af alle rejseplan-elementer i kronologisk rækkefølge (fly, transfer, færge, hotel-ophold, udflugter, pakke-rejser).
+- hotels: liste af hvert hotel-ophold med felter: name, location, nights, room, meals, checkIn, checkOut. Plus:
+  * roomAllocations: array af strenge med værelsesfordeling fra PDF, fx ['Værelse 1: 2 voksne', 'Værelse 2: 2 voksne + 2 børn (8+6)']. Acceptér både 'voksen' (ental) og 'voksne' (flertal). Tom array hvis ikke listet.
+  * alternative: hvis PDF nævner et alternativt hotel (typisk efter 'sætning som Dette resort kunne måske også være noget for jer:'), så et objekt { name, description, nights, meals, savings }. null hvis intet.
+  * isPackage: true hvis dette 'hotel' faktisk er en pakke-rejse (Sri Lanka rundrejse, Safari, Orangutang Search, Sumatra-tur, Halong Cruise). Disse genkendes ved mønstret: navn + 'X dage/Y nætter (KODE)' efterfulgt af '*Hotellerne på rundrejsen er:*' (eller lignende) med liste af sub-hoteller.
+  * subHotels: hvis isPackage er true, en array af { name, location, room, nights } for hvert sub-hotel.
+  * included: array af strenge fra 'Inkluderet i prisen:' liste (hvis findes).
+  * notIncluded: array af strenge fra 'Ikke inkluderet i prisen:' liste (hvis findes).
+  * notes: array af 'Bemærk:'-tekster eller 'hotel-specifikke noter' der hører til opholdet (fx tidevands-info, lokal turistskat, bagage-begrænsninger).
+- price: { total, perPerson, note } — total er '##.### kr.', perPerson er '##.### kr. pr. person · # voksne', note kort forklaring. Hvis PDF er Faktura, skær 'Faktura: XXX' og 'Fakturadato' væk.
+- disclaimer: kort dansk standardforbehold fra PDF'ens forbeholds-side.
+- documentType: 'rejseforslag' eller 'faktura' (kig efter ordet 'Faktura:' øverst i PDF).
 
-For hvert itinerary-element:
-- type: "flight" | "hotel" | "transfer" | "activity"
-- typeLabel: fx "FLY · DAG 1" eller "HOTEL · 3 NÆTTER · DAG 2–5"
-- title: kort titel, fx "Copenhagen → Kuala Lumpur" eller "Meliá Hotel, Kuala Lumpur"
-- details: én linje med tekniske detaljer (flynr, tider, værelse, måltider)
-- chips: array af korte informationspills (fx ["Via Singapore", "12t 30m", "Economy Flex"])
-- obs: hvis der er en vigtig praktisk bemærkning inline i PDF'en (fx chaufførinstruktion, gebyr der betales kontant, terminalskift), ekstraher den som { title, text }. Ellers null.
-- expandKind + expand: vælg ÉN af disse — eller null hvis intet matcher:
+For itinerary items gælder (BRUG DISSE EKSAKTE FELT-NAVNE — ingen andre):
+- type: 'flight' | 'transfer' | 'hotel' | 'activity' (kun disse fire)
+- typeLabel: kort label-tekst, fx 'FLY · DAG 1' eller 'HOTEL · 5 NÆTTER · DAG 5–9' eller 'SAFARI · 4 DAGE / 3 NÆTTER · DAG 3–6'
+- dateLabel: kompakt dato-label så kunden ikke skal regne ud hvilken dato 'DAG N' er. Format:
+  * Single dag (FLY/TRANSFER/ACTIVITY): '<UGEDAG> <DAG>. <MÅNED>', fx 'SØN 27. DEC' eller 'TOR 31. DEC'.
+  * Range over flere dage (HOTEL/SAFARI), samme måned: '<UGEDAG1> <DAG1>. – <UGEDAG2> <DAG2>. <MÅNED>', fx 'MAN 28. – TOR 31. DEC'.
+  * Range der krydser månedsskifte: '<UGEDAG1> <DAG1>. <MÅNED1> – <UGEDAG2> <DAG2>. <MÅNED2>', fx 'ONS 30. DEC – SØN 3. JAN'.
+  Ugedage (3 bogstaver versaler): MAN, TIR, ONS, TOR, FRE, LØR, SØN. Måneder (3 bogstaver versaler): JAN, FEB, MAR, APR, MAJ, JUN, JUL, AUG, SEP, OKT, NOV, DEC. Brug PDF'ens faktiske datoer til at finde ugedag korrekt.
+- title: kort titel, fx 'Copenhagen → Koh Samui' eller 'Mará Hotel, Koh Lanta'
+- details: én linje med kort, læsbar oversigt (fx 'EK152 · Afgang lør. 6. feb. kl. 14:45 · Ankomst søn. 7. feb. kl. 00:10 · Rejsetid: 6t 25m')
+- chips: array af 2-5 korte nøgleord (fx ['Emirates Air', 'EK152', '6t 25m', 'Via Dubai'] eller ['Halvpension', '7 nætter', 'Sea View Villa'])
+- obs: { title, text } hvis PDF'en har en relevant note (OBS!, ankomstinstruktion, måltids-info, bagage-begrænsninger, tidevands-info). null ellers.
+- isOptional: true hvis aktiviteten har 'Tilkøb:' prefix (valgfri ekstra). False ellers.
+- expandKind + expand: definerer det udvidelige indhold under itemet. Vælg én kombination, eller udelad begge (sæt til null) hvis intet at udvide (typisk simple transfers).
 
-  a) "program" → brug HVIS elementet er ÉN inkluderet udflugt/turprogram (typisk over flere dage) med et dag-for-dag forløb. Fx "Orangutang Search — Borneo" der løber over 4 dage. Format: { days: [{label, text, meal?}], included: [...] }. Skriv dagsprogrammet komplet ud — én "day" pr. dag i PDF'en. "included" er det samlede "Inkluderet"-afsnit for hele udflugten.
+  a) expandKind: "flight" → for fly-elementer. expand: { details: [{label, value}] } med rækker som:
+     ['Flynummer','EK152'], ['Selskab','Emirates Air'], ['Afgang','Copenhagen (CPH) · lørdag 6. februar 2027 kl. 14:45'], ['Ankomst','Dubai (DXB) · søndag 7. februar 2027 kl. 00:10'], ['Varighed','6 timer, 25 min'], evt. ['Mellemlanding','Dubai (DXB), 2 timer 50 min stop'], evt. ['Bagage','20 kg pr. person (standard)'], evt. ['Note','(PG) Denne flyvning opereres af Bangkok Airways' / '*Betjenes af SAS' / '(TR) Denne flyvning opereres af Scoot'].
 
-  b) "activities" → brug HVIS kunden får præsenteret FLERE valgfrie aktiviteter de kan vælge imellem (tilkøb eller bare forslag). Typisk en sektion som "Frie udflugtsmuligheder", "Tilvalg på destinationen", "Vælg blandt følgende oplevelser". Format: { activities: [{title, desc}] }. Kun valgfrie/optional aktiviteter — ikke inkluderede.
-    VIGTIGT: hvis sektionen kun indeholder ÉN aktivitet, så er det reelt en inkluderet udflugt → brug "program" i stedet (med en enkelt day-blok hvis nødvendigt), IKKE "activities" med ét element.
+  b) expandKind: "program" → for udflugter/safari/rundrejser som ÉN aktivitet med flere dages program. expand: { days: [{label, text, meal?}], included: [string] }.
+     VIGTIGT: hvis aktiviteten er en pakke-rejse med sub-hoteller (Sri Lanka rundrejse, Halong Cruise, Sumatra-tur etc. med 'X dage/Y nætter (KODE)' og navngivne overnatningssteder), placér den i hotels[] med isPackage=true i stedet for itinerary.
 
-  c) "flight" → brug ALTID for type="flight" elementer. Format: { details: [{label, value}, ...] }.
-    Populér details med alt hvad PDF'en oplyser om flyet — fx (men ikke begrænset til):
-      - "Flynummer" (fx "SQ351")
-      - "Selskab" (fx "Singapore Airlines")
-      - "Afgang" (fx "København (CPH) · 26. juni 2027 kl. 11:55")
-      - "Ankomst" (fx "Kuala Lumpur (KUL) · 27. juni 2027 kl. 10:35")
-      - "Varighed" (fx "12t 30m")
-      - "Mellemlanding" / "Via" (fx "Singapore (SIN), 1t 30m stop")
-      - "Sædeklasse" / "Billettype" (fx "Economy Flex")
-      - "Bagage" (fx "23 kg + 7 kg håndbagage")
-      - "Måltid" (fx "Inkluderet")
-      - "Terminal" (afgang / ankomst hvis nævnt)
-      - Frequent-flyer programmer, sædepræferencer, andre noter.
-    Det er OK at gentage info fra "details"/"chips"-felterne — den udvidede visning skal stå alene som komplet flyinfo. Hvis et felt ikke fremgår af PDF'en, så udelad det helt (returnér ikke "ukendt" eller tomme værdier).
+  c) expandKind: "activities" → for udflugts-blokke med flere uafhængige aktiviteter at vælge mellem. expand: { activities: [{title, desc}] }.
 
-  d) null → for transfer/hotel-elementer hvor alt allerede står i details og der ikke er et dagsprogram eller flere aktiviteter.
-
-For "program" days: ekstraher dag-for-dag med label (fx "Dag 1 — Sandakan & Sepilok"), tekst, måltider (én linje, fx "Frokost og aftensmad inkluderet"). Skriv dagsteksten ud i den fulde længde fra PDF'en.
-For "activities": ekstraher titel og den FULDE beskrivelse pr. aktivitet — kopiér teksten direkte fra PDF'en uden at forkorte eller omformulere. Hvis beskrivelsen fylder flere sætninger eller afsnit i PDF'en, så medtag det hele.
-For "flight" details: brug korte labels (fx "Bagage", "Måltid", "Sædeklasse", "Terminal afgang", "Billettype") og fulde værdier som de fremgår af PDF'en.
-
-Medtag IKKE standardvilkår, annulleringsregler, forsikringstekst eller indrejseregler i selve rejseplanen — de hører til i practicalNote eller udelades.
+ALDRIG brug felt-navnene 'times', 'summary', 'timeLabel', 'info', eller læg fly-/program-/aktivitets-data i sibling-keys ('flight', 'turprogram', 'aktivitet') på itemet. Alt udvideligt indhold SKAL ligge i 'expand'-objektet og være parret med en 'expandKind'.
 
 Skriv ALT på dansk. Returnér KUN det rene JSON-objekt.`;
 
@@ -62,7 +68,7 @@ export async function parsePdfWithClaude(pdfBase64: string): Promise<unknown> {
 
   const message = await client.messages.create({
     model: MODEL,
-    max_tokens: 8000,
+    max_tokens: 16000,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -100,6 +106,59 @@ export async function parsePdfWithClaude(pdfBase64: string): Promise<unknown> {
   try {
     return JSON.parse(stripped);
   } catch {
-    throw new Error("Claude returnerede ikke gyldig JSON. Forsøg igen.");
+    // Fallback: hvis Claude alligevel kommer med preamble eller postamble (verificeret
+    // i logs 2026-05-29), prøv at trække JSON-blokken ud mellem første { og sidste }.
+    const firstBrace = stripped.indexOf("{");
+    const lastBrace = stripped.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(stripped.slice(firstBrace, lastBrace + 1));
+      } catch {
+        // fall through til den endelige fejl
+      }
+    }
+    const err = new Error("Claude returnerede ikke gyldig JSON. Forsøg igen.") as Error & {
+      rawResponse?: string;
+    };
+    err.rawResponse = raw;
+    throw err;
   }
+}
+
+
+export async function extractPdfRawText(pdfBase64: string): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY ikke konfigureret");
+
+  const client = new Anthropic({ apiKey });
+
+  const message = await client.messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    system:
+      "Du modtager en PDF og returnerer KUN den rå tekst, eksakt som den fremgår. Bevar linjeskift mellem afsnit. Tilføj IKKE kommentarer, overskrifter eller forklaringer.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: pdfBase64,
+            },
+          },
+          {
+            type: "text",
+            text: "Returnér PDF'ens fulde rå tekst.",
+          },
+        ],
+      },
+    ],
+  });
+
+  const textBlock = message.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") return "";
+  return textBlock.text.trim();
 }

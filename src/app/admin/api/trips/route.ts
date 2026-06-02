@@ -16,6 +16,7 @@ const createSchema = z.object({
   heroPhoto: z.string().url().optional().nullable(),
   customerName: z.string().optional().nullable(),
   slugOverride: z.string().optional().nullable(),
+  rawPdfText: z.string().optional().nullable(),
 });
 
 function slugify(input: string): string {
@@ -36,7 +37,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("trips")
       .select(
-        "id, booking_no, slug, destination, customer_name, hero_photo, active, created_at, updated_at",
+        "id, booking_no, slug, destination, customer_name, hero_photo, active, created_at, updated_at, raw_pdf_text, data",
       )
       .order("created_at", { ascending: false });
 
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { trip, heroPhoto, customerName, slugOverride } = parsed.data;
+  const { trip, heroPhoto, customerName, slugOverride, rawPdfText } = parsed.data;
   const slug = slugOverride?.trim() || slugify(trip.bookingNo) || slugify(trip.destination);
   if (!slug) {
     return NextResponse.json({ error: "Kunne ikke generere et gyldigt slug" }, { status: 400 });
@@ -136,13 +137,13 @@ export async function POST(req: Request) {
       .upsert(
         {
           booking_no: trip.bookingNo,
-          slug,
           destination: trip.destination,
           customer_name: customerName ?? null,
           data: trip,
           hero_photo: heroPhoto ?? null,
           // Re-uploading a PDF is an implicit "make this live" signal; lift any
           // prior soft-delete so the customer link works again.
+          raw_pdf_text: rawPdfText ?? null,
           active: true,
         },
         { onConflict: "booking_no" },

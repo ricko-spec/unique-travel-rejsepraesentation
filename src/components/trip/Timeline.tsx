@@ -35,7 +35,12 @@ function TimelineItem({ item, defaultOpen }: { item: ItineraryItem; defaultOpen?
     <div className="tl-item">
       <div className={`tl-dot is-${item.type}`} />
       <div className="tl-card">
-        <div className={`tl-type is-${item.type}`}>{item.typeLabel}</div>
+        <div className={`tl-type is-${item.type}`}>
+          <span className="tl-type-label">{item.typeLabel}</span>
+          {item.dateLabel && (
+            <span className="tl-type-date"> · {item.dateLabel}</span>
+          )}
+        </div>
         <div className="tl-title">{item.title}</div>
         {item.details && <div className="tl-details">{item.details}</div>}
 
