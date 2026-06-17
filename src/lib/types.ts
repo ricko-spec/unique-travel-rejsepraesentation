@@ -460,23 +460,70 @@ function normalizeItineraryItem(
   };
 }
 
+// Mark\u00f8rer til smart destination-routing. En ren Zanzibar-strandrejse parses som
+// "Tanzania" (det er hvad TravelWire-PDF'en siger), men skal vise Zanzibar-hero i
+// stedet for savanne. Kombi-rejser (safari + Zanzibar) skal forblive "Tanzania".
+const ZANZIBAR_MARKERS = [
+  "matemwe",
+  "nungwi",
+  "kendwa",
+  "paje",
+  "jambiani",
+  "kiwengwa",
+  "stone town",
+  "zanzibar",
+];
+const SAFARI_MARKERS = [
+  "arusha",
+  "serengeti",
+  "ngorongoro",
+  "tarangire",
+  "manyara",
+  "kilimanjaro",
+];
+
+function reclassifyDestination(
+  destination: string,
+  subtitle: string,
+  hotels: Hotel[],
+): string {
+  if (destination !== "Tanzania") return destination;
+  // Safari-ben optr\u00e6der ofte som pakke-rejse med lejrene i subHotels \u2014 tag dem med,
+  // s\u00e5 kombi-rejser p\u00e5lideligt beholder "Tanzania".
+  const haystack = [
+    subtitle ?? "",
+    ...hotels.flatMap((h) => [
+      h.name,
+      h.location,
+      ...(h.subHotels ?? []).flatMap((s) => [s.name, s.location]),
+    ]),
+  ]
+    .join(" ")
+    .toLowerCase();
+  const hasZanzibar = ZANZIBAR_MARKERS.some((m) => haystack.includes(m));
+  const hasSafari = SAFARI_MARKERS.some((m) => haystack.includes(m));
+  return hasZanzibar && !hasSafari ? "Zanzibar" : destination;
+}
+
 export function normalizeTrip(trip: Trip): Trip {
   const departure = trip.departure ?? "";
+  const hotels = (trip.hotels ?? []).map((h) => {
+    const anyH = h as Record<string, unknown>;
+    return {
+      ...h,
+      name: pickStr(h.name, anyH.navn),
+      location: pickStr(h.location, anyH.lokation),
+      nights: pickNum(h.nights, anyH["n\u00e6tter"]),
+      room: pickStr(h.room, anyH["v\u00e6relse"]),
+      meals: pickStr(h.meals, anyH["m\u00e5ltider"]),
+      checkIn: pickStr(h.checkIn, anyH.checkInd),
+      checkOut: pickStr(h.checkOut, anyH.checkUd),
+    };
+  });
   return {
     ...trip,
+    destination: reclassifyDestination(trip.destination, trip.subtitle, hotels),
     itinerary: trip.itinerary.map((item, i) => normalizeItineraryItem(item, i, departure)),
-    hotels: (trip.hotels ?? []).map((h) => {
-      const anyH = h as Record<string, unknown>;
-      return {
-        ...h,
-        name: pickStr(h.name, anyH.navn),
-        location: pickStr(h.location, anyH.lokation),
-        nights: pickNum(h.nights, anyH["n\u00e6tter"]),
-        room: pickStr(h.room, anyH["v\u00e6relse"]),
-        meals: pickStr(h.meals, anyH["m\u00e5ltider"]),
-        checkIn: pickStr(h.checkIn, anyH.checkInd),
-        checkOut: pickStr(h.checkOut, anyH.checkUd),
-      };
-    }),
+    hotels,
   };
 }
