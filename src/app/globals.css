@@ -869,10 +869,22 @@ section { width: 100%; }
   gap: 24px;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.2s ease;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px rgba(0, 60, 60, 0.05);
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   min-height: 88px;
 }
 .cta:hover { background: var(--gold-soft); }
+/* Affordance: hele blokken løfter sig diskret på hover/fokus, ikke kun pilen. */
+.cta:hover,
+.cta:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 0 rgba(0,0,0,0.05), 0 14px 32px rgba(0, 60, 60, 0.12);
+}
+/* Touch: :hover virker ikke på mobil, så tap giver presset feedback i stedet. */
+.cta:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 6px 16px rgba(0, 60, 60, 0.07);
+}
 .cta-text-l {
   font-family: var(--font-cormorant), serif;
   font-style: italic;
