@@ -173,6 +173,13 @@ export const tripSchema = z
     advisorPhone: z.string().nullable().optional(),
     heroPhoto: looseStr.optional().nullable(),
     intro: looseStr.optional().default(""),
+    // Original AI-genereret intro, gemt ved første parse så "Gendan AI-tekst" i
+    // admin kan rulle en sælger-redigering tilbage. Sættes i POST /admin/api/trips.
+    introOriginal: looseStr.optional(),
+    // Audit-spor for sælger-redigering af intro (vises i admin; revisionen ligger
+    // også i audit_log-tabellen). Valgfrie — kun sat efter en redigering.
+    introEditedAt: looseStr.optional(),
+    introEditedBy: looseStr.optional(),
     itinerary: z.array(itineraryItemSchema).default([]),
     hotels: z.array(hotelSchema).default([]),
     price: z

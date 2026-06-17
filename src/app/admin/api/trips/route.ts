@@ -139,7 +139,10 @@ export async function POST(req: Request) {
           booking_no: trip.bookingNo,
           destination: trip.destination,
           customer_name: customerName ?? null,
-          data: trip,
+          // Fang den friske AI-intro som introOriginal, så "Gendan AI-tekst" i
+          // admin kan rulle en sælger-redigering tilbage. Re-upload regenererer
+          // intro'en og opdaterer dermed også originalen.
+          data: { ...trip, introOriginal: trip.introOriginal ?? trip.intro },
           hero_photo: heroPhoto ?? null,
           // Re-uploading a PDF is an implicit "make this live" signal; lift any
           // prior soft-delete so the customer link works again.

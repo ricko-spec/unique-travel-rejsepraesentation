@@ -431,6 +431,12 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                             Åbn
                           </a>
                         <Link
+                          href={`/admin/trips/${t.id}`}
+                          className="admin-btn admin-btn-secondary"
+                        >
+                          Detaljer
+                        </Link>
+                        <Link
                           href={`/admin/qa/${t.slug}`}
                           className="admin-btn admin-btn-secondary"
                         >
