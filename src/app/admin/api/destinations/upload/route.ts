@@ -47,14 +47,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Destination mangler" }, { status: 400 });
   }
   if (typeof slot !== "string" || !ALLOWED_SLOTS.has(slot)) {
-    return NextResponse.json({ error: "Ugyldig slot" }, { status: 400 });
+    return NextResponse.json({ error: `Ugyldig slot: "${String(slot)}"` }, { status: 400 });
   }
   if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: "Fil er for stor (max 10 MB)" }, { status: 400 });
+    const mb = (file.size / 1024 / 1024).toFixed(1);
+    return NextResponse.json({ error: `Fil er for stor (max 10 MB) — modtog ${mb} MB` }, { status: 400 });
   }
   const mime = (file as File).type || "image/jpeg";
   if (!ALLOWED_MIME.has(mime)) {
-    return NextResponse.json({ error: "Filtype ikke tilladt" }, { status: 400 });
+    return NextResponse.json(
+      { error: `Filtype ikke tilladt: "${mime}". Tilladt: jpeg, png, webp, avif.` },
+      { status: 400 },
+    );
   }
 
   const extFromMime = mime.split("/").pop() || "jpg";
