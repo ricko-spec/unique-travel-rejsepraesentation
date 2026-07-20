@@ -87,7 +87,9 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     setTrip(j.trip as Trip);
     setRawPdfText((j.rawPdfText as string | undefined) ?? "");
     setCustomerName((j.trip as Trip).travellers ?? "");
-    setSlugOverride((j.trip as Trip).bookingNo ?? "");
+    // SEC-1: foreslå ALDRIG booking-nr som slug — booking-nr er kundens
+    // adgangskode, og slug = booking-nr ville lægge koden i selve URL'en.
+    // Tomt felt → DB'en genererer en tilfældig 12-hex slug.
   }
 
   function onFileSelected(f: File | null) {
@@ -287,7 +289,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                     className="admin-input"
                     value={slugOverride}
                     onChange={(e) => setSlugOverride(e.target.value)}
-                    placeholder={trip.bookingNo}
+                    placeholder="Genereres automatisk"
                   />
                 </div>
                 <div className="admin-form-row">

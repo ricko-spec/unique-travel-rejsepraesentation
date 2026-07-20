@@ -136,6 +136,9 @@ export async function POST(req: Request) {
       .from("trips")
       .upsert(
         {
+          // SEC-1: 'slug' må ALDRIG med i denne payload. Ved insert genererer
+          // DB-defaulten en tilfældig 12-hex slug — den må ikke kunne blive
+          // booking-nummeret (kundens adgangskode) eller andet gætbart.
           booking_no: trip.bookingNo,
           destination: trip.destination,
           customer_name: customerName ?? null,

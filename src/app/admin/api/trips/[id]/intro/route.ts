@@ -1,9 +1,9 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { z } from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSessionUser } from "@/lib/supabase/auth";
 import { describeFetchError, getSupabaseService } from "@/lib/supabase/server";
+import { writeAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,29 +15,12 @@ const introSchema = z.object({
   intro: z.string().max(MAX_INTRO_LEN, `Intro må højst være ${MAX_INTRO_LEN} tegn`),
 });
 
-// Best-effort audit-logning af sælger-redigering — må aldrig blokere selve gemningen.
-// Samme tabel/form som kunde-unlock-loggen i src/app/[bookingId]/actions.ts.
-async function writeAudit(
-  supabase: SupabaseClient,
-  actor: string,
-  slug: string,
-  metadata: Record<string, unknown>,
-): Promise<void> {
-  try {
-    const h = headers();
-    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const { error } = await supabase.from("audit_log").insert({
-      actor,
-      action: "intro_edited",
-      resource: slug,
-      ip,
-      user_agent: h.get("user-agent"),
-      metadata,
-    });
-    if (error) console.error("[audit] intro_edited insert error:", error);
-  } catch (e) {
-    console.error("[audit] intro_edited insert threw:", e);
-  }
+// Kort, ikke-reversibelt fingerprint af en tekst. Audit-loggen må ikke
+// indeholde selve intro-teksterne (PII/kundedata, SEC-3) — men fingerprint +
+// længde er nok til at se AT og HVORNÅR teksten skiftede, og til at matche
+// mod data.introOriginal/intro på trip-rækken, hvor det fulde revisionsspor bor.
+function fingerprint(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex").slice(0, 12);
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -59,7 +42,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     const { data: row, error: readError } = await supabase
       .from("trips")
-      .select("id, slug, booking_no, data")
+      .select("id, slug, booking_no, data, updated_at")
       .eq("id", params.id)
       .maybeSingle();
 
@@ -73,7 +56,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     const currentData = (row.data ?? {}) as Record<string, unknown>;
     const before = typeof currentData.intro === "string" ? currentData.intro : "";
-    const actor = `user:${user.email ?? user.id}`;
+    // "admin:{email}" er det dokumenterede actor-format i audit_log
+    // (tidligere "user:{email}" — unificeret her; ingen gamle rækker fandtes).
+    const actor = `admin:${user.email ?? user.id}`;
     const nextData = {
       ...currentData,
       intro,
@@ -81,20 +66,38 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       introEditedBy: user.email ?? user.id,
     };
 
-    const { error: updateError } = await supabase
+    // Optimistisk lås (DATA-1): UPDATE rammer kun hvis rækken stadig har det
+    // updated_at vi læste. Har en anden (sælger eller re-upload) ændret rækken
+    // imens, opdateres 0 rækker — og vi melder konflikt frem for at overskrive.
+    const { data: updated, error: updateError } = await supabase
       .from("trips")
       .update({ data: nextData })
-      .eq("id", params.id);
+      .eq("id", params.id)
+      .eq("updated_at", row.updated_at)
+      .select("id");
 
     if (updateError) {
       console.error("[POST /api/trips/:id/intro] Update error", updateError);
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
+    if (!updated || updated.length === 0) {
+      return NextResponse.json(
+        { error: "Rejsen er ændret af en anden imens. Reload og prøv igen." },
+        { status: 409 },
+      );
+    }
 
-    await writeAudit(supabase, actor, row.slug, {
-      booking_no: row.booking_no,
-      before,
-      after: intro,
+    await writeAudit(supabase, {
+      actor,
+      action: "intro_edited",
+      resource: row.slug,
+      metadata: {
+        booking_no: row.booking_no,
+        before_len: before.length,
+        after_len: intro.length,
+        before_fp: fingerprint(before),
+        after_fp: fingerprint(intro),
+      },
     });
 
     return NextResponse.json({ ok: true, trip: nextData });
