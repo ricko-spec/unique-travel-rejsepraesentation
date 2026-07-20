@@ -1,7 +1,7 @@
 # SYSTEM-ARKITEKTUR — Unique Travel Rejsepræsentation
 
-> **Dokumentversion:** 2026-07-20
-> **Beskriver produktion:** `origin/main` @ `bf6d416` (2026-06-17, "feat(admin): redigerbar intro-tekst på ny trip-detalje-side")
+> **Dokumentversion:** 2026-07-20 (rev. 2 — efter sec-batch, password-flow og destinations-upload-flowet)
+> **Beskriver produktion:** `origin/main` pr. 2026-07-20 (`234d2e8` + destinations-admin-batchen)
 > **Verifikationsmetode:** Alle påstande i dette dokument er verificeret direkte i koden på `origin/main` og i den levende Supabase-database (`iunixfpthdftmkgpugex`) den 2026-07-20. Kode-referencer angives som `filsti:linjenummer`. Hvor noget ikke kunne verificeres, står der eksplicit "ukendt — kræver Ricko-bekræftelse".
 
 ---
@@ -57,6 +57,7 @@ Alle versioner er verificeret i `package.json` på `main`:
 | `@supabase/supabase-js` | `^2.46.1` | Data-adgang (service role, server-side) | Al data-adgang går gennem serveren; RLS lukker alt andet |
 | `@supabase/ssr` | `^0.5.2` | Cookie-baseret auth-session | Standardmåden at holde Supabase Auth-sessioner i Next.js App Router (middleware + server components) |
 | Zod | `^3.23.8` | Runtime-validering af Claude-output og request-bodies | Claude-output er utroværdigt input; Zod-skemaet er "loose" med preprocessors så små format-afvigelser ikke vælter parsing (se §9) |
+| sharp | `^0.35.3` | Server-side billedbehandling (resize + WebP) i destinations-upload | Originaler (op til 50 MB) resizes til 1920×1080/1200×800 WebP i `finalize-upload` — klient-side resize blev fravalgt pga. kvalitet (tilføjet 2026-07-20) |
 | Tailwind CSS | `^3.4.15` (dev) | Utility-CSS (primært admin/nyere komponenter) | Suppleret af håndskrevne klasser i `globals.css` for kundesiden — designet var en pixel-perfekt HTML-reference (`reference/`) der var lettest at portere som ren CSS |
 | `next/font/google` (Cormorant + Open Sans) | (indbygget i Next) | Self-hostede brand-fonte | GDPR — ingen requests til Google Fonts fra kundens browser (`src/app/layout.tsx:2-18`) |
 | ESLint + eslint-config-next | `^8.57.1` / `14.2.18` (dev) | Lint | — |
@@ -110,7 +111,7 @@ uniquetravel-rejsepraesentation/
 │   │       ├── page.tsx          # Session-gate: viser AdminLogin eller AdminDashboard
 │   │       ├── AdminLogin.tsx    # Client: email+password-formular mod POST /admin/api/auth
 │   │       ├── AdminDashboard.tsx# Client: PDF-dropzone, parse-preview, opret/opdater, liste over alle rejser
-│   │       ├── DestinationManager.tsx  # Client: billede-bibliotek pr. destination (hero + 3 galleri-slots)
+│   │       ├── DestinationManager.tsx  # Client: billede-bibliotek pr. destination — opret destination + 3-trins signed-URL-upload (hero + 3 galleri-slots)
 │   │       │
 │   │       ├── trips/[id]/       # Detalje-side pr. rejse
 │   │       │   ├── page.tsx      # Server: henter row, gater på session
@@ -122,16 +123,18 @@ uniquetravel-rejsepraesentation/
 │   │       │
 │   │       ├── profil/
 │   │       │   ├── page.tsx      # Server: gater + henter egen profil
-│   │       │   └── ProfileEditor.tsx  # Client: rediger navn/telefon/advisor_match_name
+│   │       │   └── ProfileEditor.tsx  # Client: rediger navn/telefon/advisor_match_name + skift adgangskode (kræver nuværende)
 │   │       │
 │   │       └── api/              # Alle API-routes (se §5)
-│   │           ├── auth/route.ts             # POST login / DELETE logout
+│   │           ├── auth/route.ts             # POST login (rate-limit + audit) / DELETE logout
+│   │           ├── password/route.ts         # PATCH skift adgangskode (nuværende kode kræves, rate-limit, audit)
 │   │           ├── parse/route.ts            # POST PDF → Claude → valideret Trip-JSON
 │   │           ├── trips/route.ts            # GET liste / POST upsert
 │   │           ├── trips/[id]/route.ts       # PATCH active/heroPhoto
-│   │           ├── trips/[id]/intro/route.ts # POST intro-redigering (+ audit)
-│   │           ├── destinations/route.ts     # GET/POST destination-metadata
-│   │           ├── destinations/upload/route.ts  # POST billede → Supabase Storage
+│   │           ├── trips/[id]/intro/route.ts # POST intro-redigering (fingerprints-audit, optimistisk lås → 409)
+│   │           ├── destinations/route.ts     # GET bibliotek / POST opret destination
+│   │           ├── destinations/upload-url/route.ts      # POST signeret _staging-URL (trin 1)
+│   │           ├── destinations/finalize-upload/route.ts # POST download+sharp→WebP+række-upsert (trin 3)
 │   │           ├── profile/route.ts          # GET/PATCH egen profil
 │   │           └── health/route.ts           # GET env-diagnostik + Supabase-probe
 │   │
@@ -148,6 +151,7 @@ uniquetravel-rejsepraesentation/
 │   │   └── SectionHeader.tsx     # Genbrugt sektions-overskrift (guld-label + hairline)
 │   │
 │   └── lib/
+│       ├── audit.ts              # Central writeAudit-helper (best-effort) + typed AuditAction-union + requestMeta
 │       ├── claude.ts             # Anthropic-klient, SYSTEM_PROMPT, JSON-salvage, rå-tekst-udtræk
 │       ├── types.ts              # Zod-schemas, Trip-typer, normalizeTrip, danske dato-helpers (537 linjer)
 │       ├── profiles.ts           # Profil-CRUD (RLS self-only) + enrichAdvisorContact (service role)
@@ -247,28 +251,30 @@ sequenceDiagram
 
 ## 5. Route-katalog
 
-Verificeret ved gennemlæsning af samtlige 9 `route.ts`-filer under `src/app/` (der findes ingen andre). Alle routes kører `runtime = "nodejs"` og `dynamic = "force-dynamic"`. "Auth" betyder `getSessionUser()`-tjek der returnerer 401 uden gyldig Supabase-session-cookie.
+Verificeret ved gennemlæsning af samtlige 11 `route.ts`-filer under `src/app/` (der findes ingen andre). Alle routes kører `runtime = "nodejs"` og `dynamic = "force-dynamic"`. "Auth" betyder `getSessionUser()`-tjek der returnerer 401 uden gyldig Supabase-session-cookie.
 
 | Sti | Metode | Auth | Formål | Input | Output |
 |---|---|---|---|---|---|
-| `/admin/api/auth` | POST | Nej (er selve login) | Log ind via Supabase Auth | JSON `{ email, password }` | `{ ok: true }` / 400 / 401 `{ error }` — session sættes som cookies |
+| `/admin/api/auth` | POST | Nej (er selve login) | Log ind via Supabase Auth. Rate-limitet `login:{ip}` (10/15 min) + audit `login_success`/`login_failed`/`login_rate_limited` (SEC-2) | JSON `{ email, password }` | `{ ok: true }` / 400 / 401 / 429 `{ error }` — session sættes som cookies |
 | `/admin/api/auth` | DELETE | Nej (no-op uden session) | Log ud (signOut + cookie-rydning) | — | `{ ok: true }` |
+| `/admin/api/password` | PATCH | Ja | Skift egen adgangskode. Kræver nuværende kode (verificeret via session-løs anon-klient), rate-limitet `pwchange:{ip}`, audit `password_changed`/`password_change_failed`/`password_change_rate_limited` | JSON `{ currentPassword, password (min 6) }` | `{ ok: true }` / 400 / 401 / 429 |
 | `/admin/api/parse` | POST | Ja | PDF → Claude → valideret, normaliseret, advisor-beriget Trip | FormData `file` (PDF, max 10 MB) | `{ trip, rawPdfText }` / 400 / 422 `{ error, issues, raw }` / 500 |
 | `/admin/api/trips` | GET | Ja | Liste over alle rejser (inkl. `data` + `raw_pdf_text` til QA) | — | `{ trips: [...] }` nyeste først |
 | `/admin/api/trips` | POST | Ja | Opret/opdater præsentation (upsert på `booking_no`) | JSON `{ trip, heroPhoto?, customerName?, slugOverride?, rawPdfText? }` | `{ id, slug, created, updated }` / 400 / 409 (slug-kollision) / 500 |
 | `/admin/api/trips/[id]` | PATCH | Ja | Aktivér/deaktivér (soft delete) og/eller skift hero-foto | JSON `{ active?, heroPhoto? }` | `{ ok: true }` / 400 / 500 |
-| `/admin/api/trips/[id]/intro` | POST | Ja | Gem sælger-redigeret intro (max 500 tegn; tom tilladt) + audit-log | JSON `{ intro }` | `{ ok: true, trip }` / 400 / 404 / 500 |
+| `/admin/api/trips/[id]/intro` | POST | Ja | Gem sælger-redigeret intro (max 500 tegn; tom tilladt) + audit med fingerprints. **Optimistisk lås (DATA-1):** UPDATE betinget på læst `updated_at` — konflikt giver 409 | JSON `{ intro }` | `{ ok: true, trip }` / 400 / 404 / **409** / 500 |
 | `/admin/api/destinations` | GET | Ja | Hent destinationsbibliotek | — | `{ destinations: [{ name, hero_url, gallery, updated_at }] }` |
-| `/admin/api/destinations` | POST | Ja | Opret/opdater destination-metadata (upsert på `name`) | JSON `{ name, hero_url?, gallery? (max 3 URLs) }` | `{ destination }` / 400 / 500 |
-| `/admin/api/destinations/upload` | POST | Ja | Upload billede til Storage-bucket `destinations` | FormData `file` (jpeg/png/webp/avif, max 10 MB), `destination`, `slot` (`hero`\|`gallery-0..2`) | `{ url, path }` / 400 / 500 |
+| `/admin/api/destinations` | POST | Ja | **Opret** ny destination (tomme billedfelter). Case-insensitivt dublet-tjek. Billed-URLs skrives kun af `finalize-upload` | JSON `{ name }` | `{ destination }` / 400 / 409 (dublet) / 500 |
+| `/admin/api/destinations/upload-url` | POST | Ja | Trin 1 af billed-upload: udsted signeret Storage-URL til `_staging/{dest}/{slot}-{ts}-{random}.tmp` + opportunistisk oprydning af staging-filer > 24 t | JSON `{ destination, slot }` | `{ signedUrl, token, path }` / 400 / 500 |
+| `/admin/api/destinations/finalize-upload` | POST | Ja | Trin 3: download fra staging (sti strengt regex- og destinations-valideret), magic-byte-tjek, sharp → WebP (hero 1920×1080 q85 / galleri 1200×800 q80), staging slettes, destinations-rækken upsertes, audit. `maxDuration = 60` | JSON `{ destination, slot, stagingPath }` | `{ url }` / 400 / 500 |
 | `/admin/api/profile` | GET | Ja (implicit via RLS) | Hent egen profil | — | `{ profile }` / 401 |
 | `/admin/api/profile` | PATCH | Ja (implicit via RLS) | Opdater egne felter | JSON `{ full_name?, phone?, advisor_match_name? }` | `{ profile }` / 400 / 401 / 500 |
 | `/admin/api/health` | GET | Ja | Driftsdiagnostik: env-sanity + Supabase-probe | — | `{ env, supabaseReachable, supabaseError, nodeVersion }` |
 
 **Særlige noter:**
-- `POST /admin/api/parse` har `maxDuration = 300` (`parse/route.ts:9`) — Claude-kaldet kan tage op mod et minut ved store PDF'er. `destinations/upload` har `maxDuration = 30`.
+- `POST /admin/api/parse` har `maxDuration = 300` (`parse/route.ts:9`) — Claude-kaldet kan tage op mod et minut ved store PDF'er.
+- Den gamle `POST /admin/api/destinations/upload` (FormData-baseret) blev **slettet 2026-07-20**: Vercel serverless afviser request-bodies > 4,5 MB ved platform-kanten, så originalfotos kan aldrig gå gennem en API-route. Billeder uploades nu direkte til Supabase Storage via det signerede 3-trins-flow (upload-url → PUT → finalize-upload). Bemærk at parse-routen stadig modtager PDF'er via FormData — TravelWire-PDF'er er små nok, men grænsen på 4,5 MB (ikke de kodede 10 MB) er den reelle.
 - Ud over API-routes findes **én server action**: `unlockTrip(slug, code)` i `src/app/[bookingId]/actions.ts` — kundens kode-unlock. Den er ikke en HTTP-route men kaldes via Next.js' server-action-mekanisme fra `AccessGate`. Auth: ingen (kunden er anonym); beskyttet af rate-limit + audit i stedet.
-- `POST /admin/api/auth` (login) har **ingen rate-limit og ingen audit-logning** — kun kunde-unlock er beskyttet. Se §17.
 - Fejl-responser fra `trips`-routes inkluderer `envDiagnostics()` ved forbindelsesfejl (`trips/route.ts:57`) — bevidst valg for at kunne fejlsøge Vercel-env-problemer direkte fra klienten. Diagnostikken indeholder ikke selve nøglerne, kun præsens/rolle/længde.
 
 ---
@@ -329,7 +335,7 @@ Sælgeren kan:
 2. **Oprette/opdatere en præsentation** — justere link-slug, kundenavn (internt) og hero-foto-URL med live-preview; se råt JSON; advarsel hvis booking-nummeret findes i forvejen. *API:* `POST /admin/api/trips`.
 3. **Kopiere kunde-materiale** — "Kopiér link" lægger en færdig dansk email-tekst (intro-linje + link + "Adgangskode: {booking_no}") i udklipsholderen (`AdminDashboard.tsx:152-168`).
 4. **Administrere alle præsentationer** — tabel med booking, destination, kunde, dato, status; pr. række: Kopiér link, Åbn, Detaljer (→ `/admin/trips/[id]`), Sammenlign (→ `/admin/qa/[slug]`), Deaktivér/Aktivér. *API:* `GET /admin/api/trips`, `PATCH /admin/api/trips/[id]`.
-5. **Vedligeholde destinationsbilleder** — `DestinationManager` nederst: pr. destination ét hero-slot (16:9) og tre galleri-slots (4:3) med upload/skift. *API:* `GET/POST /admin/api/destinations`, `POST /admin/api/destinations/upload`. Destinationer oprettes ved upsert — rækken opstår første gang der uploades et billede til navnet (UI-teksten "oprettes automatisk når en rejsepræsentation parses" er upræcis; parsing skriver ikke til `destinations`).
+5. **Vedligeholde destinationsbilleder** — `DestinationManager` nederst: **opret ny destination** (navn, trimmet, case-insensitivt dublet-tjek i både klient og server) og pr. destination ét hero-slot (16:9) + tre galleri-slots (4:3). Upload kører 3-trins-flowet: lokal validering (max 50 MB + magic-byte-sniff) → `POST .../upload-url` (signeret Storage-URL) → direkte PUT til Supabase Storage (udenom Vercels 4,5 MB-grænse) → `POST .../finalize-upload` (sharp → WebP, række-opdatering, staging-oprydning). "Behandler billede..." vises under hele forløbet. *API:* `GET/POST /admin/api/destinations`, `POST .../upload-url`, `POST .../finalize-upload`.
 6. **Log ud** (`DELETE /admin/api/auth`) og gå til **Min profil**.
 
 ### `/admin/trips/[id]` — Rejse-detaljer (`page.tsx` + `TripDetail.tsx`, tilføjet 2026-06-17)
@@ -347,7 +353,7 @@ To-kolonne-visning: venstre den rå PDF-tekst (`trips.raw_pdf_text`, udtrukket a
 
 ### `/admin/profil` — Min profil (`profil/page.tsx` + `ProfileEditor.tsx`, tilføjet 2026-06-02)
 
-Sælgeren kan redigere **fulde navn**, **telefon** og **rådgivernavn i rejseplaner** (`advisor_match_name`) — sidstnævnte skal matche navnet i TravelWire-PDF'ernes "Vores ref:"-linje præcist, da det styrer om kundens ContactCTA viser sælgerens email/telefon. Email er read-only (login-identitet). *API:* `GET/PATCH /admin/api/profile` (RLS: kun egen række). Password-skift findes **ikke** i produktion (ligger på feature-branchen `feature/individuelle-logins-profiles`).
+Sælgeren kan redigere **fulde navn**, **telefon** og **rådgivernavn i rejseplaner** (`advisor_match_name`) — sidstnævnte skal matche navnet i TravelWire-PDF'ernes "Vores ref:"-linje præcist, da det styrer om kundens ContactCTA viser sælgerens email/telefon. Email er read-only (login-identitet). *API:* `GET/PATCH /admin/api/profile` (RLS: kun egen række). Siden har desuden en **"Skift adgangskode"-sektion** (tilføjet `ba1b5e1`, 2026-07-20): nuværende adgangskode kræves, ny kode min. 6 tegn + bekræftelse, client-validering før kald. *API:* `PATCH /admin/api/password` (se §5 — verifikation via session-løs anon-klient, rate-limit `pwchange:{ip}`, fuld audit).
 
 ---
 
@@ -537,7 +543,7 @@ Browser                    middleware.ts              Server Component / API-rou
    |                           |                               |  └─ null? → AdminLogin / 401 / redirect
 ```
 
-1. **Login:** `AdminLogin` POSTer email+password til `/admin/api/auth`; routen kalder `signInWithPassword` på session-klienten (`auth/route.ts:15-16`) — `@supabase/ssr` sætter session-cookies på svaret. Klienten kalder `router.refresh()` og server-komponenten ser nu brugeren.
+1. **Login:** `AdminLogin` POSTer email+password til `/admin/api/auth`. Routen rate-limiter først (`login:{ip}`, 10/15 min — SEC-2), kalder så `signInWithPassword` på session-klienten — `@supabase/ssr` sætter session-cookies på svaret — og audit-logger udfaldet (`login_success`/`login_failed`/`login_rate_limited`). Klienten kalder `router.refresh()` og server-komponenten ser nu brugeren. Adgangskoden kan efterfølgende skiftes på `/admin/profil` via `PATCH /admin/api/password` (kræver nuværende kode).
 2. **Session-vedligehold:** `src/middleware.ts` matcher **kun** `/admin` og `/admin/:path*` (`:34-36`). Den kalder `auth.getUser()` for at trigge token-refresh og persistere de nye cookies — det eneste sted cookies må skrives under navigation. I Server Components er `cookies().set()` read-only; `createSessionClient` sluger derfor set-fejl bevidst (`auth.ts:24-29`).
 3. **Gating:** `getSessionUser()` (`auth.ts:37-42`) er den centrale gate. Mønstret pr. kontekst:
    - `/admin` (side): `user ?? render(<AdminLogin/>)` (`admin/page.tsx:14-17`)
@@ -648,7 +654,7 @@ Der er **ingen retry-logik** og ingen persistering af fejlede parses (`parse_fai
 
 ## 12. Rate-limiting
 
-Én generisk mekanisme, ét anvendelsessted. Konstanter: **10 forsøg pr. 15 minutter** (`src/lib/rate-limit.ts:3-4`).
+Én generisk mekanisme, **tre anvendelsessteder** (kunde-unlock, admin-login, password-skift — hver med sit eget nøgle-budget). Konstanter: **10 forsøg pr. 15 minutter** (`src/lib/rate-limit.ts:3-4`).
 
 ### Samspillet `checkRateLimit` ↔ `increment_rate_limit`
 
@@ -675,41 +681,38 @@ Designpointer:
 ### Hvor rate-limit er (og ikke er) anvendt
 
 ```
-                             ┌──────────────────────────────┐
-Kunde → AccessGate → unlockTrip ──► checkRateLimit("unlock:{ip}:{slug}")
-                             │   ├─ allowed → kode-tjek → cookie
-                             │   └─ blocked → "For mange forsøg.
-                             │       Prøv igen om N minutter."
-                             │       + audit: unlock_rate_limited
-                             └──────────────────────────────┘
+Kunde  → unlockTrip                  ──► checkRateLimit("unlock:{ip}:{slug}")
+                                          blocked → "For mange forsøg …" + audit: unlock_rate_limited
+Sælger → POST /admin/api/auth        ──► checkRateLimit("login:{ip}")          [SEC-2, 2026-07-20]
+                                          blocked → 429 + audit: login_rate_limited
+Sælger → PATCH /admin/api/password   ──► checkRateLimit("pwchange:{ip}")       [2026-07-20]
+                                          blocked → 429 + audit: password_change_rate_limited
 
-Sælger → POST /admin/api/auth (login)      ── INGEN rate-limit (kun Supabase Auths egne grænser)
-Sælger → POST /admin/api/parse             ── INGEN rate-limit (session-gated; Claude-omkostning ubegrænset)
-Alle øvrige admin-routes                   ── INGEN rate-limit (session-gated)
+Sælger → POST /admin/api/parse       ── INGEN rate-limit (session-gated; Claude-omkostning ubegrænset — SEC-4-backlog)
+Alle øvrige admin-routes             ── INGEN rate-limit (session-gated)
 ```
 
-Nøglen `unlock:{ip}:{slug}` betyder: samme IP kan angribe forskellige slugs uafhængigt, og delt IP (kontornetværk/CGNAT) deler budget pr. rejse. IP læses som første hop i `x-forwarded-for` (`actions.ts:53-54`) — på Vercel er den trustworthy nok til formålet. Der findes ingen oprydning af udløbne rækker (14 rækker pt.; vokser langsomt).
+Fælles mønster alle tre steder: rate-limit-tjek FØR selve valideringen, og succes decrementer aldrig tælleren. Nøgle-design: `unlock:{ip}:{slug}` giver budget pr. IP pr. rejse; `login:{ip}` og `pwchange:{ip}` er pr. IP på tværs af konti — på kontorets fælles IP deler sælgerne budgettet (bevidst afvejning mod brute-force). IP læses som første hop i `x-forwarded-for` — på Vercel er den trustworthy nok til formålet. Der findes ingen oprydning af udløbne rækker (vokser langsomt).
 
 ---
 
 ## 13. Audit-logging
 
-**Princip:** best-effort — audit må ALDRIG blokere forretningshandlingen. Begge writers har try/catch der logger til konsollen og fortsætter (`actions.ts:21-41`, `intro/route.ts:20-41`). Tabellens kontrakt (kolonne-kommentar): "Ingen PII må gemmes her" — der logges slugs, booking-numre, IP, user-agent og intro-tekster, men aldrig rejsende-navne eller adgangskoder ud over booking-nr (som selv ER adgangskoden — se §17).
+**Princip:** best-effort — audit må ALDRIG blokere forretningshandlingen. Al skrivning går gennem den **centrale helper `writeAudit` i `src/lib/audit.ts`** (refaktoreret fra to duplikerede kopier i `ec1dc8d`): typed `AuditAction`-union så tastefejl fanges af compileren, `requestMeta()` til IP/user-agent, try/catch der logger og fortsætter. Actor-format er `admin:{email}` for sælgere og `customer:{slug}` for kunder. Tabellens kontrakt: "Ingen PII må gemmes her" — intro-tekster logges som **fingerprints** (SEC-3), aldrig fuld tekst; adgangskoder logges aldrig.
 
-### Hvad logges faktisk (verificeret i kode OG i de 24 levende rækker)
+### Hvad logges faktisk (alle actions i `AuditAction`-unionen, verificeret i kode og drift)
 
 | Action | Actor | Skrives fra | Metadata |
 |---|---|---|---|
-| `unlock_success` (13 rækker) | `customer:{slug}` | `actions.ts:104-110` — FØR redirect, da `redirect()` kaster | `{ attempt_count }` |
-| `unlock_failed` (10 rækker) | `customer:{slug}` | `actions.ts:82-89` (trip findes ikke) og `:93-99` (forkert kode) | `{ attempt_count, reason: "trip_not_found" \| "wrong_code" }` |
-| `unlock_rate_limited` (1 række) | `customer:{slug}` | `actions.ts:61-67` | `{ attempt_count }` |
-| `intro_edited` (0 rækker endnu) | `user:{email}` | `intro/route.ts:94-98` | `{ booking_no, before, after }` — fuld revision af teksten |
+| `unlock_success` / `unlock_failed` / `unlock_rate_limited` | `customer:{slug}` | `[bookingId]/actions.ts` (succes logges FØR redirect, da `redirect()` kaster) | `{ attempt_count }` (+ `reason: "trip_not_found" \| "wrong_code"` ved failed) |
+| `login_success` / `login_failed` / `login_rate_limited` | `admin:{email}` | `api/auth/route.ts` (SEC-2) | `{ attempt_count }` |
+| `password_changed` / `password_change_failed` / `password_change_rate_limited` | `admin:{email}` | `api/password/route.ts` | `{ attempt_count }` (+ `reason: "wrong_current_password" \| "update_error"`) — aldrig selve koderne |
+| `intro_edited` | `admin:{email}` | `api/trips/[id]/intro/route.ts` | `{ booking_no, before_len, after_len, before_fp, after_fp }` — sha256-fingerprints (12 hex), IKKE teksten (SEC-3). Fuldt revisionsspor bor på trip-rækken (`introOriginal` + `introEditedAt/By`) |
+| `destination_image_uploaded` | `admin:{email}` | `api/destinations/finalize-upload/route.ts` | `{ original_size, resized_size, format_from, format_to }` |
 
 ### Dokumenteret men IKKE implementeret
 
-`audit_log.action`-kolonnens DB-kommentar nævner desuden `trip_viewed`, `trip_created`, `trip_updated`, `pdf_parsed`, `admin_login`, `admin_login_failed`, `unlock_attempt` — **ingen af disse skrives af koden på main**. Kommentaren beskriver ambitionen fra da tabellen blev oprettet (2026-06-15), ikke virkeligheden. Særligt fraværet af `admin_login_failed` betyder at brute-force mod sælger-logins hverken rate-limites eller opdages i audit-loggen (se §17).
-
-De to `writeAudit`-hjælpere er næsten identiske kopier i to filer — en oplagt fremtidig `src/lib/audit.ts`.
+`audit_log.action`-kolonnens DB-kommentar nævner desuden `trip_viewed`, `trip_created`, `trip_updated`, `pdf_parsed`, `admin_login`, `admin_login_failed`, `unlock_attempt` — disse skrives fortsat ikke (login-hændelser bruger navnene `login_*`, ikke `admin_login*`). Fuld mutations-dækning er Fable's DATA-2-backlog.
 
 ---
 
@@ -770,7 +773,8 @@ Designets kilde-sandhed er `reference/README.md` — en komplet handoff-spec med
 
 - **Hosting:** Vercel, koblet til GitHub-repoet `ricko-spec/unique-travel-rejsepraesentation`. Branch-alias for produktion: `unique-travel-rejsepraesentation-git-main-unique-travel.vercel.app`.
 - **Auto-deploy:** hvert push til `main` er en produktionsudgivelse. Der findes ingen staging-miljø — preview-deploys på feature-branches ER test-miljøet. Husreglen er: **push aldrig til main uden preview-test** (dokumentations-ændringer undtaget).
-- **Branch-strategi:** feature-branches → preview-deploy → merge til `main`. Aktiv pt.: `feature/individuelle-logins-profiles` (fase 2: password-skift + ProfileEditor-udvidelser — ikke i produktion).
+- **Produktionsdomæne:** `rejseplaner.uniquetravel.dk` (custom domain på Vercel-projektet — verificeret via deployment-alias 2026-07-20). Branch-aliaset ovenfor peger på samme deployment.
+- **Branch-strategi:** feature-branches → preview-deploy → Rickos OK → fast-forward/merge til `main` → branch slettes. Preview-deploys ligger bag Vercel Authentication (302 til Vercel-login) og deler produktions-DB/-Storage — test-data i preview er ægte data.
 - **Miljøvariabler** (navne fra `.env.example` — values ligger kun i Vercel project settings og lokal `.env.local`):
   - `ANTHROPIC_API_KEY` — Claude-parsing (server-only)
   - `NEXT_PUBLIC_SUPABASE_URL` — projekt-URL (eksponeres til klient, harmløs)
@@ -801,11 +805,11 @@ Bevidst simple valg og halvfærdige kanter, i prioriteret rækkefølge:
 
 1. **~~Ingen migrations-styring~~ (løst 2026-07-20).** Hele skemaet er nu versioneret som `supabase/001-008_*.sql` (idempotente, verificeret mod live-DDL); de gamle `schema.sql`/`profiles.sql` med de misvisende projekt-referencer er fjernet. Drift kan nu opdages mekanisk: `node scripts/check-schema-drift.mjs` diffner live-DB mod den committede `supabase/schema-baseline.json` (exit 1 ved afvigelse) — første kørsel fangede straks en manglende trigger (`destinations_set_updated_at`). Tilbageværende risiko: tjekket køres manuelt (ingen CI at hænge det på).
 2. **Adgangskoden ER booking-nummeret.** Lav entropi (5-cifret sekvensnummer), og det står i klartekst i kundens email sammen med linket. Rate-limiten (10/15 min pr. IP pr. slug) er den reelle beskyttelse. Accepteret risiko for indholdstypen — men værd at genbesøge hvis der kommer betalingsdata på siderne.
-3. **Sælger-login er ubeskyttet ud over Supabase Auths defaults.** Ingen rate-limit, ingen `admin_login_failed`-audit (selvom DB-kommentaren lover det), ingen 2FA. Admin-kontoen kan parse ubegrænset (Claude-omkostning).
+3. **~~Sælger-login er ubeskyttet~~ (løst 2026-07-20, SEC-2).** Login har nu rate-limit + fuld audit; password-skift kræver nuværende kode og er selvstændigt rate-limitet. Tilbage: ingen 2FA, og parse-endpointet er stadig uden rate-limit (Claude-omkostning ved lækket session — SEC-4-backlog).
 4. **`parse_failures` er død infrastruktur.** Designet (kategorier, PII-RLS, oprydningspolitik i kommentaren) men aldrig koblet til koden — fejlede parses efterlader kun Vercel-console-logs der roterer væk. Enten kobles den på i `parse/route.ts`'s catch-stier, eller droppes.
 5. **`trips.created_by` skrives ikke.** Kolonne + FK + index er klar i DB'en (kommentaren hævder "Fylder fra auth session ved POST /admin/api/trips" — det gør main-koden ikke). Formentlig forberedt til feature-branchen; indtil merge er kolonnen NULL og kommentaren misvisende.
 6. **Ingen tests og ingen CI.** Ingen testfiler i repoet, ingen GitHub Actions. `normalizeTrip`'s legacy-mapping og `computeWarnings` er oplagte unit-test-kandidater med høj regression-risiko ved prompt-ændringer.
-7. **Audit-dækningen er smal.** Kun unlock + intro-redigering. `trip_created/updated`, `pdf_parsed`, `trip_viewed` og admin-logins logges ikke, selvom tabellen er dimensioneret til det. `writeAudit` er duplikeret i to filer.
+7. **Audit-dækningen er bredere men ikke fuld (delvist løst 2026-07-20).** Nu dækkes unlock, login, password-skift, intro-redigering og destination-uploads via den centrale `src/lib/audit.ts` (dubletterne er væk). `trip_created/updated`, `pdf_parsed` og `trip_viewed` logges fortsat ikke (DATA-2-backlog). **Ny kendt blind vinkel:** Storage-bucket-config (`destinations` har `file_size_limit = 50 MB`, hævet fra 10 MB 2026-07-20, + MIME-allowlist) ligger i `storage`-skemaet og fanges IKKE af `check-schema-drift.mjs`, som kun dækker `public`.
 8. **README og DB-kommentarer lyver lidt.** Model-navn (README siger `claude-sonnet-4-20250514`, koden `claude-sonnet-4-6`), struktur-afsnittet mangler alle sider/routes fra juni, `profiles.sql` kalder produktions-DB'en "dev" og nævner projektet `sujimigwcjkzpekkdpzf` som "production" — ukendt om det findes/bruges — kræver Ricko-bekæftelse.
 9. **Småting/død kode:** `ADVISOR_PHONE`-eksporten i `Hero.tsx:55` bruges ingen steder; `ActionBar`/fejlsider hardkoder hovednummeret `+45 59 49 86 30` (mens CTA'en viser sælgerens — bevidst?); `.admin-textarea` er defineret to gange i `globals.css` (`:1092` monospace/80px og `:1258` Open Sans/150px — sidste vinder); redundant index `trips_slug_idx` ved siden af unique-constraintens eget; `qa/_placeholder.md`; DB-defaulten på `trips.slug` (tilfældig hex) er reelt død; `disclaimer`/`documentType`/`isOptional` efterspørges i prompten men bruges aldrig; `DestinationManager`-hjælpeteksten påstår destinationer auto-oprettes ved parse (de oprettes ved billede-upload); ingen oprydning af `rate_limits`-rækker.
 10. **Ingen retry på Claude-kald.** Én transient API-fejl = manuel re-upload. Fint ved nuværende volumen; irriterende ved vækst.

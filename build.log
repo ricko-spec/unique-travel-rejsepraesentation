@@ -1,0 +1,65 @@
+
+> uniquetravel-rejsepraesentation@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.35
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (101kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (231kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+./src/app/admin/AdminDashboard.tsx
+315:19  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/admin/DestinationManager.tsx
+316:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/trip/DestinationGallery.tsx
+27:15  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/trip/Hero.tsx
+15:9  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/6) ...
+   Generating static pages (1/6) 
+   Generating static pages (2/6) 
+   Generating static pages (4/6) 
+ ✓ Generating static pages (6/6)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                  Size     First Load JS
+┌ ○ /                                        146 B          87.4 kB
+├ ○ /_not-found                              873 B          88.1 kB
+├ ƒ /[bookingId]                             2.63 kB        89.9 kB
+├ ƒ /admin                                   5.94 kB         102 kB
+├ ƒ /admin/api/auth                          0 B                0 B
+├ ƒ /admin/api/destinations                  0 B                0 B
+├ ƒ /admin/api/destinations/finalize-upload  0 B                0 B
+├ ƒ /admin/api/destinations/upload-url       0 B                0 B
+├ ƒ /admin/api/health                        0 B                0 B
+├ ƒ /admin/api/parse                         0 B                0 B
+├ ƒ /admin/api/password                      0 B                0 B
+├ ƒ /admin/api/profile                       0 B                0 B
+├ ƒ /admin/api/trips                         0 B                0 B
+├ ƒ /admin/api/trips/[id]                    0 B                0 B
+├ ƒ /admin/api/trips/[id]/intro              0 B                0 B
+├ ƒ /admin/profil                            1.59 kB        88.9 kB
+├ ƒ /admin/qa/[slug]                         174 B          96.1 kB
+└ ƒ /admin/trips/[id]                        2.37 kB        89.6 kB
++ First Load JS shared by all                87.3 kB
+  ├ chunks/117-5cdbc5a45758cbea.js           31.7 kB
+  ├ chunks/fd9d1056-7d5ef8fc1895a2d9.js      53.6 kB
+  └ other shared chunks (total)              1.9 kB
+
+
+ƒ Middleware                                 82.1 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

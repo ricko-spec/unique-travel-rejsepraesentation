@@ -6,10 +6,11 @@ import { getSupabaseService } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const updateSchema = z.object({
-  name: z.string().min(1),
-  hero_url: z.string().url().nullable().optional(),
-  gallery: z.array(z.string().url()).max(3).optional(),
+// POST er et rent opret-endpoint. Billed-URLs skrives KUN af
+// finalize-upload-routen (server-side efter behandling) — de blev tidligere
+// upsertet herfra af klienten, men det flow forsvandt med signed-URL-upload.
+const createSchema = z.object({
+  name: z.string(),
 });
 
 export async function GET() {
@@ -43,25 +44,53 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "Ugyldigt JSON" }, { status: 400 });
   }
-  const parsed = updateSchema.safeParse(body);
+  const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Ugyldigt body", issues: parsed.error.issues },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Ugyldigt body" }, { status: 400 });
   }
+  const name = parsed.data.name.trim();
+  if (!name) {
+    return NextResponse.json({ error: "Destinationsnavn må ikke være tomt" }, { status: 400 });
+  }
+
   try {
     const supabase = getSupabaseService();
-    const payload: Record<string, unknown> = { name: parsed.data.name };
-    if (parsed.data.hero_url !== undefined) payload.hero_url = parsed.data.hero_url;
-    if (parsed.data.gallery !== undefined) payload.gallery = parsed.data.gallery;
+
+    // Dublet-tjek case-insensitivt: "japan" og "Japan" er samme destination —
+    // to rækker ville splitte billedbiblioteket og forvirre hero-opslaget.
+    const { data: existing, error: dupError } = await supabase
+      .from("destinations")
+      .select("name")
+      .ilike("name", name)
+      .limit(1);
+
+    if (dupError) {
+      console.error("[POST /api/destinations] Duplicate check error", dupError);
+      return NextResponse.json({ error: dupError.message }, { status: 500 });
+    }
+    if (existing && existing.length > 0) {
+      return NextResponse.json(
+        { error: `Destinationen "${existing[0].name}" findes allerede` },
+        { status: 409 },
+      );
+    }
+
+    // Ny række med tomme billedfelter — hero/galleri uploades bagefter via
+    // det eksisterende signed-URL-flow (upload-url → PUT → finalize-upload).
     const { data, error } = await supabase
       .from("destinations")
-      .upsert(payload, { onConflict: "name" })
+      .insert({ name, hero_url: null, gallery: [] })
       .select()
       .single();
+
     if (error) {
-      console.error("[POST /api/destinations] Supabase error", error);
+      console.error("[POST /api/destinations] Insert error", error);
+      if (error.code === "23505") {
+        return NextResponse.json(
+          { error: `Destinationen "${name}" findes allerede` },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     return NextResponse.json({ destination: data });

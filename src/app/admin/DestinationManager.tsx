@@ -16,6 +16,9 @@ export function DestinationManager() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -123,6 +126,42 @@ export function DestinationManager() {
     }
   }
 
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setCreateError(null);
+    const name = newName.trim();
+    if (!name) {
+      setCreateError("Indtast et destinationsnavn");
+      return;
+    }
+    // Case-insensitivt dublet-tjek mod den indlæste liste — serveren tjekker
+    // også, men her fanges det uden et roundtrip.
+    const dup = destinations.find(
+      (d) => d.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (dup) {
+      setCreateError(`Destinationen "${dup.name}" findes allerede`);
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await fetch("/admin/api/destinations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        throw new Error(await extractError(res, "Kunne ikke oprette destinationen"));
+      }
+      setNewName("");
+      await load();
+    } catch (e) {
+      setCreateError(e instanceof Error ? e.message : "Ukendt fejl");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="text-sm text-stone-500 py-6">Henter destinationer...</div>
@@ -137,9 +176,44 @@ export function DestinationManager() {
         </h2>
         <p className="text-sm text-stone-600 mt-1">
           Fælles billedbibliotek pr. land. Alle rejser til samme land bruger
-          disse billeder automatisk.
+          disse billeder automatisk. Destinationer oprettes manuelt her,
+          hvorefter hero- og galleribilleder kan uploades. Kundesiden bruger
+          rejsens eget billede eller en gradient som fallback, hvis der endnu
+          ikke findes billeder.
         </p>
       </div>
+
+      <form
+        onSubmit={handleCreate}
+        className="border border-stone-200 rounded-2xl p-4 bg-white flex flex-wrap items-end gap-3"
+      >
+        <div className="flex-1 min-w-[220px]">
+          <label
+            htmlFor="new-destination"
+            className="block text-xs uppercase tracking-wider text-stone-500 mb-2"
+          >
+            Opret destination
+          </label>
+          <input
+            id="new-destination"
+            className="w-full px-3 py-2 border border-stone-200 rounded-lg text-sm text-stone-900 focus:outline-none focus:border-stone-400"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="fx Japan"
+            disabled={creating}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={creating || !newName.trim()}
+          className="text-xs bg-stone-900 text-white px-4 py-2.5 rounded-md hover:bg-stone-800 disabled:opacity-50"
+        >
+          {creating ? "Opretter..." : "Opret"}
+        </button>
+        {createError && (
+          <p className="w-full text-sm text-red-700 mt-1">{createError}</p>
+        )}
+      </form>
 
       {error && (
         <div className="text-sm text-red-700 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
@@ -149,8 +223,7 @@ export function DestinationManager() {
 
       {destinations.length === 0 ? (
         <div className="text-sm text-stone-500">
-          Ingen destinationer endnu. De oprettes automatisk når en
-          rejsepræsentation parses.
+          Ingen destinationer endnu — opret den første ovenfor.
         </div>
       ) : (
         <div className="space-y-10">
