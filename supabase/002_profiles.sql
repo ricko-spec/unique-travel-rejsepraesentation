@@ -1,30 +1,31 @@
--- Unique Travel — profiles + auth
--- Run this in the SQL Editor for project: iunixfpthdftmkgpugex (dev).
--- For production (sujimigwcjkzpekkdpzf) run the same file at deploy time.
+-- ============================================================================
+-- Migration 002: profiles — sælgere (1:1 med auth.users)
+-- ============================================================================
+-- Kørt live på iunixfpthdftmkgpugex 2026-06-02 (auth-cutover, individuelle
+-- logins). Idempotent.
 --
--- profiles holder kontaktinfo pr. medarbejder, 1:1 med auth.users.
--- advisor_match_name = det navn der står i TravelWire-PDF'erne (fx "Gustav Gotfredsen"),
--- og bruges til at koble en rejses advisor til den rigtige email/telefon på kundesiden.
+-- advisor_match_name = det navn der står i TravelWire-PDF'ernes "Vores ref:"-
+-- linje (fx "Gustav Gotfredsen"). Bruges af enrichAdvisorContact til at koble
+-- en rejses advisor til den rigtige email/telefon på kundens ContactCTA.
+-- Brugere oprettes invite-only i Supabase Dashboard (Authentication → Add
+-- user); triggeren nederst auto-opretter profil-rækken.
+-- ============================================================================
 
 create table if not exists public.profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  email text not null,
-  full_name text,
-  phone text,
+  id                 uuid primary key references auth.users(id) on delete cascade,
+  email              text not null,
+  full_name          text,
+  phone              text,
   advisor_match_name text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
 );
 
 -- hurtigt, case-insensitivt opslag på rådgivernavn
 create index if not exists profiles_advisor_match_idx
   on public.profiles (lower(advisor_match_name));
 
--- updated_at-trigger (fælles helper)
-create or replace function public.set_updated_at() returns trigger as $$
-begin new.updated_at = now(); return new; end;
-$$ language plpgsql;
-
+-- updated_at-trigger (helper defineret i 001)
 drop trigger if exists profiles_set_updated_at on public.profiles;
 create trigger profiles_set_updated_at
   before update on public.profiles
@@ -45,7 +46,7 @@ drop policy if exists "service_role full access profiles" on public.profiles;
 create policy "service_role full access profiles" on public.profiles
   for all to service_role using (true) with check (true);
 
--- auto-opret en profil-række når en bruger oprettes (invite-only via Supabase-dashboard)
+-- auto-opret en profil-række når en bruger oprettes
 create or replace function public.handle_new_user() returns trigger as $$
 begin
   insert into public.profiles (id, email, full_name)

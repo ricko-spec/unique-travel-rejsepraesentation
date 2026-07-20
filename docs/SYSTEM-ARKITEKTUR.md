@@ -155,12 +155,18 @@ uniquetravel-rejsepraesentation/
 │           ├── server.ts         # Service-role-klient + nøgle-validering + env-diagnostik
 │           └── auth.ts           # Session-klient (@supabase/ssr) + getSessionUser
 │
-└── supabase/
-    ├── schema.sql                # trips-tabellen + RLS (OBS: header nævner forkert projekt-ref, se §8)
-    └── profiles.sql              # profiles + RLS + auto-oprettelses-trigger
+└── supabase/                     # Nummererede, idempotente migrationer (001-007) — hele DB-skemaet
+    ├── README.md                 # Kør-rækkefølge, regler og drift-tjek
+    ├── 001_trips.sql             # trips + RLS + set_updated_at-helper
+    ├── 002_profiles.sql          # profiles + RLS + handle_new_user-trigger
+    ├── 003_destinations.sql      # destinations (billedbibliotek) + public-read RLS
+    ├── 004_audit_log.sql         # audit_log + indexes + RLS
+    ├── 005_rate_limits.sql       # rate_limits + increment_rate_limit RPC
+    ├── 006_created_by_on_trips.sql  # trips.created_by (sporing; skrives ikke af koden endnu)
+    └── 007_parse_failures.sql    # parse_failures dead-letter (ikke koblet til koden endnu)
 ```
 
-**Vigtigt om `supabase/`-mappen:** Den indeholder kun `trips` og `profiles`. Tabellerne `destinations`, `audit_log`, `rate_limits`, `parse_failures` samt RPC-funktionen `increment_rate_limit` **findes kun i den levende database** — deres DDL er aldrig blevet committet til repoet (se §8 og §17).
+**Om `supabase/`-mappen:** Frem til 2026-07-20 indeholdt den kun `trips` og `profiles` (som `schema.sql`/`profiles.sql`), mens `destinations`, `audit_log`, `rate_limits`, `parse_failures` og `increment_rate_limit` kun fandtes i den levende database. Det er nu rettet: hele skemaet er versioneret som migrationerne 001-007, verificeret 1:1 mod live-DDL. Se `supabase/README.md` for reglerne der skal forhindre ny drift.
 
 ---
 
@@ -348,7 +354,7 @@ Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_polic
 
 > **Vigtigt om projekt-referencer:** `.env.example:2` og README peger på `iunixfpthdftmkgpugex` — det er dér de 35 rejser, 7 profiler og al audit-data ligger, altså **den faktiske produktionsdatabase**. To andre refs optræder i repoet og er **misvisende**: `supabase/schema.sql:2` nævner `ocxrvkrggzppyhgyambj` (det er Allotment-værktøjets projekt — copy-paste-fejl), og `supabase/profiles.sql:2-3` kalder `iunixfpthdftmkgpugex` for "dev" og nævner `sujimigwcjkzpekkdpzf` som "production" — om dét projekt overhovedet findes/bruges er ukendt — kræver Ricko-bekræftelse.
 
-> **Schema-drift:** Kun `trips` og `profiles` har DDL i repoet. `destinations`, `audit_log`, `rate_limits`, `parse_failures` og `increment_rate_limit` er oprettet direkte i Supabase (formentlig via SQL Editor/MCP) uden versionering. Dokumentationen nedenfor er derfor eneste samlede reference.
+> **Schema-drift (løst 2026-07-20):** Oprindeligt havde kun `trips` og `profiles` DDL i repoet, mens `destinations`, `audit_log`, `rate_limits`, `parse_failures` og `increment_rate_limit` var oprettet direkte i Supabase uden versionering. Hele skemaet er nu versioneret som `supabase/001-007_*.sql`, verificeret mod live-DDL. Dokumentationen nedenfor beskriver den levende database; migrationsfilerne er den kørbar kilde.
 
 ### `trips` — hovedtabellen (35 rækker; oprindelig, i `supabase/schema.sql`)
 
@@ -790,7 +796,7 @@ Designets kilde-sandhed er `reference/README.md` — en komplet handoff-spec med
 
 Bevidst simple valg og halvfærdige kanter, i prioriteret rækkefølge:
 
-1. **Ingen migrations-styring — schema-drift er allerede sket.** 4 af 6 tabeller + RPC'en findes kun i den levende DB. `schema.sql`-headeren peger endda på et forkert projekt (`ocxrvkrggzppyhgyambj`). En ny udvikler kan ikke genskabe databasen fra repoet. *Anbefaling: dump nuværende skema til versionerede filer.*
+1. **~~Ingen migrations-styring~~ (løst 2026-07-20).** Hele skemaet er nu versioneret som `supabase/001-007_*.sql` (idempotente, verificeret mod live-DDL); de gamle `schema.sql`/`profiles.sql` med de misvisende projekt-referencer er fjernet. Tilbageværende risiko: processen er stadig manuel — SQL kørt i SQL Editor/MCP uden en samtidig migrationsfil genskaber driften (regler i `supabase/README.md`).
 2. **Adgangskoden ER booking-nummeret.** Lav entropi (5-cifret sekvensnummer), og det står i klartekst i kundens email sammen med linket. Rate-limiten (10/15 min pr. IP pr. slug) er den reelle beskyttelse. Accepteret risiko for indholdstypen — men værd at genbesøge hvis der kommer betalingsdata på siderne.
 3. **Sælger-login er ubeskyttet ud over Supabase Auths defaults.** Ingen rate-limit, ingen `admin_login_failed`-audit (selvom DB-kommentaren lover det), ingen 2FA. Admin-kontoen kan parse ubegrænset (Claude-omkostning).
 4. **`parse_failures` er død infrastruktur.** Designet (kategorier, PII-RLS, oprydningspolitik i kommentaren) men aldrig koblet til koden — fejlede parses efterlader kun Vercel-console-logs der roterer væk. Enten kobles den på i `parse/route.ts`'s catch-stier, eller droppes.
@@ -810,7 +816,7 @@ Bevidst simple valg og halvfærdige kanter, i prioriteret rækkefølge:
 
 # Bilag A — Rekonstrueret DDL for hele databasen
 
-Fordi 4 af 6 tabeller mangler DDL i repoet (§8), er hele skemaet her rekonstrueret fra den levende database (`list_tables` + `pg_indexes` + `pg_policies` + `pg_get_functiondef`, 2026-07-20). Dette bilag kan køres mod et tomt Supabase-projekt og bør flyttes til versionerede migrations-filer.
+Hele skemaet, rekonstrueret fra den levende database (`list_tables` + `pg_indexes` + `pg_policies` + `pg_get_functiondef`, 2026-07-20). **Siden 2026-07-20 er dette også versioneret som de kørbar migrationer `supabase/001-007_*.sql`** — brug dém til at opsætte en database; dette bilag står som samlet læse-reference. Én detalje afviger: FK'en på `created_by` har `on delete set null` i produktion (medtaget i `006_created_by_on_trips.sql`, mangler i DDL'en nedenfor).
 
 ```sql
 -- ============================================================

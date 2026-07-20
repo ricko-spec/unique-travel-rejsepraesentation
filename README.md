@@ -26,7 +26,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 ### 3. Kør SQL-migrationerne
 
-Åbn [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdftmkgpugex/sql/new) i Supabase og kør `supabase/schema.sql` (trips) og `supabase/profiles.sql` (profiles + auth).
+Åbn [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdftmkgpugex/sql/new) i Supabase og kør de nummererede filer i `supabase/` i rækkefølge (`001_trips.sql` → `007_parse_failures.sql`). Alle filer er idempotente. Se `supabase/README.md` for indhold, regler og drift-tjek. Opret derudover Storage-bucket `destinations` i Dashboard → Storage.
 
 ### 4. Start dev server
 
@@ -42,7 +42,7 @@ npm run dev
 - Next.js 14 (App Router) + TypeScript
 - Tailwind + CSS custom properties til brandtokens (`globals.css`)
 - Supabase (`@supabase/supabase-js` med service role nøgle server-side; RLS låser direkte client-adgang)
-- Anthropic Claude (`claude-sonnet-4-20250514`) til PDF-parsing
+- Anthropic Claude (`claude-sonnet-4-6`, se `src/lib/claude.ts`) til PDF-parsing
 - next/font/google self-hoster Cormorant + Open Sans (GDPR)
 - Zod til schema-validering
 
@@ -70,8 +70,9 @@ src/
     supabase/auth.ts          session-klient (@supabase/ssr) + getSessionUser
     profiles.ts               profil-opslag/-opdatering (RLS self-only)
   middleware.ts               holder Supabase-session frisk på /admin
-supabase/schema.sql           trips-skema
-supabase/profiles.sql         profiles + auth (RLS, triggers)
+supabase/001-007_*.sql        nummererede, idempotente migrationer (hele DB-skemaet)
+supabase/README.md            kør-rækkefølge, regler og drift-tjek
+docs/SYSTEM-ARKITEKTUR.md     komplet system-beskrivelse af produktionen
 reference/                    designreferencer (uændret)
 ```
 
