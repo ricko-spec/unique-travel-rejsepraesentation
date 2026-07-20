@@ -215,8 +215,9 @@ function ImageSlot({
           </div>
         )}
         {uploading && (
-          <div className="absolute inset-0 bg-white/80 flex items-center justify-center text-sm text-stone-700">
-            Uploader...
+          <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center gap-2 text-sm text-stone-700">
+            <span className="admin-spinner" />
+            Behandler billede...
           </div>
         )}
       </div>

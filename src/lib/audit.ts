@@ -13,7 +13,8 @@ export type AuditAction =
   | "login_rate_limited"
   | "password_changed"
   | "password_change_failed"
-  | "password_change_rate_limited";
+  | "password_change_rate_limited"
+  | "destination_image_uploaded";
 
 export type AuditEntry = {
   // "admin:{email}" for sælgere, "customer:{slug}" for kunder
