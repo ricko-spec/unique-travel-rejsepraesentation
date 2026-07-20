@@ -19,6 +19,12 @@ export function ProfileEditor({
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -39,6 +45,42 @@ export function ProfileEditor({
       return;
     }
     setToast("Profil gemt");
+    setTimeout(() => setToast(null), 2400);
+  }
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError(null);
+    if (!currentPassword) {
+      setPwError("Indtast din nuværende adgangskode");
+      return;
+    }
+    if (password.length < 6) {
+      setPwError("Adgangskoden skal være mindst 6 tegn");
+      return;
+    }
+    if (password !== confirm) {
+      setPwError("De to adgangskoder er ikke ens");
+      return;
+    }
+    setPwSaving(true);
+    const res = await fetch("/admin/api/password", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ currentPassword, password }),
+    });
+    setPwSaving(false);
+    if (!res.ok) {
+      const j = await res
+        .json()
+        .catch(() => ({ error: "Kunne ikke skifte adgangskode" }));
+      setPwError(j.error ?? "Kunne ikke skifte adgangskode");
+      return;
+    }
+    setCurrentPassword("");
+    setPassword("");
+    setConfirm("");
+    setToast("Adgangskode skiftet");
     setTimeout(() => setToast(null), 2400);
   }
 
@@ -120,6 +162,64 @@ export function ProfileEditor({
             <div className="admin-actions-row">
               <button type="submit" className="admin-btn" disabled={saving}>
                 {saving ? "Gemmer..." : "Gem profil"}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div className="admin-card">
+          <h2>Skift adgangskode</h2>
+          {pwError && <div className="admin-error">{pwError}</div>}
+
+          <form onSubmit={changePassword}>
+            <div className="admin-form-row">
+              <label className="admin-label" htmlFor="current_password">
+                Nuværende adgangskode
+              </label>
+              <input
+                id="current_password"
+                className="admin-input"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Din nuværende adgangskode"
+              />
+            </div>
+
+            <div className="admin-form-row">
+              <label className="admin-label" htmlFor="new_password">
+                Nyt password
+              </label>
+              <input
+                id="new_password"
+                className="admin-input"
+                type="password"
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Mindst 6 tegn"
+              />
+            </div>
+
+            <div className="admin-form-row">
+              <label className="admin-label" htmlFor="confirm_password">
+                Bekræft nyt password
+              </label>
+              <input
+                id="confirm_password"
+                className="admin-input"
+                type="password"
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="Gentag adgangskoden"
+              />
+            </div>
+
+            <div className="admin-actions-row">
+              <button type="submit" className="admin-btn" disabled={pwSaving}>
+                {pwSaving ? "Gemmer..." : "Skift adgangskode"}
               </button>
             </div>
           </form>

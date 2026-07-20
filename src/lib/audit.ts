@@ -10,7 +10,10 @@ export type AuditAction =
   | "intro_edited"
   | "login_success"
   | "login_failed"
-  | "login_rate_limited";
+  | "login_rate_limited"
+  | "password_changed"
+  | "password_change_failed"
+  | "password_change_rate_limited";
 
 export type AuditEntry = {
   // "admin:{email}" for sælgere, "customer:{slug}" for kunder
