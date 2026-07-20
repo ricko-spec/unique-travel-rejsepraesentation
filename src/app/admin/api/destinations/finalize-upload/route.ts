@@ -7,26 +7,40 @@ import { writeAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+// Download af op til 50 MB + sharp-decode af store stock-billeder kan tage tid.
+export const maxDuration = 60;
 
 // Trin 3 af upload-flowet (trin 1: /upload-url udsteder signeret URL,
 // trin 2: browseren PUT'er originalen direkte til Storage — udenom Vercels
-// 4,5 MB body-grænse). Her hentes originalen fra orig/-stien, valideres på
-// magic bytes, resizes til WebP, lægges på den endelige sti, og originalen
-// slettes igen.
+// 4,5 MB body-grænse). Her hentes originalen fra _staging/, valideres på
+// magic bytes, resizes til WebP, lægges på den endelige sti, staging-filen
+// slettes, og destinations-rækken opdateres — så klienten kun skal kalde
+// dette ene endpoint efter upload.
 
-const ALLOWED_SLOTS = new Set(["hero", "gallery-0", "gallery-1", "gallery-2"]);
-const MAX_SIZE = 10 * 1024 * 1024;
+const ALLOWED_SLOTS = ["hero", "gallery-0", "gallery-1", "gallery-2"] as const;
+type Slot = (typeof ALLOWED_SLOTS)[number];
+const MAX_SIZE = 50 * 1024 * 1024;
 
 // Kun stier vores eget upload-url-trin kan have udstedt accepteres —
 // forhindrer at endpointet bruges til at læse/slette vilkårlige objekter.
-const ORIG_PATH_RE = /^orig\/[a-z0-9-]{1,60}\/(hero|gallery-[0-2])-\d{10,16}$/;
+const STAGING_PATH_RE =
+  /^_staging\/[a-z0-9-]{1,60}\/(hero|gallery-[0-2])-\d{10,16}-[0-9a-f]{12}\.tmp$/;
 
 const bodySchema = z.object({
-  path: z.string().regex(ORIG_PATH_RE, "Ugyldig upload-sti"),
   destination: z.string().min(1),
-  slot: z.string(),
+  slot: z.enum(ALLOWED_SLOTS),
+  stagingPath: z.string().regex(STAGING_PATH_RE, "Ugyldig staging-sti"),
 });
+
+function slugifyDestination(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
 
 // Magic-byte-sniff: MIME-headeren er klient-styret og kan lyve — de første
 // bytes kan ikke. Returnerer det faktiske format eller null.
@@ -60,36 +74,41 @@ export async function POST(req: Request) {
     const msg = parsed.error.issues[0]?.message ?? "Ugyldige data";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
-  const { path: origPath, destination, slot } = parsed.data;
+  const { destination, slot, stagingPath } = parsed.data;
 
-  if (!ALLOWED_SLOTS.has(slot)) {
-    return NextResponse.json({ error: `Ugyldig slot: "${slot}"` }, { status: 400 });
+  const cleanDest = slugifyDestination(destination);
+  if (!cleanDest) {
+    return NextResponse.json({ error: "Ugyldig destination" }, { status: 400 });
+  }
+  // Stien skal høre til PRÆCIS denne destination — ikke bare være en gyldig
+  // staging-sti for en anden.
+  if (!stagingPath.startsWith(`_staging/${cleanDest}/`)) {
+    return NextResponse.json(
+      { error: "Staging-sti matcher ikke destinationen" },
+      { status: 400 },
+    );
   }
 
   const supabase = getSupabaseService();
-  // Slugify'et destination står allerede i orig-stien (upload-url-trinnet
-  // byggede den) — genbrug det så endelig sti og orig-sti altid matcher.
-  const cleanDest = origPath.split("/")[1];
 
-  // Best-effort oprydning af originalen — må ikke vælte svaret.
-  async function removeOriginal() {
+  async function removeStaging() {
     try {
-      const { error } = await supabase.storage.from("destinations").remove([origPath]);
-      if (error) console.error("[upload] Kunne ikke slette original:", error);
+      const { error } = await supabase.storage.from("destinations").remove([stagingPath]);
+      if (error) console.error("[finalize] Kunne ikke slette staging-fil:", error);
     } catch (e) {
-      console.error("[upload] Sletning af original kastede:", e);
+      console.error("[finalize] Sletning af staging-fil kastede:", e);
     }
   }
 
   try {
     const { data: blob, error: dlError } = await supabase.storage
       .from("destinations")
-      .download(origPath);
+      .download(stagingPath);
 
     if (dlError || !blob) {
-      console.error("[POST /api/destinations/upload] Download error", dlError);
+      console.error("[POST /api/destinations/finalize-upload] Download error", dlError);
       return NextResponse.json(
-        { error: "Kunne ikke hente den uploadede fil — prøv igen" },
+        { error: "Kunne ikke hente den uploadede fil — prøv at uploade igen" },
         { status: 500 },
       );
     }
@@ -97,17 +116,17 @@ export async function POST(req: Request) {
     const original = Buffer.from(await blob.arrayBuffer());
 
     if (original.length > MAX_SIZE) {
-      await removeOriginal();
+      await removeStaging();
       const mb = (original.length / 1024 / 1024).toFixed(1);
       return NextResponse.json(
-        { error: `Fil er for stor (max 10 MB) — modtog ${mb} MB` },
+        { error: `Fil er for stor (max 50 MB) — modtog ${mb} MB` },
         { status: 400 },
       );
     }
 
     const formatFrom = sniffImageFormat(original);
     if (!formatFrom) {
-      await removeOriginal();
+      await removeStaging();
       return NextResponse.json(
         { error: "Filen er ikke et gyldigt billede" },
         { status: 400 },
@@ -130,8 +149,8 @@ export async function POST(req: Request) {
         .webp({ quality })
         .toBuffer();
     } catch (e) {
-      console.error("[POST /api/destinations/upload] sharp-fejl", e);
-      await removeOriginal();
+      console.error("[POST /api/destinations/finalize-upload] sharp-fejl", e);
+      await removeStaging();
       return NextResponse.json(
         { error: "Kunne ikke behandle billedet — er det en gyldig JPEG, PNG eller WebP?" },
         { status: 400 },
@@ -149,16 +168,55 @@ export async function POST(req: Request) {
       });
 
     if (uploadError) {
-      console.error("[POST /api/destinations/upload] Storage error", uploadError);
-      await removeOriginal();
+      console.error("[POST /api/destinations/finalize-upload] Storage error", uploadError);
+      await removeStaging();
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
     }
-
-    await removeOriginal();
 
     const { data: pub } = supabase.storage
       .from("destinations")
       .getPublicUrl(finalPath);
+    const url = pub.publicUrl;
+
+    // Staging slettes FØR destinations-rækken opdateres (aftalt rækkefølge).
+    await removeStaging();
+
+    // Opdater destinations-rækken server-side — klienten skal ikke længere
+    // selv POSTe til /admin/api/destinations bagefter.
+    const { data: existing, error: readError } = await supabase
+      .from("destinations")
+      .select("hero_url, gallery")
+      .eq("name", destination.trim())
+      .maybeSingle();
+
+    if (readError) {
+      console.error("[POST /api/destinations/finalize-upload] Row read error", readError);
+      return NextResponse.json({ error: readError.message }, { status: 500 });
+    }
+
+    const payload: { name: string; hero_url?: string; gallery?: string[] } = {
+      name: destination.trim(),
+    };
+    if (slot === "hero") {
+      payload.hero_url = url;
+    } else {
+      const idx = Number(slot.replace("gallery-", ""));
+      const gallery: string[] = Array.isArray(existing?.gallery)
+        ? [...(existing!.gallery as string[])]
+        : [];
+      while (gallery.length <= idx) gallery.push("");
+      gallery[idx] = url;
+      payload.gallery = gallery.filter((u) => !!u);
+    }
+
+    const { error: upsertError } = await supabase
+      .from("destinations")
+      .upsert(payload, { onConflict: "name" });
+
+    if (upsertError) {
+      console.error("[POST /api/destinations/finalize-upload] Row upsert error", upsertError);
+      return NextResponse.json({ error: upsertError.message }, { status: 500 });
+    }
 
     await writeAudit(supabase, {
       actor: `admin:${user.email ?? user.id}`,
@@ -172,10 +230,10 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ url: pub.publicUrl, path: finalPath });
+    return NextResponse.json({ url });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Ukendt fejl";
-    console.error("[POST /api/destinations/upload] Throw", e);
+    console.error("[POST /api/destinations/finalize-upload] Throw", e);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

@@ -44,6 +44,22 @@ export function DestinationManager() {
     return `${fallback} (HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ""})`;
   }
 
+  // Magic-byte-sniff af filens første bytes — extension og MIME-type kan
+  // begge lyve; det kan de faktiske bytes ikke.
+  async function sniffMime(file: File): Promise<string | null> {
+    const buf = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    if (buf.length < 12) return null;
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47)
+      return "image/png";
+    const ascii = (from: number, to: number) =>
+      String.fromCharCode(...buf.slice(from, to));
+    if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "image/webp";
+    if (ascii(4, 8) === "ftyp" && ["avif", "avis"].includes(ascii(8, 12)))
+      return "image/avif";
+    return null;
+  }
+
   async function handleUpload(
     destination: string,
     slot: Slot,
@@ -53,67 +69,51 @@ export function DestinationManager() {
     setUploadingKey(key);
     setError(null);
     try {
-      // 1) Bed serveren om en signeret Storage-URL (auth + validering af
-      //    slot/størrelse/filtype sker her).
-      const initRes = await fetch("/admin/api/destinations/upload-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          destination,
-          slot,
-          size: file.size,
-          mime: file.type || "application/octet-stream",
-        }),
-      });
-      if (!initRes.ok) {
-        throw new Error(await extractError(initRes, "Kunne ikke starte upload"));
-      }
-      const { signedUrl, path } = await initRes.json();
-
-      // 2) Upload originalen DIREKTE til Supabase Storage — udenom Vercel,
-      //    hvis platform-grænse på 4,5 MB ellers afviser store originaler
-      //    før vores kode overhovedet kører.
-      const putRes = await fetch(signedUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
-      });
-      if (!putRes.ok) {
+      // 0) Lokal validering før noget sendes: størrelse + faktisk indhold.
+      if (file.size > 50 * 1024 * 1024) {
         throw new Error(
-          `Upload til billedlageret fejlede (HTTP ${putRes.status}) — prøv igen`,
+          `Filen er for stor (max 50 MB) — den er ${(file.size / 1024 / 1024).toFixed(1)} MB`,
+        );
+      }
+      const mime = await sniffMime(file);
+      if (!mime) {
+        throw new Error(
+          "Filen ser ikke ud til at være et gyldigt billede (JPEG/PNG/WebP/AVIF)",
         );
       }
 
-      // 3) Bed serveren behandle billedet (magic bytes, resize, WebP).
-      const upRes = await fetch("/admin/api/destinations/upload", {
+      // 1) Bed serveren om en signeret Storage-URL (auth + slot-validering).
+      const initRes = await fetch("/admin/api/destinations/upload-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path, destination, slot }),
+        body: JSON.stringify({ destination, slot }),
       });
-      if (!upRes.ok) {
-        throw new Error(await extractError(upRes, "Billedbehandling fejlede"));
+      if (!initRes.ok) {
+        throw new Error(await extractError(initRes, "Kunne ikke få upload-tilladelse"));
       }
-      const { url } = await upRes.json();
-      const current = destinations.find((d) => d.name === destination);
-      const payload: { name: string; hero_url?: string; gallery?: string[] } = {
-        name: destination,
-      };
-      if (slot === "hero") {
-        payload.hero_url = url;
-      } else {
-        const idx = Number(slot.replace("gallery-", ""));
-        const gallery = [...(current?.gallery || [])];
-        while (gallery.length <= idx) gallery.push("");
-        gallery[idx] = url;
-        payload.gallery = gallery.filter((u) => !!u);
+      const { signedUrl, path } = await initRes.json();
+
+      // 2) Upload originalen DIREKTE til Supabase Storage — udenom Vercels
+      //    4,5 MB body-grænse. Content-Type fra sniff (bucketens MIME-
+      //    allowlist håndhæver jpeg/png/webp/avif).
+      const putRes = await fetch(signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": mime },
+        body: file,
+      });
+      if (!putRes.ok) {
+        throw new Error(`Upload til Supabase fejlede (HTTP ${putRes.status})`);
       }
-      const metaRes = await fetch("/admin/api/destinations", {
+
+      // 3) Bed serveren behandle billedet (magic bytes, resize, WebP) —
+      //    finalize opdaterer også destinations-rækken og rydder staging op.
+      const finRes = await fetch("/admin/api/destinations/finalize-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ destination, slot, stagingPath: path }),
       });
-      if (!metaRes.ok) {
-        throw new Error(await extractError(metaRes, "Kunne ikke gemme billed-URL"));
+      if (!finRes.ok) {
+        throw new Error(await extractError(finRes, "Behandling fejlede"));
       }
       await load();
     } catch (e) {
