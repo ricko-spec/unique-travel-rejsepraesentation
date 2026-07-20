@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { z } from "zod";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSessionUser } from "@/lib/supabase/auth";
 import { describeFetchError, getSupabaseService } from "@/lib/supabase/server";
+import { writeAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,31 +13,6 @@ const MAX_INTRO_LEN = 500;
 const introSchema = z.object({
   intro: z.string().max(MAX_INTRO_LEN, `Intro må højst være ${MAX_INTRO_LEN} tegn`),
 });
-
-// Best-effort audit-logning af sælger-redigering — må aldrig blokere selve gemningen.
-// Samme tabel/form som kunde-unlock-loggen i src/app/[bookingId]/actions.ts.
-async function writeAudit(
-  supabase: SupabaseClient,
-  actor: string,
-  slug: string,
-  metadata: Record<string, unknown>,
-): Promise<void> {
-  try {
-    const h = headers();
-    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const { error } = await supabase.from("audit_log").insert({
-      actor,
-      action: "intro_edited",
-      resource: slug,
-      ip,
-      user_agent: h.get("user-agent"),
-      metadata,
-    });
-    if (error) console.error("[audit] intro_edited insert error:", error);
-  } catch (e) {
-    console.error("[audit] intro_edited insert threw:", e);
-  }
-}
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await getSessionUser();
@@ -91,10 +65,15 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    await writeAudit(supabase, actor, row.slug, {
-      booking_no: row.booking_no,
-      before,
-      after: intro,
+    await writeAudit(supabase, {
+      actor,
+      action: "intro_edited",
+      resource: row.slug,
+      metadata: {
+        booking_no: row.booking_no,
+        before,
+        after: intro,
+      },
     });
 
     return NextResponse.json({ ok: true, trip: nextData });
