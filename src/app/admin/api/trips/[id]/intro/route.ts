@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     const { data: row, error: readError } = await supabase
       .from("trips")
-      .select("id, slug, booking_no, data")
+      .select("id, slug, booking_no, data, updated_at")
       .eq("id", params.id)
       .maybeSingle();
 
@@ -66,14 +66,25 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       introEditedBy: user.email ?? user.id,
     };
 
-    const { error: updateError } = await supabase
+    // Optimistisk lås (DATA-1): UPDATE rammer kun hvis rækken stadig har det
+    // updated_at vi læste. Har en anden (sælger eller re-upload) ændret rækken
+    // imens, opdateres 0 rækker — og vi melder konflikt frem for at overskrive.
+    const { data: updated, error: updateError } = await supabase
       .from("trips")
       .update({ data: nextData })
-      .eq("id", params.id);
+      .eq("id", params.id)
+      .eq("updated_at", row.updated_at)
+      .select("id");
 
     if (updateError) {
       console.error("[POST /api/trips/:id/intro] Update error", updateError);
       return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+    if (!updated || updated.length === 0) {
+      return NextResponse.json(
+        { error: "Rejsen er ændret af en anden imens. Reload og prøv igen." },
+        { status: 409 },
+      );
     }
 
     await writeAudit(supabase, {

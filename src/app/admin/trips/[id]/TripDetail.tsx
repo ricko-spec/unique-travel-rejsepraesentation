@@ -88,6 +88,8 @@ export function TripDetail({
   const [savedIntro, setSavedIntro] = useState(initialIntro);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 409 fra serveren: en anden har ændret rejsen imens — kræver reload.
+  const [conflict, setConflict] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const warnings = useMemo(() => computeWarnings(intro, data), [intro, data]);
@@ -97,6 +99,7 @@ export function TripDetail({
 
   async function save() {
     setError(null);
+    setConflict(false);
     setSaving(true);
     const res = await fetch(`/admin/api/trips/${id}/intro`, {
       method: "POST",
@@ -107,6 +110,7 @@ export function TripDetail({
     if (!res.ok) {
       const j = await res.json().catch(() => ({ error: "Kunne ikke gemme" }));
       setError(j.error ?? "Kunne ikke gemme");
+      if (res.status === 409) setConflict(true);
       return;
     }
     setSavedIntro(intro);
@@ -153,7 +157,21 @@ export function TripDetail({
         {/* Intro-editor */}
         <div className="admin-card">
           <h2>Intro-tekst</h2>
-          {error && <div className="admin-error">{error}</div>}
+          {error && (
+            <div className="admin-error">
+              {error}
+              {conflict && (
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    className="admin-btn admin-btn-secondary"
+                    onClick={() => window.location.reload()}
+                  >
+                    Genindlæs siden
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="admin-brandrules">
             <strong>Hold brand-stilen — ens for alle sælgere.</strong> Teksten er en
