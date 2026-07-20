@@ -17,6 +17,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `005_rate_limits.sql` | rate_limits + `increment_rate_limit` RPC | 2026-06-15 |
 | `006_created_by_on_trips.sql` | trips.created_by (sporing — kolonnen skrives endnu ikke af koden) | 2026-07-04 |
 | `007_parse_failures.sql` | parse_failures dead-letter (endnu ikke koblet til koden) | 2026-07-04 |
+| `008_schema_snapshot.sql` | `schema_snapshot()` RPC — grundlag for drift-tjekket | 2026-07-20 |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.
@@ -24,16 +25,29 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 ## Regler
 
 1. **Ny DDL = ny nummereret fil.** Rediger aldrig en allerede-kørt migration (undtagen
-   kommentarer); næste fil hedder `008_*.sql`.
+   kommentarer); næste fil hedder `009_*.sql`.
 2. **Kør i Supabase-first, commit i samme ombæring.** Drift opstår når SQL køres i
    SQL Editor/MCP uden at filen lander i repoet — det var præcis hvad der skete med
    003-005 (oprettet maj-juni, først versioneret 2026-07-20).
 3. Idempotens er et krav: hele mappen skal kunne køres mod en tom DB og reproducere
    produktion.
+4. **Efter enhver skema-ændring:** kør migrationen live, dernæst
+   `node scripts/check-schema-drift.mjs --update-baseline`, og commit migration +
+   `schema-baseline.json` sammen.
 
 ## Drift-tjek
 
-Sammenlign live-DDL med filerne her (kør i SQL Editor eller via MCP):
+```bash
+node scripts/check-schema-drift.mjs                    # exit 0 = ok, 1 = drift, 2 = fejl
+node scripts/check-schema-drift.mjs --update-baseline  # efter bevidst ændring
+```
+
+Scriptet kalder `schema_snapshot()` (008) og diffner mod `schema-baseline.json` —
+kolonner, policies, indexes, constraints, funktioner, triggers og kommentarer.
+Fandt allerede ved første kørsel en manglende trigger (`destinations_set_updated_at`)
+som blev føjet til 003.
+
+Manuelt alternativ — sammenlign live-DDL direkte i SQL Editor:
 
 ```sql
 -- Tabeller + kolonner

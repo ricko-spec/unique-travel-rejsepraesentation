@@ -1,0 +1,592 @@
+{
+  "columns": [
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "audit_log",
+      "type": "uuid"
+    },
+    {
+      "column": "occurred_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "audit_log",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "actor",
+      "default": null,
+      "nullable": "NO",
+      "table": "audit_log",
+      "type": "text"
+    },
+    {
+      "column": "action",
+      "default": null,
+      "nullable": "NO",
+      "table": "audit_log",
+      "type": "text"
+    },
+    {
+      "column": "resource",
+      "default": null,
+      "nullable": "YES",
+      "table": "audit_log",
+      "type": "text"
+    },
+    {
+      "column": "ip",
+      "default": null,
+      "nullable": "YES",
+      "table": "audit_log",
+      "type": "text"
+    },
+    {
+      "column": "user_agent",
+      "default": null,
+      "nullable": "YES",
+      "table": "audit_log",
+      "type": "text"
+    },
+    {
+      "column": "metadata",
+      "default": null,
+      "nullable": "YES",
+      "table": "audit_log",
+      "type": "jsonb"
+    },
+    {
+      "column": "name",
+      "default": null,
+      "nullable": "NO",
+      "table": "destinations",
+      "type": "text"
+    },
+    {
+      "column": "hero_url",
+      "default": null,
+      "nullable": "YES",
+      "table": "destinations",
+      "type": "text"
+    },
+    {
+      "column": "gallery",
+      "default": "'[]'::jsonb",
+      "nullable": "NO",
+      "table": "destinations",
+      "type": "jsonb"
+    },
+    {
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "destinations",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "parse_failures",
+      "type": "uuid"
+    },
+    {
+      "column": "occurred_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "parse_failures",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "actor",
+      "default": null,
+      "nullable": "NO",
+      "table": "parse_failures",
+      "type": "text"
+    },
+    {
+      "column": "kind",
+      "default": null,
+      "nullable": "NO",
+      "table": "parse_failures",
+      "type": "text"
+    },
+    {
+      "column": "raw_response",
+      "default": null,
+      "nullable": "YES",
+      "table": "parse_failures",
+      "type": "text"
+    },
+    {
+      "column": "issues",
+      "default": null,
+      "nullable": "YES",
+      "table": "parse_failures",
+      "type": "jsonb"
+    },
+    {
+      "column": "pdf_name",
+      "default": null,
+      "nullable": "YES",
+      "table": "parse_failures",
+      "type": "text"
+    },
+    {
+      "column": "id",
+      "default": null,
+      "nullable": "NO",
+      "table": "profiles",
+      "type": "uuid"
+    },
+    {
+      "column": "email",
+      "default": null,
+      "nullable": "NO",
+      "table": "profiles",
+      "type": "text"
+    },
+    {
+      "column": "full_name",
+      "default": null,
+      "nullable": "YES",
+      "table": "profiles",
+      "type": "text"
+    },
+    {
+      "column": "phone",
+      "default": null,
+      "nullable": "YES",
+      "table": "profiles",
+      "type": "text"
+    },
+    {
+      "column": "advisor_match_name",
+      "default": null,
+      "nullable": "YES",
+      "table": "profiles",
+      "type": "text"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "profiles",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "profiles",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "key",
+      "default": null,
+      "nullable": "NO",
+      "table": "rate_limits",
+      "type": "text"
+    },
+    {
+      "column": "count",
+      "default": "0",
+      "nullable": "NO",
+      "table": "rate_limits",
+      "type": "integer"
+    },
+    {
+      "column": "reset_at",
+      "default": null,
+      "nullable": "NO",
+      "table": "rate_limits",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "rate_limits",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "trips",
+      "type": "uuid"
+    },
+    {
+      "column": "booking_no",
+      "default": null,
+      "nullable": "NO",
+      "table": "trips",
+      "type": "text"
+    },
+    {
+      "column": "slug",
+      "default": "lower(encode(extensions.gen_random_bytes(6), 'hex'::text))",
+      "nullable": "NO",
+      "table": "trips",
+      "type": "text"
+    },
+    {
+      "column": "destination",
+      "default": null,
+      "nullable": "NO",
+      "table": "trips",
+      "type": "text"
+    },
+    {
+      "column": "customer_name",
+      "default": null,
+      "nullable": "YES",
+      "table": "trips",
+      "type": "text"
+    },
+    {
+      "column": "data",
+      "default": null,
+      "nullable": "NO",
+      "table": "trips",
+      "type": "jsonb"
+    },
+    {
+      "column": "hero_photo",
+      "default": null,
+      "nullable": "YES",
+      "table": "trips",
+      "type": "text"
+    },
+    {
+      "column": "active",
+      "default": "true",
+      "nullable": "NO",
+      "table": "trips",
+      "type": "boolean"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "trips",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "trips",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "raw_pdf_text",
+      "default": null,
+      "nullable": "YES",
+      "table": "trips",
+      "type": "text"
+    },
+    {
+      "column": "created_by",
+      "default": null,
+      "nullable": "YES",
+      "table": "trips",
+      "type": "uuid"
+    }
+  ],
+  "comments": [
+    {
+      "column": null,
+      "comment": "Audit log over PII-adgang og admin-handlinger. Skrives kun via service_role fra server-side kode. Ingen PII må gemmes her.",
+      "table": "audit_log"
+    },
+    {
+      "column": "action",
+      "comment": "Hvilken type handling: trip_viewed, trip_created, trip_updated, pdf_parsed, admin_login, admin_login_failed, unlock_attempt, unlock_success, unlock_failed, unlock_rate_limited, intro_edited",
+      "table": "audit_log"
+    },
+    {
+      "column": "actor",
+      "comment": "Hvem udførte handlingen: admin:{email}, customer:{slug}, eller system",
+      "table": "audit_log"
+    },
+    {
+      "column": "metadata",
+      "comment": "Ekstra non-sensitive kontekst i JSON",
+      "table": "audit_log"
+    },
+    {
+      "column": "resource",
+      "comment": "Hvilket objekt blev påvirket — typisk slug eller booking_no",
+      "table": "audit_log"
+    },
+    {
+      "column": null,
+      "comment": "Dead-letter for fejlede PDF-parses. Rå-svaret kan indeholde kundedata — service-role-only, oprydes > 30 dage.",
+      "table": "parse_failures"
+    },
+    {
+      "column": "actor",
+      "comment": "admin:{email} — hvem der forsøgte parsen",
+      "table": "parse_failures"
+    },
+    {
+      "column": "issues",
+      "comment": "Zod-issues array ved schema_mismatch; ellers NULL.",
+      "table": "parse_failures"
+    },
+    {
+      "column": "kind",
+      "comment": "Fejlkategori: invalid_json | schema_mismatch | max_tokens | anthropic_error",
+      "table": "parse_failures"
+    },
+    {
+      "column": "raw_response",
+      "comment": "Første 8000 tegn af Claudes rå response (kan indeholde PII — RLS beskytter).",
+      "table": "parse_failures"
+    },
+    {
+      "column": null,
+      "comment": "Generic rate limiter. Key er typisk \"{action}:{ip}:{resource}\". Resettes når reset_at < now().",
+      "table": "rate_limits"
+    },
+    {
+      "column": "created_by",
+      "comment": "Sælgeren der oprettede rejsen. NULL for rækker oprettet før 2026-07. Fylder fra auth session ved POST /admin/api/trips.",
+      "table": "trips"
+    },
+    {
+      "column": "raw_pdf_text",
+      "comment": "Raw text extracted from uploaded PDF before Claude parsing. Used for admin QA comparison.",
+      "table": "trips"
+    }
+  ],
+  "constraints": [
+    {
+      "def": "PRIMARY KEY (id)",
+      "name": "audit_log_pkey",
+      "table": "audit_log"
+    },
+    {
+      "def": "PRIMARY KEY (name)",
+      "name": "destinations_pkey",
+      "table": "destinations"
+    },
+    {
+      "def": "PRIMARY KEY (id)",
+      "name": "parse_failures_pkey",
+      "table": "parse_failures"
+    },
+    {
+      "def": "FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE",
+      "name": "profiles_id_fkey",
+      "table": "profiles"
+    },
+    {
+      "def": "PRIMARY KEY (id)",
+      "name": "profiles_pkey",
+      "table": "profiles"
+    },
+    {
+      "def": "PRIMARY KEY (key)",
+      "name": "rate_limits_pkey",
+      "table": "rate_limits"
+    },
+    {
+      "def": "UNIQUE (booking_no)",
+      "name": "trips_booking_no_key",
+      "table": "trips"
+    },
+    {
+      "def": "FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL",
+      "name": "trips_created_by_fkey",
+      "table": "trips"
+    },
+    {
+      "def": "PRIMARY KEY (id)",
+      "name": "trips_pkey",
+      "table": "trips"
+    },
+    {
+      "def": "UNIQUE (slug)",
+      "name": "trips_slug_key",
+      "table": "trips"
+    }
+  ],
+  "functions": [
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.handle_new_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  insert into public.profiles (id, email, full_name)\n  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', ''))\n  on conflict (id) do nothing;\n  return new;\nend;\n$function$\n",
+      "name": "handle_new_user"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.increment_rate_limit(p_key text, p_new_reset_at timestamp with time zone)\n RETURNS TABLE(count integer, reset_at timestamp with time zone)\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nbegin\n  return query\n  insert into public.rate_limits (key, count, reset_at)\n  values (p_key, 1, p_new_reset_at)\n  on conflict (key) do update set\n    count = case\n      when public.rate_limits.reset_at < now() then 1\n      else public.rate_limits.count + 1\n    end,\n    reset_at = case\n      when public.rate_limits.reset_at < now() then excluded.reset_at\n      else public.rate_limits.reset_at\n    end\n  returning public.rate_limits.count, public.rate_limits.reset_at;\nend;\n$function$\n",
+      "name": "increment_rate_limit"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.schema_snapshot()\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\nselect jsonb_build_object(\n  'columns', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', table_name,\n      'column', column_name,\n      'type', data_type,\n      'nullable', is_nullable,\n      'default', column_default\n    ) order by table_name, ordinal_position)\n    from information_schema.columns\n    where table_schema = 'public'\n  ), '[]'::jsonb),\n\n  'policies', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', tablename,\n      'policy', policyname,\n      'cmd', cmd,\n      'roles', roles::text,\n      'using', qual,\n      'with_check', with_check\n    ) order by tablename, policyname)\n    from pg_policies\n    where schemaname = 'public'\n  ), '[]'::jsonb),\n\n  'indexes', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'name', indexname,\n      'def', indexdef\n    ) order by indexname)\n    from pg_indexes\n    where schemaname = 'public'\n  ), '[]'::jsonb),\n\n  'constraints', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', conrelid::regclass::text,\n      'name', conname,\n      'def', pg_get_constraintdef(oid)\n    ) order by conrelid::regclass::text, conname)\n    from pg_constraint\n    where connamespace = 'public'::regnamespace\n  ), '[]'::jsonb),\n\n  'functions', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'name', p.proname,\n      'def', pg_get_functiondef(p.oid)\n    ) order by p.proname)\n    from pg_proc p\n    where p.pronamespace = 'public'::regnamespace\n  ), '[]'::jsonb),\n\n  'triggers', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', c.relname,\n      'name', t.tgname,\n      'def', pg_get_triggerdef(t.oid)\n    ) order by c.relname, t.tgname)\n    from pg_trigger t\n    join pg_class c on c.oid = t.tgrelid\n    where c.relnamespace = 'public'::regnamespace\n      and not t.tgisinternal\n  ), '[]'::jsonb),\n\n  'comments', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', relname,\n      'column', attname,\n      'comment', cmt\n    ) order by relname, attname nulls first)\n    from (\n      select c.relname, null::text as attname, obj_description(c.oid) as cmt\n      from pg_class c\n      where c.relnamespace = 'public'::regnamespace\n        and c.relkind = 'r'\n        and obj_description(c.oid) is not null\n      union all\n      select c.relname, a.attname, col_description(c.oid, a.attnum)\n      from pg_class c\n      join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped\n      where c.relnamespace = 'public'::regnamespace\n        and c.relkind = 'r'\n        and col_description(c.oid, a.attnum) is not null\n    ) x\n  ), '[]'::jsonb)\n);\n$function$\n",
+      "name": "schema_snapshot"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin new.updated_at = now(); return new; end;\n$function$\n",
+      "name": "set_updated_at"
+    }
+  ],
+  "indexes": [
+    {
+      "def": "CREATE INDEX audit_log_action_idx ON public.audit_log USING btree (action)",
+      "name": "audit_log_action_idx"
+    },
+    {
+      "def": "CREATE INDEX audit_log_occurred_at_idx ON public.audit_log USING btree (occurred_at DESC)",
+      "name": "audit_log_occurred_at_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX audit_log_pkey ON public.audit_log USING btree (id)",
+      "name": "audit_log_pkey"
+    },
+    {
+      "def": "CREATE INDEX audit_log_resource_idx ON public.audit_log USING btree (resource)",
+      "name": "audit_log_resource_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX destinations_pkey ON public.destinations USING btree (name)",
+      "name": "destinations_pkey"
+    },
+    {
+      "def": "CREATE INDEX parse_failures_kind_idx ON public.parse_failures USING btree (kind)",
+      "name": "parse_failures_kind_idx"
+    },
+    {
+      "def": "CREATE INDEX parse_failures_occurred_at_idx ON public.parse_failures USING btree (occurred_at DESC)",
+      "name": "parse_failures_occurred_at_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX parse_failures_pkey ON public.parse_failures USING btree (id)",
+      "name": "parse_failures_pkey"
+    },
+    {
+      "def": "CREATE INDEX profiles_advisor_match_idx ON public.profiles USING btree (lower(advisor_match_name))",
+      "name": "profiles_advisor_match_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)",
+      "name": "profiles_pkey"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX rate_limits_pkey ON public.rate_limits USING btree (key)",
+      "name": "rate_limits_pkey"
+    },
+    {
+      "def": "CREATE INDEX rate_limits_reset_at_idx ON public.rate_limits USING btree (reset_at)",
+      "name": "rate_limits_reset_at_idx"
+    },
+    {
+      "def": "CREATE INDEX trips_active_idx ON public.trips USING btree (active)",
+      "name": "trips_active_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX trips_booking_no_key ON public.trips USING btree (booking_no)",
+      "name": "trips_booking_no_key"
+    },
+    {
+      "def": "CREATE INDEX trips_created_by_idx ON public.trips USING btree (created_by)",
+      "name": "trips_created_by_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX trips_pkey ON public.trips USING btree (id)",
+      "name": "trips_pkey"
+    },
+    {
+      "def": "CREATE INDEX trips_slug_idx ON public.trips USING btree (slug)",
+      "name": "trips_slug_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX trips_slug_key ON public.trips USING btree (slug)",
+      "name": "trips_slug_key"
+    }
+  ],
+  "policies": [
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access",
+      "roles": "{service_role}",
+      "table": "audit_log",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
+      "cmd": "SELECT",
+      "policy": "Anyone can read destinations",
+      "roles": "{public}",
+      "table": "destinations",
+      "using": "true",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access parse_failures",
+      "roles": "{service_role}",
+      "table": "parse_failures",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
+      "cmd": "SELECT",
+      "policy": "own profile read",
+      "roles": "{authenticated}",
+      "table": "profiles",
+      "using": "(auth.uid() = id)",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "policy": "own profile update",
+      "roles": "{authenticated}",
+      "table": "profiles",
+      "using": "(auth.uid() = id)",
+      "with_check": "(auth.uid() = id)"
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access profiles",
+      "roles": "{service_role}",
+      "table": "profiles",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access",
+      "roles": "{service_role}",
+      "table": "rate_limits",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access",
+      "roles": "{service_role}",
+      "table": "trips",
+      "using": "true",
+      "with_check": "true"
+    }
+  ],
+  "triggers": [
+    {
+      "def": "CREATE TRIGGER destinations_set_updated_at BEFORE UPDATE ON public.destinations FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+      "name": "destinations_set_updated_at",
+      "table": "destinations"
+    },
+    {
+      "def": "CREATE TRIGGER profiles_set_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+      "name": "profiles_set_updated_at",
+      "table": "profiles"
+    },
+    {
+      "def": "CREATE TRIGGER trips_set_updated_at BEFORE UPDATE ON public.trips FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+      "name": "trips_set_updated_at",
+      "table": "trips"
+    }
+  ]
+}

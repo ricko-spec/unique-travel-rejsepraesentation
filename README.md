@@ -26,7 +26,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 ### 3. Kør SQL-migrationerne
 
-Åbn [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdftmkgpugex/sql/new) i Supabase og kør de nummererede filer i `supabase/` i rækkefølge (`001_trips.sql` → `007_parse_failures.sql`). Alle filer er idempotente. Se `supabase/README.md` for indhold, regler og drift-tjek. Opret derudover Storage-bucket `destinations` i Dashboard → Storage.
+Åbn [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdftmkgpugex/sql/new) i Supabase og kør de nummererede filer i `supabase/` i rækkefølge (`001_trips.sql` → `008_schema_snapshot.sql`). Alle filer er idempotente. Se `supabase/README.md` for indhold, regler og drift-tjek (`node scripts/check-schema-drift.mjs`). Opret derudover Storage-bucket `destinations` i Dashboard → Storage.
 
 ### 4. Start dev server
 

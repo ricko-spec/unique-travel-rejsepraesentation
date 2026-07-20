@@ -88,7 +88,8 @@ uniquetravel-rejsepraesentation/
 │   └── app.jsx                   # React-referencetræ med eksempeldata (UMD React 18)
 │
 ├── scripts/
-│   └── backfill-advisor-contacts.mjs   # Engangs-script: sætter advisorEmail/Phone på eksisterende trips fra profiles (dry-run default, --apply for at skrive)
+│   ├── backfill-advisor-contacts.mjs   # Engangs-script: sætter advisorEmail/Phone på eksisterende trips fra profiles (dry-run default, --apply for at skrive)
+│   └── check-schema-drift.mjs    # Drift-tjek: diffner live-DB (via schema_snapshot RPC) mod supabase/schema-baseline.json — exit 1 ved drift
 │
 ├── src/
 │   ├── middleware.ts             # Holder Supabase-session-cookien frisk — matcher KUN /admin og /admin/*
@@ -163,7 +164,9 @@ uniquetravel-rejsepraesentation/
     ├── 004_audit_log.sql         # audit_log + indexes + RLS
     ├── 005_rate_limits.sql       # rate_limits + increment_rate_limit RPC
     ├── 006_created_by_on_trips.sql  # trips.created_by (sporing; skrives ikke af koden endnu)
-    └── 007_parse_failures.sql    # parse_failures dead-letter (ikke koblet til koden endnu)
+    ├── 007_parse_failures.sql    # parse_failures dead-letter (ikke koblet til koden endnu)
+    ├── 008_schema_snapshot.sql   # schema_snapshot() RPC — leverer DDL-metadata til drift-tjekket
+    └── schema-baseline.json      # Committet snapshot af live-DDL (opdateres med --update-baseline)
 ```
 
 **Om `supabase/`-mappen:** Frem til 2026-07-20 indeholdt den kun `trips` og `profiles` (som `schema.sql`/`profiles.sql`), mens `destinations`, `audit_log`, `rate_limits`, `parse_failures` og `increment_rate_limit` kun fandtes i den levende database. Det er nu rettet: hele skemaet er versioneret som migrationerne 001-007, verificeret 1:1 mod live-DDL. Se `supabase/README.md` for reglerne der skal forhindre ny drift.
@@ -796,7 +799,7 @@ Designets kilde-sandhed er `reference/README.md` — en komplet handoff-spec med
 
 Bevidst simple valg og halvfærdige kanter, i prioriteret rækkefølge:
 
-1. **~~Ingen migrations-styring~~ (løst 2026-07-20).** Hele skemaet er nu versioneret som `supabase/001-007_*.sql` (idempotente, verificeret mod live-DDL); de gamle `schema.sql`/`profiles.sql` med de misvisende projekt-referencer er fjernet. Tilbageværende risiko: processen er stadig manuel — SQL kørt i SQL Editor/MCP uden en samtidig migrationsfil genskaber driften (regler i `supabase/README.md`).
+1. **~~Ingen migrations-styring~~ (løst 2026-07-20).** Hele skemaet er nu versioneret som `supabase/001-008_*.sql` (idempotente, verificeret mod live-DDL); de gamle `schema.sql`/`profiles.sql` med de misvisende projekt-referencer er fjernet. Drift kan nu opdages mekanisk: `node scripts/check-schema-drift.mjs` diffner live-DB mod den committede `supabase/schema-baseline.json` (exit 1 ved afvigelse) — første kørsel fangede straks en manglende trigger (`destinations_set_updated_at`). Tilbageværende risiko: tjekket køres manuelt (ingen CI at hænge det på).
 2. **Adgangskoden ER booking-nummeret.** Lav entropi (5-cifret sekvensnummer), og det står i klartekst i kundens email sammen med linket. Rate-limiten (10/15 min pr. IP pr. slug) er den reelle beskyttelse. Accepteret risiko for indholdstypen — men værd at genbesøge hvis der kommer betalingsdata på siderne.
 3. **Sælger-login er ubeskyttet ud over Supabase Auths defaults.** Ingen rate-limit, ingen `admin_login_failed`-audit (selvom DB-kommentaren lover det), ingen 2FA. Admin-kontoen kan parse ubegrænset (Claude-omkostning).
 4. **`parse_failures` er død infrastruktur.** Designet (kategorier, PII-RLS, oprydningspolitik i kommentaren) men aldrig koblet til koden — fejlede parses efterlader kun Vercel-console-logs der roterer væk. Enten kobles den på i `parse/route.ts`'s catch-stier, eller droppes.

@@ -18,6 +18,14 @@ create table if not exists public.destinations (
   updated_at timestamptz not null default now()
 );
 
+-- updated_at-trigger (helper defineret i 001). Fandtes i produktion men
+-- manglede i både Cowork-snapshottet og første version af denne fil —
+-- opdaget af scripts/check-schema-drift.mjs 2026-07-20.
+drop trigger if exists destinations_set_updated_at on public.destinations;
+create trigger destinations_set_updated_at
+  before update on public.destinations
+  for each row execute function public.set_updated_at();
+
 alter table public.destinations enable row level security;
 
 -- Eneste tabel med offentlig læseadgang (kundesiden læser dog reelt via
