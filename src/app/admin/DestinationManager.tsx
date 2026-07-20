@@ -36,6 +36,14 @@ export function DestinationManager() {
     load();
   }, []);
 
+  // Udtræk serverens fejlbesked; falder svaret ikke ud som JSON (fx en
+  // platform-fejlside), vis i det mindste HTTP-status så fejlen kan handles på.
+  async function extractError(res: Response, fallback: string): Promise<string> {
+    const j = await res.json().catch(() => null);
+    if (j && typeof j.error === "string" && j.error) return j.error;
+    return `${fallback} (HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ""})`;
+  }
+
   async function handleUpload(
     destination: string,
     slot: Slot,
@@ -43,18 +51,47 @@ export function DestinationManager() {
   ) {
     const key = `${destination}:${slot}`;
     setUploadingKey(key);
+    setError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("destination", destination);
-      fd.append("slot", slot);
+      // 1) Bed serveren om en signeret Storage-URL (auth + validering af
+      //    slot/størrelse/filtype sker her).
+      const initRes = await fetch("/admin/api/destinations/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          destination,
+          slot,
+          size: file.size,
+          mime: file.type || "application/octet-stream",
+        }),
+      });
+      if (!initRes.ok) {
+        throw new Error(await extractError(initRes, "Kunne ikke starte upload"));
+      }
+      const { signedUrl, path } = await initRes.json();
+
+      // 2) Upload originalen DIREKTE til Supabase Storage — udenom Vercel,
+      //    hvis platform-grænse på 4,5 MB ellers afviser store originaler
+      //    før vores kode overhovedet kører.
+      const putRes = await fetch(signedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+      if (!putRes.ok) {
+        throw new Error(
+          `Upload til billedlageret fejlede (HTTP ${putRes.status}) — prøv igen`,
+        );
+      }
+
+      // 3) Bed serveren behandle billedet (magic bytes, resize, WebP).
       const upRes = await fetch("/admin/api/destinations/upload", {
         method: "POST",
-        body: fd,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path, destination, slot }),
       });
       if (!upRes.ok) {
-        const err = await upRes.json().catch(() => ({ error: "Upload-fejl" }));
-        throw new Error(err.error || "Upload-fejl");
+        throw new Error(await extractError(upRes, "Billedbehandling fejlede"));
       }
       const { url } = await upRes.json();
       const current = destinations.find((d) => d.name === destination);
@@ -76,8 +113,7 @@ export function DestinationManager() {
         body: JSON.stringify(payload),
       });
       if (!metaRes.ok) {
-        const err = await metaRes.json().catch(() => ({ error: "Gem-fejl" }));
-        throw new Error(err.error || "Gem-fejl");
+        throw new Error(await extractError(metaRes, "Kunne ikke gemme billed-URL"));
       }
       await load();
     } catch (e) {
