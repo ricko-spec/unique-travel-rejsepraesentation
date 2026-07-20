@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionUser } from "@/lib/supabase/auth";
@@ -13,6 +14,14 @@ const MAX_INTRO_LEN = 500;
 const introSchema = z.object({
   intro: z.string().max(MAX_INTRO_LEN, `Intro må højst være ${MAX_INTRO_LEN} tegn`),
 });
+
+// Kort, ikke-reversibelt fingerprint af en tekst. Audit-loggen må ikke
+// indeholde selve intro-teksterne (PII/kundedata, SEC-3) — men fingerprint +
+// længde er nok til at se AT og HVORNÅR teksten skiftede, og til at matche
+// mod data.introOriginal/intro på trip-rækken, hvor det fulde revisionsspor bor.
+function fingerprint(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex").slice(0, 12);
+}
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await getSessionUser();
@@ -47,7 +56,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     const currentData = (row.data ?? {}) as Record<string, unknown>;
     const before = typeof currentData.intro === "string" ? currentData.intro : "";
-    const actor = `user:${user.email ?? user.id}`;
+    // "admin:{email}" er det dokumenterede actor-format i audit_log
+    // (tidligere "user:{email}" — unificeret her; ingen gamle rækker fandtes).
+    const actor = `admin:${user.email ?? user.id}`;
     const nextData = {
       ...currentData,
       intro,
@@ -71,8 +82,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       resource: row.slug,
       metadata: {
         booking_no: row.booking_no,
-        before,
-        after: intro,
+        before_len: before.length,
+        after_len: intro.length,
+        before_fp: fingerprint(before),
+        after_fp: fingerprint(intro),
       },
     });
 
