@@ -1,28 +1,30 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-07-21** (kit-dokumentationsbatchen)
+> Sidst opdateret: **2026-07-21** (efter kit-mergen)
 
 ## Production
 
-- **Commit:** `6a81290` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk/admin` svarer HTTP 200
-- Indhold: hele juli-batchen (sec-fixes, password-flow, destinations-upload m. WebP, opret-destination, docs)
+- **Commit:** `fcadaca` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk/admin` svarer HTTP 200
+- Indhold: juli-batchen (sec-fixes, password-flow, destinations-upload m. WebP, opret-destination)
+  + **AI Project Automation Kit i drift** (AGENTS.md, CLAUDE.md, docs-sættet — merged 2026-07-21)
 
 ## Branches
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `6a81290` (production) |
-| `docs/ai-operating-model` | **Aktiv** — kit-dokumentationen (denne batch); afventer ChatGPT-review + Rickos merge-OK |
+| `main` | = origin/main = `fcadaca` (production) |
+| `docs/ai-operating-model` | Merged til main — kan slettes (KRÆVER RICKO) |
+| `docs/status-after-kit-merge` | Denne opdatering — slettes efter merge |
 | `feature/individuelle-logins-profiles` | Desktop-checkout, rent, alt merged — kan slettes (KRÆVER RICKO) |
 | `dest-admin` (+ ældre remote-branches) | Merged — sletning afventer OK |
 
 ## Åbne tråde
 
-1. Kit-dokumentationen: review → merge-OK
-2. Mille: opret Japan/Kenya/Mauritius + billeder i production (ren drift)
+1. Mille: opret Japan/Kenya/Mauritius + billeder i production (ren drift, ingen kode)
+2. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
 3. `stash@{0}` "image-library WIP" — fredet, beslutning udestår
-4. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
+4. Branch-oprydning af gamle merged branches — afventer Rickos OK
 
 ## Seneste checks (2026-07-21, main-baseret)
 
@@ -39,5 +41,7 @@ schema-drift ✅ "Ingen drift" · DB sund (35 trips, 13 destinationer, 0 staging
 
 ## Næste anbefalede outcome
 
-Få kit-dokumentationen godkendt og merget → derefter roadmap "Næste" pkt. 2-3
-(Mille-drift og Vision 2.0-scopeafklaring).
+1. **Mille opretter Japan/Kenya/Mauritius + uploader billeder i production** (Admin →
+   Destinationsbilleder → Opret destination) — ren drift, ingen kode
+2. **Vision 2.0 scope-afklaring og plan** med Ricko — ingen kode endnu (jf. beslutning:
+   planlægges som preview-branch før merge)
