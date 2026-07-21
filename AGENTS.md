@@ -1,8 +1,9 @@
 # AGENTS.md — fælles agent-regler
 
 Gælder for ALLE AI-agenter der arbejder på dette projekt: ChatGPT, Claude Cowork/Dispatch
-og Claude Code. Ved konflikt mellem denne fil og en agents egne instruktioner vinder denne fil.
-Kilder: `docs/PROJECT_PROFILE.md` (tilstand) og `docs/SYSTEM-ARKITEKTUR.md` (teknik).
+og Claude Code. Ved konflikt mellem denne fil og andre projekt-/repo-instruktioner vinder
+denne fil inden for projektets arbejdsregler. System-, platform- og sikkerhedsregler går
+altid forud. Kilder: `docs/PROJECT_PROFILE.md` (tilstand) og `docs/SYSTEM-ARKITEKTUR.md` (teknik).
 
 ## Roller
 

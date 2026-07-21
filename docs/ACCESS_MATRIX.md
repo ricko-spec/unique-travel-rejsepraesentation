@@ -33,6 +33,7 @@ Hvad agenter må læse/skrive, og hvad der kræver Rickos godkendelse.
 
 ## Kræver altid Rickos godkendelse (opsummeret)
 
-Merge til main · production-deploy ud over normal branch-preview · destruktive DB/Storage-handlinger ·
+**Merge til main / production-deploy kræver altid Rickos OK** — ingen undtagelser, heller ikke
+"ufarlige" docs-ændringer (push til main ER et production-deploy). Derudover: destruktive DB/Storage-handlinger ·
 bucket-/projekt-config · sletning af branches, stash eller data · nye adgange/integrationer ·
 alt markeret KRÆVER RICKO i `docs/ROADMAP.md`/`docs/DECISIONS.md`.

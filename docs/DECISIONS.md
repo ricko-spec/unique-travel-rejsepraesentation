@@ -6,7 +6,7 @@ Format: beslutning · begrundelse · kilde/commit.
 | Dato | Beslutning | Begrundelse | Reference |
 |---|---|---|---|
 | 2026-07-21 | **Vision 2.0 planlægges som preview-branch før merge** — intet 2.0-arbejde direkte på main | main = production; visuelt løft skal kunne testes af Ricko/sælgere isoleret | Denne branch (`docs/ai-operating-model`) |
-| 2026-07-20 | **Destinationer oprettes manuelt i admin** ("Opret destination") — ingen auto-upsert fra trips endnu | Bevidst lille scope; auto-upsert (Fable DATA-4) er backlog | `6bb1498` |
+| 2026-07-20 | **Destinationer oprettes manuelt i admin** ("Opret destination") — ingen auto-upsert fra trips endnu. Besluttet/preview-testet 2026-07-20, merged til main 2026-07-21 | Bevidst lille scope; auto-upsert (Fable DATA-4) er backlog | `6bb1498`, merge `6a81290` |
 | 2026-07-20 | **Store destinationsbilleder uploades via signed URL direkte til Supabase Storage** (`_staging` + finalize), op til 50 MB; bucket-grænse hævet 10→50 MB | Vercel afviser request-bodies > 4,5 MB ved platform-kanten; klient-side resize fravalgt pga. kvalitet (sharp server-side) | `324fae0`, `234d2e8` |
 | 2026-07-20 | **Password-skift kræver nuværende adgangskode** + separat rate-limit (`pwchange:{ip}`) | En kapret session må ikke lydløst kunne overtage kontoen | `ba1b5e1` |
 | 2026-07-20 | **Intro-audit logger sha256-fingerprints + længder, aldrig fuld tekst** (SEC-3). Fuldt revisionsspor bor på trip-rækken (`introOriginal`, `introEditedAt/By`) | audit_log-kontrakten: "Ingen PII". Teksterne kan indeholde kundedata | `e43ff2f` |

@@ -2,6 +2,19 @@
 
 Next.js 14 webapp der konverterer TravelWire PDF-rejseplaner til kunde-vendte præsentationer med unikke links.
 
+## AI-arbejdsmodel
+
+Repoet bruger **AI Project Automation Kit**: AI-agenter (ChatGPT, Claude Cowork/Dispatch, Claude Code)
+arbejder efter fælles regler, og al merge/deploy kræver Rickos OK. Læs i denne rækkefølge:
+
+1. [`AGENTS.md`](AGENTS.md) — fælles agent-regler (git, adgang, stopbetingelser)
+2. [`CLAUDE.md`](CLAUDE.md) — operationel instruks til Claude Code
+3. [`docs/STATUS.md`](docs/STATUS.md) — aktuel tilstand (læs før hver arbejdsrunde)
+4. [`docs/PROJECT_PROFILE.md`](docs/PROJECT_PROFILE.md) — identitet, toolchain, husregler
+5. [`docs/ROADMAP.md`](docs/ROADMAP.md) — prioriteter og åbne beslutninger
+6. [`docs/TESTING.md`](docs/TESTING.md) — checks og manuelle testlister
+7. [`docs/SYSTEM-ARKITEKTUR.md`](docs/SYSTEM-ARKITEKTUR.md) — dyb teknisk reference
+
 ## Setup
 
 ### 1. Installér dependencies
