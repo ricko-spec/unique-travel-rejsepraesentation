@@ -288,7 +288,8 @@ function parseDanishDate(s: string): Date | null {
 
 // Parser både ISO ('2027-03-31') og dansk ('31. marts 2027') dato-streng til en
 // UTC Date. Returnerer null hvis ingen af formerne matcher.
-function parseFlexibleDate(s: string): Date | null {
+// Eksporteret fordi display-helpers i src/lib/format.ts også bruger den.
+export function parseFlexibleDate(s: string): Date | null {
   const trimmed = s.trim();
   const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (iso) {
@@ -310,37 +311,6 @@ export function formatLongDateDK(s: string | null | undefined): string {
   if (!date) return s;
   const wd = DK_WEEKDAYS_FULL[date.getUTCDay()];
   return `${wd} ${date.getUTCDate()}. ${DK_MONTHS_FULL[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
-}
-
-// Format dato som '3. oktober 2026' (dansk langform uden ugedag) — til hero-pillen.
-// Falder tilbage til original streng hvis input ikke kan parses (fx allerede dansk fritekst).
-export function formatMediumDateDK(s: string | null | undefined): string {
-  if (!s) return "";
-  const date = parseFlexibleDate(s);
-  if (!date) return s;
-  return new Intl.DateTimeFormat("da-DK", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
-}
-
-// Parseren gemmer både merpris OG besparelse i samme 'savings'-felt, så etiketten kan
-// ikke hardkodes: ordet 'merpris' i strengen eller et '+'-præfiks betyder at alternativet
-// koster MERE end det valgte hotel (verificeret mod TravelWire-kilden, booking 35385).
-export function formatAlternativePriceLine(savings: string): string {
-  const s = savings.trim();
-  if (!s) return "";
-  if (/merpris/i.test(s)) return s;
-  if (s.startsWith("+")) return `Merpris: ${s}`;
-  return `Besparelse: ${s}`;
-}
-
-// 'sub-hoteller' er parserens interne sprog og optræder i room-feltet på pakke-rejser —
-// kunden skal se 'hoteller undervejs' (datamodellen/feltnavnene ændres ikke).
-export function displayRoomLabel(room: string): string {
-  return room.replace(/sub-?hoteller/gi, "hoteller undervejs");
 }
 
 function addDaysUTC(d: Date, days: number): Date {

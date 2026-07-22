@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { type Trip, formatMediumDateDK } from "@/lib/types";
+import type { Trip } from "@/lib/types";
+import { formatMediumDateDK } from "@/lib/format";
 
 const ADVISOR_PHONE = "+4559498630";
 

@@ -3,7 +3,7 @@ import {
   formatAlternativePriceLine,
   formatMediumDateDK,
   displayRoomLabel,
-} from "./types";
+} from "./format";
 
 // Fixture-strengene er de faktiske savings-varianter fra production-databasen
 // (juli 2026), så testen dækker alle kendte former.

@@ -1,9 +1,5 @@
-import {
-  type Hotel,
-  formatLongDateDK,
-  formatAlternativePriceLine,
-  displayRoomLabel,
-} from "@/lib/types";
+import { type Hotel, formatLongDateDK } from "@/lib/types";
+import { formatAlternativePriceLine, displayRoomLabel } from "@/lib/format";
 import { SectionHeader } from "./SectionHeader";
 
 export function Hotels({ hotels }: { hotels: Hotel[] }) {
