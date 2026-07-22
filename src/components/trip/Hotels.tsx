@@ -1,4 +1,4 @@
-import { type Hotel, formatLongDateDK } from "@/lib/types";
+import { type Hotel, formatLongDateDK, formatAlternativePriceLine } from "@/lib/types";
 import { SectionHeader } from "./SectionHeader";
 
 export function Hotels({ hotels }: { hotels: Hotel[] }) {
@@ -126,7 +126,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                 )}
                 {h.alternative.savings && (
                   <div className="mt-2 text-sm text-rainforest font-medium">
-                    Besparelse: {h.alternative.savings}
+                    {formatAlternativePriceLine(h.alternative.savings)}
                   </div>
                 )}
               </div>

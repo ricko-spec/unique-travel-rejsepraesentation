@@ -312,6 +312,17 @@ export function formatLongDateDK(s: string | null | undefined): string {
   return `${wd} ${date.getUTCDate()}. ${DK_MONTHS_FULL[date.getUTCMonth()]} ${date.getUTCFullYear()}`;
 }
 
+// Parseren gemmer både merpris OG besparelse i samme 'savings'-felt, så etiketten kan
+// ikke hardkodes: ordet 'merpris' i strengen eller et '+'-præfiks betyder at alternativet
+// koster MERE end det valgte hotel (verificeret mod TravelWire-kilden, booking 35385).
+export function formatAlternativePriceLine(savings: string): string {
+  const s = savings.trim();
+  if (!s) return "";
+  if (/merpris/i.test(s)) return s;
+  if (s.startsWith("+")) return `Merpris: ${s}`;
+  return `Besparelse: ${s}`;
+}
+
 function addDaysUTC(d: Date, days: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days));
 }
