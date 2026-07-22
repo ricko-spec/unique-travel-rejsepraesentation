@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { formatAlternativePriceLine, formatMediumDateDK } from "./types";
+import {
+  formatAlternativePriceLine,
+  formatMediumDateDK,
+  displayRoomLabel,
+} from "./types";
 
 // Fixture-strengene er de faktiske savings-varianter fra production-databasen
 // (juli 2026), så testen dækker alle kendte former.
@@ -49,5 +53,23 @@ describe("formatMediumDateDK", () => {
     expect(formatMediumDateDK("")).toBe("");
     expect(formatMediumDateDK(null)).toBe("");
     expect(formatMediumDateDK(undefined)).toBe("");
+  });
+});
+
+describe("displayRoomLabel", () => {
+  // Alle tre varianter findes i production-data (juli 2026).
+  it("erstatter 'sub-hoteller' med 'hoteller undervejs' i alle kendte varianter", () => {
+    expect(displayRoomLabel("Se sub-hoteller")).toBe("Se hoteller undervejs");
+    expect(displayRoomLabel("Varierer — se sub-hoteller")).toBe(
+      "Varierer — se hoteller undervejs",
+    );
+    expect(displayRoomLabel("Diverse Deluxe værelser – se sub-hoteller")).toBe(
+      "Diverse Deluxe værelser – se hoteller undervejs",
+    );
+  });
+
+  it("rører ikke almindelige værelsesnavne", () => {
+    expect(displayRoomLabel("Deluxe Room m. havudsigt")).toBe("Deluxe Room m. havudsigt");
+    expect(displayRoomLabel("")).toBe("");
   });
 });

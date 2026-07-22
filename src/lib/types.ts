@@ -337,6 +337,12 @@ export function formatAlternativePriceLine(savings: string): string {
   return `Besparelse: ${s}`;
 }
 
+// 'sub-hoteller' er parserens interne sprog og optræder i room-feltet på pakke-rejser —
+// kunden skal se 'hoteller undervejs' (datamodellen/feltnavnene ændres ikke).
+export function displayRoomLabel(room: string): string {
+  return room.replace(/sub-?hoteller/gi, "hoteller undervejs");
+}
+
 function addDaysUTC(d: Date, days: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days));
 }

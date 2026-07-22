@@ -1,4 +1,9 @@
-import { type Hotel, formatLongDateDK, formatAlternativePriceLine } from "@/lib/types";
+import {
+  type Hotel,
+  formatLongDateDK,
+  formatAlternativePriceLine,
+  displayRoomLabel,
+} from "@/lib/types";
 import { SectionHeader } from "./SectionHeader";
 
 export function Hotels({ hotels }: { hotels: Hotel[] }) {
@@ -22,7 +27,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
             <div className="hotel-body">
               <div>
                 <div className="hotel-field-label">Værelse</div>
-                <div className="hotel-field-value">{h.room}</div>
+                <div className="hotel-field-value">{displayRoomLabel(h.room)}</div>
               </div>
               <div>
                 <div className="hotel-field-label">Måltider</div>
@@ -65,7 +70,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                       <span className="font-medium text-rainforest">{sub.name}</span>
                       {sub.location && <span className="text-grey-text"> · {sub.location}</span>}
                       {sub.nights > 0 && <span className="text-grey-text"> · {sub.nights} {sub.nights === 1 ? "nat" : "nætter"}</span>}
-                      {sub.room && <div className="text-xs text-grey-text mt-0.5">{sub.room}</div>}
+                      {sub.room && <div className="text-xs text-grey-text mt-0.5">{displayRoomLabel(sub.room)}</div>}
                     </li>
                   ))}
                 </ul>
