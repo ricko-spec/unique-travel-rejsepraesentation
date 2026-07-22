@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatAlternativePriceLine } from "./types";
+import { formatAlternativePriceLine, formatMediumDateDK } from "./types";
 
 // Fixture-strengene er de faktiske savings-varianter fra production-databasen
 // (juli 2026), så testen dækker alle kendte former.
@@ -27,5 +27,27 @@ describe("formatAlternativePriceLine", () => {
   it("tom streng giver tom streng (kortet uden pris-linje er uændret)", () => {
     expect(formatAlternativePriceLine("")).toBe("");
     expect(formatAlternativePriceLine("   ")).toBe("");
+  });
+});
+
+describe("formatMediumDateDK", () => {
+  it("ISO-dato formateres dansk uden ugedag", () => {
+    expect(formatMediumDateDK("2026-10-03")).toBe("3. oktober 2026");
+    expect(formatMediumDateDK("2026-10-19")).toBe("19. oktober 2026");
+  });
+
+  it("allerede dansk dato-streng parses og genformateres stabilt", () => {
+    expect(formatMediumDateDK("3. oktober 2026")).toBe("3. oktober 2026");
+    expect(formatMediumDateDK("lørdag 3. oktober 2026")).toBe("3. oktober 2026");
+  });
+
+  it("uparsbar streng falder tilbage til original", () => {
+    expect(formatMediumDateDK("oktober 2026")).toBe("oktober 2026");
+  });
+
+  it("tom/null input giver tom streng", () => {
+    expect(formatMediumDateDK("")).toBe("");
+    expect(formatMediumDateDK(null)).toBe("");
+    expect(formatMediumDateDK(undefined)).toBe("");
   });
 });

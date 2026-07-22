@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Trip } from "@/lib/types";
+import { type Trip, formatMediumDateDK } from "@/lib/types";
 
 const ADVISOR_PHONE = "+4559498630";
 
@@ -36,7 +36,7 @@ export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null
           <div className="hero-pills">
             {trip.subtitle && <span className="hero-pill">{trip.subtitle}</span>}
             <span className="hero-pill">
-              {trip.departure} – {trip.return}
+              {formatMediumDateDK(trip.departure)} – {formatMediumDateDK(trip.return)}
             </span>
           </div>
 
