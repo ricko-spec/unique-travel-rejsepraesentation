@@ -1,5 +1,9 @@
 import { type Hotel, formatLongDateDK } from "@/lib/types";
-import { formatAlternativePriceLine, displayRoomLabel } from "@/lib/format";
+import {
+  formatAlternativePriceLine,
+  displayRoomLabel,
+  splitRoomAllocation,
+} from "@/lib/format";
 import { SectionHeader } from "./SectionHeader";
 
 export function Hotels({ hotels }: { hotels: Hotel[] }) {
@@ -38,7 +42,34 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                 <div className="hotel-field-value">{formatLongDateDK(h.checkOut)}</div>
               </div>
             </div>
-            {h.roomAllocations && h.roomAllocations.length > 0 && (
+            {/* Gruppe-rejser (2+ værelser) får fordelingen i en fremhævet boks —
+                samme idiom som pakke-hotellerne — så sælger og kunde kan se
+                værelse-for-værelse-fordelingen uden PDF'en. Én enkelt linje
+                beholder den diskrete visning, så par-rejser forbliver rolige. */}
+            {h.roomAllocations && h.roomAllocations.length > 1 && (
+              <div className="mx-6 mb-5 mt-1 p-4 bg-rainforest/5 border border-rainforest/20 rounded-lg">
+                <div className="text-xs uppercase tracking-wider text-rainforest/80 mb-3 font-medium">
+                  Værelsesfordeling · {h.roomAllocations.length} værelser
+                </div>
+                <ul className="space-y-2">
+                  {h.roomAllocations.map((alloc, idx) => {
+                    const { label, rest } = splitRoomAllocation(alloc);
+                    return (
+                      <li
+                        key={idx}
+                        className="text-sm border-l-2 border-gold/50 pl-3 py-1"
+                      >
+                        {label && (
+                          <span className="font-medium text-rainforest">{label}: </span>
+                        )}
+                        <span className="text-grey-text">{rest}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+            {h.roomAllocations && h.roomAllocations.length === 1 && (
               <div className="px-6 pb-5">
                 <div className="text-xs uppercase tracking-wider text-rainforest/70 mb-2 font-medium">
                   Værelsesfordeling
@@ -96,10 +127,12 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                 </ul>
               </div>
             )}
+            {/* text-sm i stedet for text-xs/80% — noterne bærer reel information
+                (connecting doors, senge, måltidsregler) og var for svage at læse. */}
             {h.notes && h.notes.length > 0 && (
               <div className="px-6 pb-5">
                 {h.notes.map((note, idx) => (
-                  <p key={idx} className="text-xs text-grey-text/80 italic mt-1">
+                  <p key={idx} className="text-sm text-grey-text italic mt-1">
                     {note}
                   </p>
                 ))}

@@ -32,3 +32,17 @@ export function formatAlternativePriceLine(savings: string): string {
 export function displayRoomLabel(room: string): string {
   return room.replace(/sub-?hoteller/gi, "hoteller undervejs");
 }
+
+// Splitter en roomAllocation-streng som 'Værelse 3: 3 børn (1, 5 og 6 år)' i en
+// fremhævet label ('Værelse 3') og resten — så gruppe-rejser kan vise en tydelig
+// værelse-for-værelse-fordeling. Strenge uden 'Label: ...'-form (eller med et
+// urimeligt langt præfiks, dvs. et kolon midt i fritekst) vises uændret som rest.
+const MAX_ALLOCATION_LABEL_LEN = 24;
+
+export function splitRoomAllocation(alloc: string): { label: string; rest: string } {
+  const idx = alloc.indexOf(":");
+  if (idx <= 0 || idx > MAX_ALLOCATION_LABEL_LEN) {
+    return { label: "", rest: alloc.trim() };
+  }
+  return { label: alloc.slice(0, idx).trim(), rest: alloc.slice(idx + 1).trim() };
+}
