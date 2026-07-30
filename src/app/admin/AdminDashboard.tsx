@@ -161,10 +161,13 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     const destination = matchedTrip.destination;
     const code = matchedTrip.booking_no;
     const emailText = [
-      "Klik på linket nedenfor og indtast adgangskoden — så åbnes en oversigt over hele rejsen med dag-for-dag rejseplan, hoteller og fly.",
-      "",
+      "Se din online rejseplan her:",
       url,
-      `Adgangskode: ${code}`,
+      "",
+      "Adgangskode:",
+      code,
+      "",
+      "Du kan også se din rejseplan i den vedhæftede PDF. De to versioner ser forskellige ud, men oplysningerne er de samme — du kan benytte den version, du foretrækker.",
     ].join("\n");
     navigator.clipboard.writeText(emailText).then(() => showToast("Email-tekst kopieret"));
   }
