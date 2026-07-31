@@ -32,3 +32,15 @@ export function formatAlternativePriceLine(savings: string): string {
 export function displayRoomLabel(room: string): string {
   return room.replace(/sub-?hoteller/gi, "hoteller undervejs");
 }
+
+// Kundenavne på grupper/familier er kommaseparerede lister der gør admin-tabellens
+// rækker meget høje. Vis de to første navne + antal øvrige; navne uden komma
+// (fx 'Susanne og Finn Bastegaard') vises uændret. Fuld liste hører til i title/Detaljer.
+export function formatCustomerPreview(name: string): string {
+  const parts = name
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length <= 2) return name.trim();
+  return `${parts[0]}, ${parts[1]} + ${parts.length - 2} rejsende`;
+}

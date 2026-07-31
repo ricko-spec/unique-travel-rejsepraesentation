@@ -7,6 +7,9 @@ import { DestinationManager } from "./DestinationManager";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Trip } from "@/lib/types";
+import { formatCustomerPreview } from "@/lib/format";
+
+const TRIPS_PREVIEW_COUNT = 5;
 
 type TripListItem = {
   id: string;
@@ -22,6 +25,7 @@ type TripListItem = {
 export function AdminDashboard({ userEmail }: { userEmail?: string }) {
   const router = useRouter();
   const [trips, setTrips] = useState<TripListItem[]>([]);
+  const [showAllTrips, setShowAllTrips] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -158,7 +162,6 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
       navigator.clipboard.writeText(url).then(() => showToast("Link kopieret"));
       return;
     }
-    const destination = matchedTrip.destination;
     const code = matchedTrip.booking_no;
     const emailText = [
       "Se din online rejseplan her:",
@@ -402,11 +405,13 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {trips.map((t) => (
+                  {(showAllTrips ? trips : trips.slice(0, TRIPS_PREVIEW_COUNT)).map((t) => (
                     <tr key={t.id}>
                       <td style={{ fontFamily: "ui-monospace, monospace" }}>#{t.booking_no}</td>
                       <td>{t.destination}</td>
-                      <td style={{ color: "var(--grey-text)" }}>{t.customer_name ?? "—"}</td>
+                      <td style={{ color: "var(--grey-text)" }} title={t.customer_name ?? undefined}>
+                        {t.customer_name ? formatCustomerPreview(t.customer_name) : "—"}
+                      </td>
                       <td style={{ color: "var(--grey-text)" }}>
                         {new Date(t.created_at).toLocaleDateString("da-DK")}
                       </td>
@@ -459,6 +464,18 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                   ))}
                 </tbody>
               </table>
+              {trips.length > TRIPS_PREVIEW_COUNT && (
+                <div style={{ marginTop: 14, textAlign: "center" }}>
+                  <button
+                    className="admin-btn admin-btn-secondary"
+                    onClick={() => setShowAllTrips((v) => !v)}
+                  >
+                    {showAllTrips
+                      ? `Vis kun de seneste ${TRIPS_PREVIEW_COUNT}`
+                      : `Vis alle præsentationer (${trips.length})`}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

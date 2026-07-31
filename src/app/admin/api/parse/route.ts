@@ -42,6 +42,18 @@ export async function POST(req: Request) {
       });
     }
     const msg = e instanceof Error ? e.message : "Ukendt fejl ved parsing";
+    // Anthropic sender billing-fejl som rå API-tekst ("Your credit balance is too
+    // low...") — sælgerne skal ikke se den, kun en intern besked de kan handle på.
+    if (/credit balance|billing/i.test(msg)) {
+      console.error("[parse] Anthropic billing-fejl", msg);
+      return NextResponse.json(
+        {
+          error:
+            "AI-parseren kan ikke køre lige nu, fordi API-kontoen mangler credits. Kontakt Ricko/admin.",
+        },
+        { status: 502 },
+      );
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 

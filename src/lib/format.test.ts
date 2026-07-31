@@ -3,6 +3,7 @@ import {
   formatAlternativePriceLine,
   formatMediumDateDK,
   displayRoomLabel,
+  formatCustomerPreview,
 } from "./format";
 
 // Fixture-strengene er de faktiske savings-varianter fra production-databasen
@@ -71,5 +72,35 @@ describe("displayRoomLabel", () => {
   it("rører ikke almindelige værelsesnavne", () => {
     expect(displayRoomLabel("Deluxe Room m. havudsigt")).toBe("Deluxe Room m. havudsigt");
     expect(displayRoomLabel("")).toBe("");
+  });
+});
+
+describe("formatCustomerPreview", () => {
+  it("gruppeliste forkortes til to navne + antal øvrige", () => {
+    expect(
+      formatCustomerPreview(
+        "Karina Hyldmar Henriksen, Bo Danner Henriksen, Anna Henriksen, Emil Henriksen, Ida Henriksen, Lise Henriksen, Mads Henriksen",
+      ),
+    ).toBe("Karina Hyldmar Henriksen, Bo Danner Henriksen + 5 rejsende");
+  });
+
+  it("tre navne forkortes til to + 1 rejsende", () => {
+    expect(formatCustomerPreview("Anna Jensen, Bo Jensen, Carl Jensen")).toBe(
+      "Anna Jensen, Bo Jensen + 1 rejsende",
+    );
+  });
+
+  it("to eller færre navne vises uændret", () => {
+    expect(formatCustomerPreview("Susanne og Finn Bastegaard")).toBe(
+      "Susanne og Finn Bastegaard",
+    );
+    expect(formatCustomerPreview("Anna Jensen, Bo Jensen")).toBe("Anna Jensen, Bo Jensen");
+  });
+
+  it("tomme segmenter (dobbelt-komma, trailing komma) tæller ikke med", () => {
+    expect(formatCustomerPreview("Anna Jensen, Bo Jensen,")).toBe("Anna Jensen, Bo Jensen,");
+    expect(formatCustomerPreview("Anna Jensen,, Bo Jensen, Carl Jensen")).toBe(
+      "Anna Jensen, Bo Jensen + 1 rejsende",
+    );
   });
 });
