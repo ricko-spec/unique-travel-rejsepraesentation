@@ -61,7 +61,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  if (!(await getSessionUser())) {
+  const user = await getSessionUser();
+  if (!user) {
     return NextResponse.json({ error: "Ikke logget ind" }, { status: 401 });
   }
 
@@ -151,6 +152,10 @@ export async function POST(req: Request) {
           // prior soft-delete so the customer link works again.
           raw_pdf_text: rawPdfText ?? null,
           active: true,
+          // PAIN-2: created_by sættes KUN i insert-grenen (ny booking_no).
+          // Ved re-upload af eksisterende booking udelades feltet helt, så
+          // upsert-updaten aldrig rører den oprindelige opretter.
+          ...(wasUpdate ? {} : { created_by: user.id }),
         },
         { onConflict: "booking_no" },
       )
