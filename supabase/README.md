@@ -15,8 +15,8 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `003_destinations.sql` | destinations (billedbibliotek) + public-read RLS | 2026-05-27 |
 | `004_audit_log.sql` | audit_log + indexes + RLS | 2026-06-15 |
 | `005_rate_limits.sql` | rate_limits + `increment_rate_limit` RPC | 2026-06-15 |
-| `006_created_by_on_trips.sql` | trips.created_by (sporing — kolonnen skrives endnu ikke af koden) | 2026-07-04 |
-| `007_parse_failures.sql` | parse_failures dead-letter (endnu ikke koblet til koden) | 2026-07-04 |
+| `006_created_by_on_trips.sql` | trips.created_by (skrives af POST /admin/api/trips siden 2026-08-04, kun i insert-grenen) | 2026-07-04 |
+| `007_parse_failures.sql` | parse_failures dead-letter (koblet til parse-routen siden 2026-08-04) | 2026-07-04 |
 | `008_schema_snapshot.sql` | `schema_snapshot()` RPC — grundlag for drift-tjekket | 2026-07-20 |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
@@ -34,6 +34,16 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 4. **Efter enhver skema-ændring:** kør migrationen live, dernæst
    `node scripts/check-schema-drift.mjs --update-baseline`, og commit migration +
    `schema-baseline.json` sammen.
+
+## Driftsnote: parse_failures
+
+- Koden skriver best-effort til `parse_failures` ved parse-fejl (`invalid_json`,
+  `schema_mismatch`, `anthropic_error`). `max_tokens` afventer ERR-1 (backlog).
+- **Oprydning:** rækker bør slettes efter 30 dage. Sættes op som separat
+  Supabase-drift-opgave (pg_cron) — IKKE implementeret endnu:
+  `delete from public.parse_failures where occurred_at < now() - interval '30 days';`
+- **Data:** `raw_response` kan indeholde rå AI-output og kundedata fra PDF'en.
+  Tabellen er intern/debug (service-role-only RLS) og må aldrig vises kundevendt.
 
 ## Drift-tjek
 

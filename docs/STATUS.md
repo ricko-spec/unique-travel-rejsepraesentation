@@ -18,6 +18,7 @@
 | `docs/status-after-kit-merge` | Denne opdatering — slettes efter merge |
 | `feature/individuelle-logins-profiles` | Desktop-checkout, rent, alt merged — kan slettes (KRÆVER RICKO) |
 | `dest-admin` (+ ældre remote-branches) | Merged — sletning afventer OK |
+| `feat/backend-integrations-created-by-and-parse-failures` | Preview 2026-08-04 — PAIN-2 del 2 (trips.created_by) + ERR-2 del 2 (parse_failures-logging). Afventer Rickos OK |
 
 ## Åbne tråde
 
