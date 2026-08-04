@@ -29,6 +29,9 @@ type JwtClaims = {
   iss?: string;
   iat?: number;
   exp?: number;
+  // Authentication Methods Reference — fx [{ method: "password" }] ved login,
+  // [{ method: "otp" }] når sessionen kommer fra et recovery-/magic-link.
+  amr?: { method?: string; timestamp?: number }[];
 };
 
 export function decodeJwtClaims(jwt: string | undefined): JwtClaims | null {

@@ -10,10 +10,22 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams?: { reset?: string };
+}) {
   const user = await getSessionUser();
   if (!user) {
-    return <AdminLogin />;
+    return (
+      <AdminLogin
+        notice={
+          searchParams?.reset === "ok"
+            ? "Din adgangskode er ændret. Log ind med din nye adgangskode."
+            : null
+        }
+      />
+    );
   }
   return <AdminDashboard userEmail={user.email ?? ""} />;
 }

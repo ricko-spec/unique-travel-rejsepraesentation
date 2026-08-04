@@ -1343,3 +1343,21 @@ section { width: 100%; }
   letter-spacing: 0.18em;
   margin-bottom: 24px;
 }
+.admin-login-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+}
+.admin-login-textlink {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--grey-text);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.admin-login-textlink:hover:not(:disabled) { color: var(--rainforest); }
+.admin-login-textlink:disabled { opacity: 0.5; cursor: not-allowed; }

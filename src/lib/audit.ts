@@ -14,6 +14,7 @@ export type AuditAction =
   | "password_changed"
   | "password_change_failed"
   | "password_change_rate_limited"
+  | "password_recovery_requested"
   | "destination_image_uploaded";
 
 export type AuditEntry = {
