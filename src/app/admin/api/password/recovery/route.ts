@@ -44,8 +44,24 @@ export async function POST(req: Request) {
     redirectTo: `${origin}/admin/reset-password`,
   });
   if (error) {
-    // Logges kun internt — svaret til klienten er stadig det generiske.
     console.error("[recovery] resetPasswordForEmail error:", error.message);
+    // Supabase' mail-rate-limit er PROJEKT-global (indbygget SMTP: 2 mails/
+    // time) og siger intet om hvorvidt kontoen findes — den må derfor gerne
+    // vises ærligt. Alle andre fejl (fx user not found) forbliver generisk
+    // succes, så endpointet ikke kan bruges til email-enumeration.
+    const isEmailRateLimit =
+      error.status === 429 ||
+      ("code" in error && error.code === "over_email_send_rate_limit") ||
+      /email rate limit/i.test(error.message);
+    if (isEmailRateLimit) {
+      return NextResponse.json(
+        {
+          error:
+            "Der er sendt for mange nulstillingsmails lige nu. Prøv igen om lidt, eller kontakt Ricko.",
+        },
+        { status: 429 },
+      );
+    }
   }
 
   await writeAudit(service, {
