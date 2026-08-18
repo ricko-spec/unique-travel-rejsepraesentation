@@ -22,7 +22,7 @@ export function formatMediumDateDK(s: string | null | undefined): string {
 export function formatAlternativePriceLine(savings: string): string {
   const s = savings.trim();
   if (!s) return "";
-  if (/merpris/i.test(s)) return s;
+  if (/merpris|besparelse/i.test(s)) return s;
   if (s.startsWith("+")) return `Merpris: ${s}`;
   return `Besparelse: ${s}`;
 }

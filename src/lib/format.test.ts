@@ -24,6 +24,12 @@ describe("formatAlternativePriceLine", () => {
     );
   });
 
+  it("streng der selv indeholder 'Besparelse' vises uændret (booking 35493, Olhuveli)", () => {
+    expect(formatAlternativePriceLine("Besparelse i alt for 10 nætter: ca. 2.800 kr.")).toBe(
+      "Besparelse i alt for 10 nætter: ca. 2.800 kr.",
+    );
+  });
+
   it("ren beløbs-streng får fortsat Besparelse-etiket", () => {
     expect(formatAlternativePriceLine("ca. 12.000 kr.")).toBe("Besparelse: ca. 12.000 kr.");
     expect(formatAlternativePriceLine("ca. 30.000 kr.")).toBe("Besparelse: ca. 30.000 kr.");
