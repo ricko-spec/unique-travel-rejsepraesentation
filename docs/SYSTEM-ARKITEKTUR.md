@@ -505,7 +505,7 @@ Skemaet er `.passthrough()` — ukendte felter fra Claude (fx `disclaimer`, `doc
 
 ### `hotelSchema` (`types.ts:130-159`)
 
-Ud over de fire basisfelter: `roomAllocations` (værelsesfordeling), `alternative` (alternativ-hotel med `savings`), `isPackage` + `subHotels` (rundrejser/safarier der i PDF'en ligner ét hotel men rummer flere overnatningssteder — renderes som pakke-blok), `included`/`notIncluded`/`notes`.
+Ud over de fire basisfelter: `roomAllocations` (værelsesfordeling), `alternative` (alternativ-hotel med `savings`) + `alternatives[]` (udfyldes af `normalizeTrip` via `src/lib/hotel-alternatives.ts`: `alternative` + alternativ-blokke løftet ud af `notes` — parseren returnerer kun ét objekt, nr. 2+ lander som rå note-tekst; kundesiden renderer listen), `isPackage` + `subHotels` (rundrejser/safarier der i PDF'en ligner ét hotel men rummer flere overnatningssteder — renderes som pakke-blok), `included`/`notIncluded`/`notes`.
 
 ### `normalizeTrip` — reparations-laget (`types.ts:360-536`)
 

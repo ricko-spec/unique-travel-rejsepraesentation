@@ -105,33 +105,33 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                 ))}
               </div>
             )}
-            {h.alternative && h.alternative.name && (
-              <div className="mx-6 mb-5 mt-1 p-4 bg-sand-page/60 border border-sand rounded-lg">
+            {(h.alternatives ?? []).map((alt, altIdx) => (
+              <div key={altIdx} className="mx-6 mb-5 mt-1 p-4 bg-sand-page/60 border border-sand rounded-lg">
                 <div className="text-xs uppercase tracking-wider text-gold mb-2 font-medium">
                   Dette resort kunne også være noget for jer
                 </div>
                 <div className="font-serif text-lg text-rainforest mb-1">
-                  {h.alternative.name}
+                  {alt.name}
                 </div>
-                {h.alternative.description && (
+                {alt.description && (
                   <div className="text-sm text-grey-text mb-2">
-                    {h.alternative.description}
+                    {alt.description}
                   </div>
                 )}
-                {(h.alternative.nights > 0 || h.alternative.meals) && (
+                {(alt.nights > 0 || alt.meals) && (
                   <div className="text-xs text-grey-text">
-                    {h.alternative.nights > 0 && `${h.alternative.nights} nætter`}
-                    {h.alternative.nights > 0 && h.alternative.meals && " · "}
-                    {h.alternative.meals}
+                    {alt.nights > 0 && `${alt.nights} nætter`}
+                    {alt.nights > 0 && alt.meals && " · "}
+                    {alt.meals}
                   </div>
                 )}
-                {h.alternative.savings && (
+                {alt.savings && (
                   <div className="mt-2 text-sm text-rainforest font-medium">
-                    {formatAlternativePriceLine(h.alternative.savings)}
+                    {formatAlternativePriceLine(alt.savings)}
                   </div>
                 )}
               </div>
-            )}
+            ))}
           </div>
         ))}
     </section>

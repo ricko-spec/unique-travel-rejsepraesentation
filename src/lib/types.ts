@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { collectAlternatives } from "./hotel-alternatives";
 
 // ----- helpers -----
 // Accept null/undefined/anything coercible to string; default to "".
@@ -138,6 +139,8 @@ export const hotelSchema = z
     checkOut: looseStr.optional().default(""),
     roomAllocations: z.array(looseStr).optional().default([]),
     alternative: alternativeHotelSchema.nullable().optional(),
+    // Flere alternativer — udfyldes af normalizeTrip ('alternative' + løftede noter).
+    alternatives: z.array(alternativeHotelSchema).optional().default([]),
     isPackage: z.boolean().optional().default(false),
     subHotels: z
       .array(
@@ -203,6 +206,7 @@ export type ProgramExpand = z.infer<typeof programExpandSchema>;
 export type ActivitiesExpand = z.infer<typeof activitiesExpandSchema>;
 export type FlightExpand = z.infer<typeof flightExpandSchema>;
 export type ItineraryItem = z.infer<typeof itineraryItemSchema>;
+export type AlternativeHotel = z.infer<typeof alternativeHotelSchema>;
 export type Hotel = z.infer<typeof hotelSchema>;
 export type Trip = z.infer<typeof tripSchema>;
 
@@ -517,8 +521,11 @@ export function normalizeTrip(trip: Trip): Trip {
   const departure = trip.departure ?? "";
   const hotels = (trip.hotels ?? []).map((h) => {
     const anyH = h as Record<string, unknown>;
+    const { alternatives, notes } = collectAlternatives(h);
     return {
       ...h,
+      alternatives,
+      notes,
       name: pickStr(h.name, anyH.navn),
       location: pickStr(h.location, anyH.lokation),
       nights: pickNum(h.nights, anyH["n\u00e6tter"]),
