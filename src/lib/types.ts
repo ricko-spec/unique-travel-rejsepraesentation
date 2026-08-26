@@ -519,10 +519,23 @@ function reclassifyDestination(
 
 export function normalizeTrip(trip: Trip): Trip {
   const departure = trip.departure ?? "";
+  const itinerary = trip.itinerary.map((item, i) =>
+    normalizeItineraryItem(item, i, departure),
+  );
+
+  // En rundrejse/pakke vises to steder: som "L\u00e6s om udflugten" (expandKind 'program')
+  // i rejseplanen med hele dag-for-dag-programmet og dets inklusioner, OG som et
+  // pakke-hotel-kort nede i hotelomr\u00e5det. Pakke-kortets 'included'/'notIncluded' er
+  // programmets inklusioner (safarier, tempelbes\u00f8g, togtur \u2026) \u2014 ikke hotel-info \u2014 og
+  // gentager dermed rejseplanen. N\u00e5r programmet allerede ligger i rejseplanen, fjernes
+  // den lange dobbeltvisning fra hotel-kortet, s\u00e5 det holder sig til hoteller, v\u00e6relse,
+  // m\u00e5ltider, datoer, sub-hoteller og hotel-noter. Findes programmet IKKE i rejseplanen
+  // (nogle pakker parses uden 'program'-item), bevares listen, s\u00e5 intet indhold tabes.
+  const hasProgramInItinerary = itinerary.some((it) => it.expandKind === "program");
   const hotels = (trip.hotels ?? []).map((h) => {
     const anyH = h as Record<string, unknown>;
     const { alternatives, notes } = collectAlternatives(h);
-    return {
+    const normalized = {
       ...h,
       alternatives,
       notes,
@@ -534,11 +547,15 @@ export function normalizeTrip(trip: Trip): Trip {
       checkIn: pickStr(h.checkIn, anyH.checkInd),
       checkOut: pickStr(h.checkOut, anyH.checkUd),
     };
+    if (h.isPackage && hasProgramInItinerary) {
+      return { ...normalized, included: [], notIncluded: [] };
+    }
+    return normalized;
   });
   return {
     ...trip,
     destination: reclassifyDestination(trip.destination, trip.subtitle, hotels),
-    itinerary: trip.itinerary.map((item, i) => normalizeItineraryItem(item, i, departure)),
+    itinerary,
     hotels,
   };
 }
