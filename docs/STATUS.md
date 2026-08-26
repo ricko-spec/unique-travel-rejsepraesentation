@@ -1,11 +1,12 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-08-26** (efter august-batchen: PR #5–#9 merged)
+> Sidst opdateret: **2026-08-26** (efter august-batchen PR #5–#9 + fuldført branch-oprydning)
 
 ## Production
 
-- **Commit:** `9dfddbf` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk` svarer HTTP 200
+- **Commit:** `8d664dc` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk` svarer HTTP 200
+  (`8d664dc` = docs-only STATUS-merge oven på app-koden fra PR #5–#9 / `9dfddbf`)
 - Indhold ud over juli-batchen (sec-fixes, password-flow, destinations-upload m. WebP, opret-destination,
   AI Project Automation Kit):
   - **PR #6 (`fix/admin-password-recovery-flow`)** — password recovery for admin: reset-side,
@@ -25,22 +26,28 @@
 
 ## Branches
 
+Branch-oprydning **fuldført 2026-08-26**: alle merged branches (PR #5–#9, `dest-admin`,
+`docs/*`, `rate-limit-unlock-security-fix`, `feature/redigerbar-intro` m.fl.) samt de
+tilhørende scratchpad-/D-worktrees er slettet lokalt og på remote. `feat/backend-integrations-…`
+blev force-slettet lokalt (kun gammel pre-rebase `30900d8`; indholdet er i main via `af0acb2`).
+Kun WIP/aktive og stash-tilknyttede referencer består.
+
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `9dfddbf` (production) |
-| `feature/individuelle-logins-profiles` | Merged — bevares pga. tilknyttet `stash@{0}` (image-library WIP) |
-| `feat/backend-integrations-created-by-and-parse-failures` | Merged (remote `af0acb2`). Lokal kopi/worktree er pre-rebase `30900d8` — ryddes ved branch-oprydning |
-| `fix/preserve-room-blocks` | **IKKE merged (WIP)** — bevares |
+| `main` | = origin/main = `8d664dc` (production) |
+| `fix/preserve-room-blocks` | **IKKE merged (WIP)** — åben PR #2. Worktree: `wt-room-blocks` |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
-| `gallery-upload-diagnose` (remote) | **IKKE merged** — bevares indtil afklaret |
-| Øvrige merged branches (PR #6–#9, dest-admin, docs/*, rate-limit-unlock, feature/redigerbar-intro m.fl.) | Merged — under oprydning (se "Åbne tråde") |
+| `feature/individuelle-logins-profiles` | Merged — bevares pga. tilknyttet `stash@{0}` (image-library WIP) |
+| `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
+
+Worktrees: `main` (Desktop) + `wt-room-blocks` (`fix/preserve-room-blocks`). Ingen D-worktrees tilbage.
 
 ## Åbne tråde
 
 1. Mille: opret Japan/Kenya/Mauritius-lignende manglende destinationer + billeder i production (ren drift, ingen kode)
 2. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
 3. `stash@{0}` "image-library WIP" — fredet, beslutning udestår
-4. Branch-oprydning af merged branches — i gang (docs/branch-cleanup-batch, 2026-08-26)
+4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive/stash-tilknyttede branches består)
 
 ## Backlog (fra august-review)
 
@@ -59,7 +66,7 @@
 - **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
   sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
 
-## Seneste checks (2026-08-26, main `9dfddbf`)
+## Seneste checks (2026-08-26, main `8d664dc`)
 
 typecheck ✅ · lint ✅ (0 fejl; 4 kendte img-warnings = PERF-3) · build ✅ ·
 test ✅ (37 tests / 4 filer: format, hotel-alternatives, normalize-trip, destination-match) ·
@@ -77,6 +84,5 @@ og production-verifikation af PR #9 (hero) gennemført 2026-08-26; alt testdata 
 
 ## Næste anbefalede outcome
 
-1. **Færdiggør branch-oprydning** (merged local + remote branches; bevar WIP + stash)
-2. **Vision 2.0 scope-afklaring og plan** med Ricko — ingen kode endnu (planlægges som preview-branch før merge)
-3. **Backlog-prioritering** — vælg næste kundevendte forbedring fra listen ovenfor
+1. **Vision 2.0 scope-afklaring og plan** med Ricko — ingen kode endnu (planlægges som preview-branch før merge)
+2. **Backlog-prioritering** — vælg næste kundevendte forbedring fra listen ovenfor
