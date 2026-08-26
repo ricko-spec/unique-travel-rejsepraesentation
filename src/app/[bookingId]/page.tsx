@@ -5,6 +5,7 @@ import { DestinationGallery } from "@/components/trip/DestinationGallery";
 import type { Metadata } from "next";
 import { getSupabaseService } from "@/lib/supabase/server";
 import { tripSchema, normalizeTrip, type TripRow } from "@/lib/types";
+import { pickDestinationMatch, type DestinationRecord } from "@/lib/destination-match";
 import { Hero } from "@/components/trip/Hero";
 import { TripDetails } from "@/components/trip/TripDetails";
 import { Timeline } from "@/components/trip/Timeline";
@@ -48,16 +49,12 @@ export async function generateMetadata({
 
 async function getDestination(name: string) {
   const supabase = getSupabaseService();
-  const { data } = await supabase
-    .from("destinations")
-    .select("hero_url, gallery")
-    .eq("name", name)
-    .maybeSingle();
-  if (!data) return null;
-  return {
-    heroUrl: (data.hero_url as string | null) ?? null,
-    gallery: Array.isArray(data.gallery) ? (data.gallery as string[]) : [],
-  };
+  // Hent alle destinationer (få rækker) og match i prioritetsrækkefølge — hele
+  // navnet først, ellers hvert land-segment af en kombi-destination. Et eksakt
+  // .eq-match fejler for "Sri Lanka & Maldiverne" o.l., hvor tabellen kun har
+  // landene enkeltvis; det gav flad fallback-hero selv om landets billede fandtes.
+  const { data } = await supabase.from("destinations").select("name, hero_url, gallery");
+  return pickDestinationMatch((data as DestinationRecord[]) ?? [], name);
 }
 
 export default async function TripPage({ params }: { params: { bookingId: string } }) {
