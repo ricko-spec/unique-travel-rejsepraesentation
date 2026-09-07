@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { collectAlternatives } from "./hotel-alternatives";
+import { normalizeLocationLabel } from "./location-label";
 
 // ----- helpers -----
 // Accept null/undefined/anything coercible to string; default to "".
@@ -362,6 +363,37 @@ function computeDateLabel(typeLabel: string, departure: string): string {
   return `${formatShortDateDK(startDate, true)} – ${formatShortDateDK(endDate, true)}`;
 }
 
+// Renser de kundevendte tekstfelter i et expand-panel (dag-for-dag-program,
+// udflugtsliste, flydetaljer) for TravelWires Jimbaran/Kuta-vedhæng.
+function scrubExpand(expand: ItineraryItem["expand"]): ItineraryItem["expand"] {
+  if (!expand) return expand;
+  const out: Record<string, unknown> = { ...expand };
+  if (Array.isArray(expand.days)) {
+    out.days = expand.days.map((d) => ({
+      ...d,
+      label: normalizeLocationLabel(d.label),
+      text: normalizeLocationLabel(d.text),
+    }));
+  }
+  if (Array.isArray(expand.included)) {
+    out.included = expand.included.map(normalizeLocationLabel);
+  }
+  if (Array.isArray(expand.activities)) {
+    out.activities = expand.activities.map((a) => ({
+      ...a,
+      title: normalizeLocationLabel(a.title),
+      desc: normalizeLocationLabel(a.desc),
+    }));
+  }
+  if (Array.isArray(expand.details)) {
+    out.details = expand.details.map((d) => ({
+      ...d,
+      value: normalizeLocationLabel(d.value),
+    }));
+  }
+  return out as ItineraryItem["expand"];
+}
+
 // Map legacy itinerary-item shapes (times/summary/timeLabel/info/flight-sibling)
 // back to the canonical chips/details/typeLabel/obs/expandKind+expand fields the
 // renderer expects. Lets existing trips with the older shape render correctly
@@ -375,13 +407,14 @@ function normalizeItineraryItem(
 
   const typeLabel = pickStr(item.typeLabel, raw.timeLabel);
   const dateLabel = pickStr(item.dateLabel, computeDateLabel(typeLabel, departure));
-  const details = pickStr(item.details, raw.summary);
-  const chips =
+  const details = normalizeLocationLabel(pickStr(item.details, raw.summary));
+  const rawChips =
     item.chips && item.chips.length > 0
       ? item.chips
       : Array.isArray(raw.times) && raw.times.length > 0
         ? (raw.times.filter((x) => typeof x === "string") as string[])
         : (item.chips ?? null);
+  const chips = rawChips ? rawChips.map(normalizeLocationLabel) : rawChips;
 
   let obs = item.obs ?? null;
   if (!obs && raw.info && typeof raw.info === "object") {
@@ -462,13 +495,14 @@ function normalizeItineraryItem(
   return {
     ...item,
     id: item.id && item.id > 0 ? item.id : index + 1,
+    title: normalizeLocationLabel(item.title),
     typeLabel,
     dateLabel,
     details,
     chips,
     obs,
     expandKind,
-    expand,
+    expand: scrubExpand(expand),
   };
 }
 
@@ -537,10 +571,19 @@ export function normalizeTrip(trip: Trip): Trip {
     const { alternatives, notes } = collectAlternatives(h);
     const normalized = {
       ...h,
-      alternatives,
-      notes,
-      name: pickStr(h.name, anyH.navn),
-      location: pickStr(h.location, anyH.lokation),
+      alternatives: alternatives.map((alt) => ({
+        ...alt,
+        name: normalizeLocationLabel(alt.name),
+        description: normalizeLocationLabel(alt.description),
+      })),
+      notes: notes.map(normalizeLocationLabel),
+      name: normalizeLocationLabel(pickStr(h.name, anyH.navn)),
+      location: normalizeLocationLabel(pickStr(h.location, anyH.lokation)),
+      subHotels: (h.subHotels ?? []).map((sub) => ({
+        ...sub,
+        name: normalizeLocationLabel(sub.name),
+        location: normalizeLocationLabel(sub.location),
+      })),
       nights: pickNum(h.nights, anyH["n\u00e6tter"]),
       room: pickStr(h.room, anyH["v\u00e6relse"]),
       meals: pickStr(h.meals, anyH["m\u00e5ltider"]),
@@ -554,6 +597,7 @@ export function normalizeTrip(trip: Trip): Trip {
   });
   return {
     ...trip,
+    subtitle: normalizeLocationLabel(trip.subtitle ?? ""),
     destination: reclassifyDestination(trip.destination, trip.subtitle, hotels),
     itinerary,
     hotels,
