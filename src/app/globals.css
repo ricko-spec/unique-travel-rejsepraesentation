@@ -691,6 +691,11 @@ section { width: 100%; }
   display: grid;
   gap: 20px;
   grid-template-columns: 1fr;
+  /* Grid strækker som standard alle kort i en række til rækkens højde. Med to
+     kolonner betød det, at et højt pakke-/rundrejsekort (mange sub-hoteller)
+     trak nabokortet med op og gav det en stor tom hvid bund. Hvert hotelkort
+     skal kun være så højt som sit eget indhold. Ingen effekt i én kolonne. */
+  align-items: start;
 }
 @media (min-width: 760px) { .hotels { padding: 0 56px; } }
 @media (min-width: 1024px) { .hotels { padding: 0 72px; grid-template-columns: 1fr 1fr; gap: 24px; } }
