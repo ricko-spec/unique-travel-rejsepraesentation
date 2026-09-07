@@ -36,6 +36,7 @@ Kun WIP/aktive og stash-tilknyttede referencer består.
 |---|---|
 | `main` | = origin/main = `8d664dc` (production) |
 | `fix/preserve-room-blocks` | **IKKE merged (WIP)** — åben PR #2. Worktree: `wt-room-blocks` |
+| `fix/jimbaran-location-and-hero-logo` | **IKKE merged** — afventer Rickos OK. Worktree: `wt-jimbaran` |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged — bevares pga. tilknyttet `stash@{0}` (image-library WIP) |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -45,6 +46,7 @@ Worktrees: `main` (Desktop) + `wt-room-blocks` (`fix/preserve-room-blocks`). Ing
 ## Åbne tråde
 
 1. Mille: opret Japan/Kenya/Mauritius-lignende manglende destinationer + billeder i production (ren drift, ingen kode)
+5. **Hero-logo (palme/Q)** — venter på asset fra Ricko, se backlog nedenfor
 2. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
 3. `stash@{0}` "image-library WIP" — fredet, beslutning udestår
 4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive/stash-tilknyttede branches består)
@@ -57,6 +59,10 @@ Worktrees: `main` (Desktop) + `wt-room-blocks` (`fix/preserve-room-blocks`). Ing
   (i dag kun fri-tekst i noter).
 - **Favicon / Q-logo** — kundevendt header er ren tekst-wordmark; intet Q/palme-brandmark eller favicon.
   Kræver eksplicit brandbeslutning (KRÆVER RICKO) — ikke en bug.
+  **Blokeret 2026-09-07:** Mille/Christian har bedt om palme-/Q-logo øverst på rejseplanerne, men
+  repoet indeholder intet logo-asset — ingen `public/`-mappe, ingen billedfil nogensinde committet
+  (verificeret mod hele git-historikken), ingen inline SVG. Kan først bygges når Ricko lægger den
+  godkendte SVG/PNG (lys udgave til mørkt hero-overlay) ind i repoet.
 - **Supabase custom SMTP** — recovery-/system-mails rammer Supabase' delte mail-rate-limit;
   custom SMTP-domæne fjerner 429'erne (drift-opgave).
 - **"Læs om rundrejsen"-tekstlabel** — evt. tydeligere toggle-label for rundrejse-/programafsnittet
