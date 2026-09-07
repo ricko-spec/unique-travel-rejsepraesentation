@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Trip } from "@/lib/types";
 import { formatCustomerPreview } from "@/lib/format";
+import { filterTrips, hasSearchQuery } from "@/lib/trip-search";
 
 const TRIPS_PREVIEW_COUNT = 5;
 
@@ -26,6 +27,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
   const router = useRouter();
   const [trips, setTrips] = useState<TripListItem[]>([]);
   const [showAllTrips, setShowAllTrips] = useState(false);
+  const [tripSearch, setTripSearch] = useState("");
   const [loadingList, setLoadingList] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -187,6 +189,19 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     setSlugOverride("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
+
+  // Søgning filtrerer den allerede hentede liste (GET /admin/api/trips har ingen
+  // pagination). Ved aktiv søgning vises ALLE match — ellers ville en rejse langt
+  // nede i listen stadig være skjult bag "Vis alle", hvilket er hele problemet
+  // søgningen skal løse. Tom søgning giver præcis den hidtidige visning, og
+  // showAllTrips-tilstanden bevares urørt imens der søges.
+  const isSearchingTrips = hasSearchQuery(tripSearch);
+  const matchedTrips = filterTrips(trips, tripSearch);
+  const visibleTrips = isSearchingTrips
+    ? matchedTrips
+    : showAllTrips
+      ? trips
+      : trips.slice(0, TRIPS_PREVIEW_COUNT);
 
   const newLink = createdSlug
     ? typeof window !== "undefined"
@@ -383,7 +398,29 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
         </div>
 
         <div className="admin-card">
-          <h2>Alle præsentationer</h2>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            <h2 style={{ marginBottom: 0 }}>Alle præsentationer</h2>
+            {!loadingList && trips.length > 0 && (
+              <input
+                type="search"
+                className="admin-input"
+                style={{ width: "auto", minWidth: 240, flex: "0 1 320px" }}
+                value={tripSearch}
+                onChange={(e) => setTripSearch(e.target.value)}
+                placeholder="Søg bookingnummer, kunde eller destination"
+                aria-label="Søg i rejsepræsentationer"
+              />
+            )}
+          </div>
           {loadingList ? (
             <div style={{ color: "var(--grey-text)", fontSize: 13 }}>
               <span className="admin-spinner" />
@@ -391,6 +428,10 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
             </div>
           ) : trips.length === 0 ? (
             <div style={{ color: "var(--grey-text)", fontSize: 13 }}>Ingen præsentationer endnu.</div>
+          ) : matchedTrips.length === 0 ? (
+            <div style={{ color: "var(--grey-text)", fontSize: 13 }}>
+              Ingen rejsepræsentationer fundet.
+            </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table className="admin-table">
@@ -405,7 +446,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {(showAllTrips ? trips : trips.slice(0, TRIPS_PREVIEW_COUNT)).map((t) => (
+                  {visibleTrips.map((t) => (
                     <tr key={t.id}>
                       <td style={{ fontFamily: "ui-monospace, monospace" }}>#{t.booking_no}</td>
                       <td>{t.destination}</td>
@@ -464,17 +505,32 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                   ))}
                 </tbody>
               </table>
-              {trips.length > TRIPS_PREVIEW_COUNT && (
-                <div style={{ marginTop: 14, textAlign: "center" }}>
-                  <button
-                    className="admin-btn admin-btn-secondary"
-                    onClick={() => setShowAllTrips((v) => !v)}
-                  >
-                    {showAllTrips
-                      ? `Vis kun de seneste ${TRIPS_PREVIEW_COUNT}`
-                      : `Vis alle præsentationer (${trips.length})`}
-                  </button>
+              {isSearchingTrips ? (
+                <div
+                  style={{
+                    marginTop: 14,
+                    textAlign: "center",
+                    color: "var(--grey-text)",
+                    fontSize: 13,
+                  }}
+                >
+                  {matchedTrips.length === 1
+                    ? "1 præsentation matcher søgningen"
+                    : `${matchedTrips.length} præsentationer matcher søgningen`}
                 </div>
+              ) : (
+                trips.length > TRIPS_PREVIEW_COUNT && (
+                  <div style={{ marginTop: 14, textAlign: "center" }}>
+                    <button
+                      className="admin-btn admin-btn-secondary"
+                      onClick={() => setShowAllTrips((v) => !v)}
+                    >
+                      {showAllTrips
+                        ? `Vis kun de seneste ${TRIPS_PREVIEW_COUNT}`
+                        : `Vis alle præsentationer (${trips.length})`}
+                    </button>
+                  </div>
+                )
               )}
             </div>
           )}
