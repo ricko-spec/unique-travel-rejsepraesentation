@@ -1,13 +1,25 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-07** (main flyttet til `efa8b31`; `stash@{0}` slettet)
+> Sidst opdateret: **2026-09-07** (PR #12 merged og production-verificeret)
 
 ## Production
 
-- **Commit:** `efa8b31` på `main` — `https://rejseplaner.uniquetravel.dk`
-  (`efa8b31` og `8d664dc` er begge docs-only STATUS-commits oven på app-koden fra PR #5–#9 / `9dfddbf`
-  — app-koden i production er uændret siden `9dfddbf`)
+- **Commit:** `1d726b7` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #12 (`fix/jimbaran-location-and-hero-logo`)** — merged og production-verificeret **2026-09-07**.
+  Jimbaran-koden i TravelWire hænger på Kuta, så PDF'en kan skrive opholdet som `Jimbaran (Kuta)`,
+  `Jimbaran/Kuta` eller `Kuta/Jimbaran`. Ny helper `normalizeLocationLabel`
+  (`src/lib/location-label.ts`) fjerner Kuta kundevendt — men kun når den står side om side med
+  Jimbaran med en TW-separator (parentes, skråstreg, komma). Kaldes fra `normalizeTrip`, så
+  rensningen sker ved **render**: eksisterende rejser blev rettet uden re-upload, uden migration
+  og uden ændring af parser-prompten. Rå `data`-jsonb beholder TW's original.
+  Bevidst urørt: `Kuta` alene, `Kuta Beach`/`Kuta Selatan`, fritekst som "Jimbaran nær Kuta",
+  og `trip.intro` (intro ændres kun via intro-endpointet).
+  Production-verificeret på bookingerne 35685, 35682, 35799 (rettet), 35479 (ægte Kuta-rejse,
+  uændret) og 35764 (ren Jimbaran, uændret); bookingnummer-unlock bekræftet uændret.
+  **Hero-logo (palme/Q) indgik IKKE** — se åbne tråde.
+- Tidligere: `efa8b31` og `8d664dc` var docs-only STATUS-commits oven på app-koden fra
+  PR #5–#9 / `9dfddbf`
 - Indhold ud over juli-batchen (sec-fixes, password-flow, destinations-upload m. WebP, opret-destination,
   AI Project Automation Kit):
   - **PR #6 (`fix/admin-password-recovery-flow`)** — password recovery for admin: reset-side,
@@ -35,20 +47,24 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `efa8b31` (production) |
+| `main` | = origin/main = `1d726b7` (production) |
 | `fix/preserve-room-blocks` | **IKKE merged (WIP)** — åben PR #2. Worktree: `wt-room-blocks` |
-| `fix/jimbaran-location-and-hero-logo` | **IKKE merged** — afventer Rickos OK. Worktree: `wt-jimbaran` |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
 
-Worktrees: `main` (Desktop), `wt-room-blocks` (`fix/preserve-room-blocks`) og
-`wt-jimbaran` (`fix/jimbaran-location-and-hero-logo`). Ingen D-worktrees tilbage.
+Worktrees: `main` (Desktop) + `wt-room-blocks` (`fix/preserve-room-blocks`).
+`fix/jimbaran-location-and-hero-logo` og worktreet `wt-jimbaran` blev slettet 2026-09-07
+efter merge (verificeret ancestor af `origin/main`).
 
 ## Åbne tråde
 
 1. Mille: opret Japan/Kenya/Mauritius-lignende manglende destinationer + billeder i production (ren drift, ingen kode)
-2. **Hero-logo (palme/Q)** — blokeret indtil det korrekte Unique Travel-asset ligger i repoet; se backlog nedenfor
+2. **Hero-logo (palme/Q)** — **blokeret: logo-asset mangler i repoet.** Mille/Christian har bedt om
+   palme-/Q-logo øverst på rejseplanerne, men der findes ingen `public/`-mappe, ingen billedfil i
+   git-historikken og ingen inline SVG. Kan først bygges når Ricko lægger den godkendte fil ind
+   (helst SVG i lys udgave — heroen har mørkt overlay). Ikke løst i PR #12; heroen viser fortsat
+   ren tekst-wordmark. Se backlog nedenfor
 3. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
 4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive branches består)
 
@@ -73,12 +89,14 @@ Worktrees: `main` (Desktop), `wt-room-blocks` (`fix/preserve-room-blocks`) og
 - **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
   sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
 
-## Seneste checks (2026-08-26, main `8d664dc` = app-koden i `efa8b31`)
+## Seneste checks (2026-09-07, main `1d726b7`)
 
 typecheck ✅ · lint ✅ (0 fejl; 4 kendte img-warnings = PERF-3) · build ✅ ·
-test ✅ (37 tests / 4 filer: format, hotel-alternatives, normalize-trip, destination-match) ·
-DB sund (~172 trips, 15 destinationer). Production-smoke-test af PR #5 (created_by + parse_failures)
-og production-verifikation af PR #9 (hero) gennemført 2026-08-26; alt testdata ryddet op igen.
+test ✅ (48 tests / 5 filer: format, hotel-alternatives, normalize-trip, destination-match,
+location-label). DB: 220 trips, 15 destinationer.
+Production-verifikation af PR #12 (Jimbaran/Kuta) gennemført 2026-09-07 — read-only, ingen
+skrivninger til production-data. Tidligere: PR #5 (created_by + parse_failures) smoke-testet og
+PR #9 (hero) verificeret 2026-08-26; alt testdata ryddet op igen.
 
 ## Kendte risici
 
