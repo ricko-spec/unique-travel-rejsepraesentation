@@ -1,12 +1,13 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-08-26** (efter august-batchen PR #5–#9 + fuldført branch-oprydning)
+> Sidst opdateret: **2026-09-07** (main flyttet til `efa8b31`; `stash@{0}` slettet)
 
 ## Production
 
-- **Commit:** `8d664dc` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk` svarer HTTP 200
-  (`8d664dc` = docs-only STATUS-merge oven på app-koden fra PR #5–#9 / `9dfddbf`)
+- **Commit:** `efa8b31` på `main` — `https://rejseplaner.uniquetravel.dk`
+  (`efa8b31` og `8d664dc` er begge docs-only STATUS-commits oven på app-koden fra PR #5–#9 / `9dfddbf`
+  — app-koden i production er uændret siden `9dfddbf`)
 - Indhold ud over juli-batchen (sec-fixes, password-flow, destinations-upload m. WebP, opret-destination,
   AI Project Automation Kit):
   - **PR #6 (`fix/admin-password-recovery-flow`)** — password recovery for admin: reset-side,
@@ -30,26 +31,26 @@ Branch-oprydning **fuldført 2026-08-26**: alle merged branches (PR #5–#9, `de
 `docs/*`, `rate-limit-unlock-security-fix`, `feature/redigerbar-intro` m.fl.) samt de
 tilhørende scratchpad-/D-worktrees er slettet lokalt og på remote. `feat/backend-integrations-…`
 blev force-slettet lokalt (kun gammel pre-rebase `30900d8`; indholdet er i main via `af0acb2`).
-Kun WIP/aktive og stash-tilknyttede referencer består.
+Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `8d664dc` (production) |
+| `main` | = origin/main = `efa8b31` (production) |
 | `fix/preserve-room-blocks` | **IKKE merged (WIP)** — åben PR #2. Worktree: `wt-room-blocks` |
 | `fix/jimbaran-location-and-hero-logo` | **IKKE merged** — afventer Rickos OK. Worktree: `wt-jimbaran` |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
-| `feature/individuelle-logins-profiles` | Merged — bevares pga. tilknyttet `stash@{0}` (image-library WIP) |
+| `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
 
-Worktrees: `main` (Desktop) + `wt-room-blocks` (`fix/preserve-room-blocks`). Ingen D-worktrees tilbage.
+Worktrees: `main` (Desktop), `wt-room-blocks` (`fix/preserve-room-blocks`) og
+`wt-jimbaran` (`fix/jimbaran-location-and-hero-logo`). Ingen D-worktrees tilbage.
 
 ## Åbne tråde
 
 1. Mille: opret Japan/Kenya/Mauritius-lignende manglende destinationer + billeder i production (ren drift, ingen kode)
-5. **Hero-logo (palme/Q)** — venter på asset fra Ricko, se backlog nedenfor
-2. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
-3. `stash@{0}` "image-library WIP" — fredet, beslutning udestår
-4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive/stash-tilknyttede branches består)
+2. **Hero-logo (palme/Q)** — blokeret indtil det korrekte Unique Travel-asset ligger i repoet; se backlog nedenfor
+3. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
+4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive branches består)
 
 ## Backlog (fra august-review)
 
@@ -72,7 +73,7 @@ Worktrees: `main` (Desktop) + `wt-room-blocks` (`fix/preserve-room-blocks`). Ing
 - **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
   sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
 
-## Seneste checks (2026-08-26, main `8d664dc`)
+## Seneste checks (2026-08-26, main `8d664dc` = app-koden i `efa8b31`)
 
 typecheck ✅ · lint ✅ (0 fejl; 4 kendte img-warnings = PERF-3) · build ✅ ·
 test ✅ (37 tests / 4 filer: format, hotel-alternatives, normalize-trip, destination-match) ·
