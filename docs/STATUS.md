@@ -1,11 +1,21 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-07** (PR #12 merged og production-verificeret)
+> Sidst opdateret: **2026-09-07** (PR #14 søgefunktion live i admin)
 
 ## Production
 
-- **Commit:** `1d726b7` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `1776924` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #14 (`feature/admin-trip-search`)** — merged og deployet **2026-09-07**. Søgefelt i
+  admin-listen "Alle præsentationer" (ønsket af Randi: en rejseplan var svær at finde igen
+  efter opdatering). Filtrerer på **bookingnummer** (helt/delvist, `#` ignoreres), destination,
+  kundenavn og slug; søgeordet deles i ord, så `bali 35682` og `sri lanka` begge virker.
+  Client-side i `src/lib/trip-search.ts` — `GET /admin/api/trips` henter hele listen uden
+  pagination, så data er allerede i browseren. Ingen DB-migration, ingen ny endpoint, ingen
+  ændring af parser, customer, auth eller bookingnummer-unlock.
+  Ved aktiv søgning vises alle match og "Vis alle" erstattes af en tæller; tomt felt giver
+  præcis den hidtidige visning (seneste 5 / vis alle), og `showAllTrips` røres ikke.
+  **Rådgiver er ikke søgbar** — feltet findes ikke på listeelementet (ligger i `trip.data`).
 - **PR #12 (`fix/jimbaran-location-and-hero-logo`)** — merged og production-verificeret **2026-09-07**.
   Jimbaran-koden i TravelWire hænger på Kuta, så PDF'en kan skrive opholdet som `Jimbaran (Kuta)`,
   `Jimbaran/Kuta` eller `Kuta/Jimbaran`. Ny helper `normalizeLocationLabel`
@@ -47,15 +57,16 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `1d726b7` (production) |
+| `main` | = origin/main = `1776924` (production) |
 | `fix/preserve-room-blocks` | **IKKE merged (WIP)** — åben PR #2. Worktree: `wt-room-blocks` |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
 
-Worktrees: `main` (Desktop) + `wt-room-blocks` (`fix/preserve-room-blocks`).
-`fix/jimbaran-location-and-hero-logo` og worktreet `wt-jimbaran` blev slettet 2026-09-07
-efter merge (verificeret ancestor af `origin/main`).
+Worktrees: kun `main` (Desktop). Den døde `wt-room-blocks`-registrering blev pruned
+2026-09-07 — branchen `fix/preserve-room-blocks` og PR #2 er uberørte.
+`fix/jimbaran-location-and-hero-logo` (+ `wt-jimbaran`) og `feature/admin-trip-search`
+(+ `wt-search`) blev slettet 2026-09-07 efter merge (begge verificeret ancestor af `origin/main`).
 
 ## Åbne tråde
 
@@ -89,14 +100,18 @@ efter merge (verificeret ancestor af `origin/main`).
 - **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
   sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
 
-## Seneste checks (2026-09-07, main `1d726b7`)
+## Seneste checks (2026-09-07, main `1776924`)
 
 typecheck ✅ · lint ✅ (0 fejl; 4 kendte img-warnings = PERF-3) · build ✅ ·
-test ✅ (48 tests / 5 filer: format, hotel-alternatives, normalize-trip, destination-match,
-location-label). DB: 220 trips, 15 destinationer.
-Production-verifikation af PR #12 (Jimbaran/Kuta) gennemført 2026-09-07 — read-only, ingen
-skrivninger til production-data. Tidligere: PR #5 (created_by + parse_failures) smoke-testet og
-PR #9 (hero) verificeret 2026-08-26; alt testdata ryddet op igen.
+test ✅ (66 tests / 6 filer: format, hotel-alternatives, normalize-trip, destination-match,
+location-label, trip-search). DB: 222 trips, 15 destinationer.
+Production efter PR #14: deploy READY, `/admin` 200, kundeside 200, `/admin/api/trips` uden
+login 401, Jimbaran/Kuta-fix fortsat intakt.
+Søgefunktionens ni testcases (præcist/delvist/`#`-bookingnummer, kundenavn, destination, slug,
+uden match, ryddet felt, ryddet felt + "Vis alle") kørt mod den ægte production-liste på 222
+trips — read-only. **Klik-test i selve admin-UI'et udestår: den kræver login, som agenter ikke
+har (jf. `docs/ACCESS_MATRIX.md`: auth-brugere kun m. Rickos OK).** Ricko/Randi bekræfter i UI.
+Tidligere: PR #12 (Jimbaran/Kuta) verificeret 2026-09-07; PR #5 og #9 2026-08-26.
 
 ## Kendte risici
 
