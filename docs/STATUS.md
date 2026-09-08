@@ -1,11 +1,25 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-07** (PR #16 hotelkort med naturlig højde live)
+> Sidst opdateret: **2026-09-08** (PR #18 hero-logo live)
 
 ## Production
 
-- **Commit:** `7e41305` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `79b39e7` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #18 (`feature/customer-hero-logo`)** — merged (fast-forward) og production-verificeret
+  **2026-09-08**. Kunderejseplanens hero viser nu det **godkendte hvide Unique Travel-logo med
+  Q/palme** i stedet for tekst-wordmarken. Løser den længe blokerede logo-tråd — blokeringen var
+  udelukkende det manglende asset, som Ricko leverede 2026-09-08.
+  **Asset: `public/brand/unique-travel-logo-white.png`** — første fil i en ny `public/`-mappe.
+  Transparent PNG 987×332, 16 KB, **byte-identisk med Rickos original** (ingen re-komprimering,
+  ingen skalering, intet visuelt ændret). AI-filen er ikke brugt, og logoet er ikke genskabt som SVG.
+  `.wordmark` erstattet af `.hero-logo` i `globals.css`: **124px på mobil, 168px fra 760px**
+  (højde 42px / 57px). Diskret `drop-shadow(0 1px 3px rgba(0,0,0,0.28))` — ingen baggrundsboks —
+  holder det hvide logo læsbart på lyse hero-billeder; bevidst valgt og bekræftet af Ricko.
+  Også rettet i `[bookingId]/loading.tsx`, som havde en anden kopi af tekst-wordmarken — ellers
+  ville skeletonet vise tekst og hoppe til logo. Kun 4 filer, 22 linjer ind / 9 ud.
+  Uberørt: kontakt-knap, hero-title, kicker, pills, intro, CTA, nøgleinfo-stribe,
+  bookingnummer-unlock. Ingen DB-migration, ingen parserændring, intet rejseindhold.
 - **PR #16 (`fix/hotel-cards-natural-height`)** — merged og production-verificeret **2026-09-07**.
   Christian meldte en stor tom hvid blok under højre hotelkort på en Sri Lanka-rejseplan.
   Root cause: `.hotels` er et CSS Grid, og grid stretcher som standard alle items i en række til
@@ -68,7 +82,7 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `7e41305` (production) |
+| `main` | = origin/main = `79b39e7` (production) |
 | `fix/preserve-room-blocks` | **IKKE merged (WIP)** — åben PR #2. Worktree: `wt-room-blocks` |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
@@ -78,16 +92,15 @@ Worktrees: kun `main` (Desktop). Den døde `wt-room-blocks`-registrering blev pr
 2026-09-07 — branchen `fix/preserve-room-blocks` og PR #2 er uberørte.
 `fix/jimbaran-location-and-hero-logo` (+ `wt-jimbaran`), `feature/admin-trip-search`
 (+ `wt-search`) og `fix/hotel-cards-natural-height` (+ `wt-cards`) blev alle slettet 2026-09-07
-efter merge (verificeret ancestor af `origin/main`).
+efter merge (verificeret ancestor af `origin/main`). `feature/customer-hero-logo` (+ `wt-hero-logo`)
+slettet 2026-09-08 på samme vilkår.
 
 ## Åbne tråde
 
 1. Mille: opret Japan/Kenya/Mauritius-lignende manglende destinationer + billeder i production (ren drift, ingen kode)
-2. **Hero-logo (palme/Q)** — **blokeret: logo-asset mangler i repoet.** Mille/Christian har bedt om
-   palme-/Q-logo øverst på rejseplanerne, men der findes ingen `public/`-mappe, ingen billedfil i
-   git-historikken og ingen inline SVG. Kan først bygges når Ricko lægger den godkendte fil ind
-   (helst SVG i lys udgave — heroen har mørkt overlay). Ikke løst i PR #12; heroen viser fortsat
-   ren tekst-wordmark. Se backlog nedenfor
+2. ~~**Hero-logo (palme/Q)**~~ — **LØST 2026-09-08 i PR #18.** Ricko leverede de godkendte
+   brand-assets, og heroen viser nu det hvide logo med Q/palme fra
+   `public/brand/unique-travel-logo-white.png`. Favicon udestår stadig — se backlog
 3. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
 4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive branches består)
 
@@ -97,12 +110,11 @@ efter merge (verificeret ancestor af `origin/main`).
   kunne løftes til kundevendt visning (kræver afklaring af hvilke felter).
 - **Vandflyver-tag** — dedikeret markør/ikon for vandflyver-transfers og bagagebegrænsninger
   (i dag kun fri-tekst i noter).
-- **Favicon / Q-logo** — kundevendt header er ren tekst-wordmark; intet Q/palme-brandmark eller favicon.
-  Kræver eksplicit brandbeslutning (KRÆVER RICKO) — ikke en bug.
-  **Blokeret 2026-09-07:** Mille/Christian har bedt om palme-/Q-logo øverst på rejseplanerne, men
-  repoet indeholder intet logo-asset — ingen `public/`-mappe, ingen billedfil nogensinde committet
-  (verificeret mod hele git-historikken), ingen inline SVG. Kan først bygges når Ricko lægger den
-  godkendte SVG/PNG (lys udgave til mørkt hero-overlay) ind i repoet.
+- **Favicon** — **Q/palme-logoet i heroen er løst 2026-09-08 (PR #18).** Tilbage står kun
+  **favicon**: der er stadig intet brandmark i browserfanen. Assetet findes nu — `Unique-travel-white-icon`
+  / `Unique-travel-green-icon` (icon-only, 920×992) er de oplagte kandidater, og de øvrige godkendte
+  varianter (grøn, sort, GREEN+GOLD) ligger hos Ricko. Kræver kun en lille beslutning om lys/mørk
+  variant — ikke længere blokeret på manglende materiale.
 - **Supabase custom SMTP** — recovery-/system-mails rammer Supabase' delte mail-rate-limit;
   custom SMTP-domæne fjerner 429'erne (drift-opgave).
 - **"Læs om rundrejsen"-tekstlabel** — evt. tydeligere toggle-label for rundrejse-/programafsnittet
@@ -112,11 +124,12 @@ efter merge (verificeret ancestor af `origin/main`).
 - **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
   sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
 
-## Seneste checks (2026-09-07, main `7e41305`)
+## Seneste checks (2026-09-08, main `79b39e7`)
 
 typecheck ✅ · lint ✅ (0 fejl; 4 kendte img-warnings = PERF-3) · build ✅ ·
 test ✅ (66 tests / 6 filer: format, hotel-alternatives, normalize-trip, destination-match,
-location-label, trip-search). DB: 222 trips, 15 destinationer.
+location-label, trip-search) — kørt på den træ-identiske commit før merge.
+DB 2026-09-08: 223 trips (217 aktive), 15 destinationer — alle 15 har hero-billede.
 Production efter PR #14: deploy READY, `/admin` 200, kundeside 200, `/admin/api/trips` uden
 login 401, Jimbaran/Kuta-fix fortsat intakt.
 Søgefunktionens ni testcases (præcist/delvist/`#`-bookingnummer, kundenavn, destination, slug,
@@ -126,7 +139,18 @@ har (jf. `docs/ACCESS_MATRIX.md`: auth-brugere kun m. Rickos OK).** Ricko/Randi 
 PR #16 production-verificeret 2026-09-07 med Chromium mod de rigtige kundesider (read-only):
 `align-items=start` aktiv, tom bund 0px på alle pakke-/badeferie-kort, rundrejsekortet viser
 fortsat alle 7 sub-hoteller, mobil uændret, ingen vandret scroll.
-Tidligere: PR #12 (Jimbaran/Kuta) verificeret 2026-09-07; PR #5 og #9 2026-08-26.
+PR #18 production-verificeret 2026-09-08 med Chromium mod den rigtige kundeside (Sri Lanka,
+read-only ud over én normal unlock): logo indlæst fra `/brand/unique-travel-logo-white.png`
+(natural 987×332), **168×57px på desktop 1280 / 124×42px på mobil 390**, `alt="Unique Travel"`,
+drop-shadow aktiv. `.wordmark` er væk, og "Unique Travel" optræder ikke længere som synlig
+hero-tekst. Kontakt-knap uforandret (95×40px, til højre for logoet, ingen overlap); kicker,
+title, pills, intro, CTA og nøgleinfo-stribe uforandrede; ingen fejlede `/brand/`-requests.
+Fallback testet ved at blokere hero-fotoet: gradient-baggrunden aktiv og logoet fortsat
+læsbart på begge breakpoints. Bookingnummer-unlock bekræftet uændret (gate vist, unlock virker).
+Loading-skeletonet kunne ikke fanges visuelt — serveren svarer for hurtigt — men den serverede
+RSC-payload viser at `loading.tsx` sender samme logo med korrekt `src` og `alt`.
+Live-assettet er byte-identisk (md5) med filen i repoet.
+Tidligere: PR #16 og #12 verificeret 2026-09-07; PR #5 og #9 2026-08-26.
 
 ## Kendte risici
 
