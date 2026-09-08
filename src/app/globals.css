@@ -126,14 +126,15 @@ section { width: 100%; }
   flex-shrink: 0;
 }
 
-.wordmark {
-  font-family: var(--font-cormorant), serif;
-  color: #fff;
-  font-weight: 500;
-  font-size: 22px;
-  letter-spacing: 0.01em;
+.hero-logo {
+  display: block;
+  width: 124px;
+  height: auto;
+  flex-shrink: 0;
+  /* Diskret skygge holder det hvide logo læsbart også på lyse hero-billeder */
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.28));
 }
-@media (min-width: 760px) { .wordmark { font-size: 26px; } }
+@media (min-width: 760px) { .hero-logo { width: 168px; } }
 
 .hero-kontakt-btn {
   color: #fff;

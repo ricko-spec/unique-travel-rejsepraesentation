@@ -6,7 +6,13 @@ export default function Loading() {
         <div className="hero-overlay" />
         <div className="hero-inner">
           <div className="hero-top">
-            <div className="wordmark">Unique Travel</div>
+            <img
+              className="hero-logo"
+              src="/brand/unique-travel-logo-white.png"
+              alt="Unique Travel"
+              width={987}
+              height={332}
+            />
           </div>
           <div className="hero-body">
             <div className="hero-kicker">Rejseforslag</div>

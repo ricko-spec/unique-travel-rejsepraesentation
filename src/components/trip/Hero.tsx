@@ -24,7 +24,13 @@ export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null
       <div className="hero-ornament" />
       <div className="hero-inner">
         <div className="hero-top">
-          <div className="wordmark">Unique Travel</div>
+          <img
+            className="hero-logo"
+            src="/brand/unique-travel-logo-white.png"
+            alt="Unique Travel"
+            width={987}
+            height={332}
+          />
           <a className="hero-kontakt-btn" href="#kontakt">
             Kontakt
           </a>
