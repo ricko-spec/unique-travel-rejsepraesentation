@@ -113,42 +113,79 @@ describe("formatCustomerPreview", () => {
 });
 
 describe("splitRoomAllocation", () => {
-  // Fixture-strengene er de faktiske roomAllocations fra booking 35518
-  // (production, juli 2026) — gruppe-rejse med 5 + 3 værelser.
+  // Fixture-strengene er faktiske roomAllocations fra production (sep. 2026).
+  // Booking 35518 er gruppe-casen: to hoteller med tre værelser hver.
   it("splitter 'Værelse N: ...' i label og rest", () => {
-    expect(splitRoomAllocation("Værelse 1: 2 voksne (Garden Bungalow)")).toEqual({
+    expect(splitRoomAllocation("Værelse 1: 2 voksne (Ocean Front værelse)")).toEqual({
       label: "Værelse 1",
-      rest: "2 voksne (Garden Bungalow)",
+      rest: "2 voksne (Ocean Front værelse)",
     });
     expect(
       splitRoomAllocation(
-        "Værelse 3: 3 børn (1, 5 og 6 år) – 1 barn sover i seng (Standard, Building 2, connecting)",
+        "Værelse 2: 2 voksne + 3 børn (1, 5 og 6 år) (Beach Family værelse) · Inkl. 1 babyseng",
       ),
     ).toEqual({
-      label: "Værelse 3",
-      rest: "3 børn (1, 5 og 6 år) – 1 barn sover i seng (Standard, Building 2, connecting)",
+      label: "Værelse 2",
+      rest: "2 voksne + 3 børn (1, 5 og 6 år) (Beach Family værelse) · Inkl. 1 babyseng",
     });
     expect(
-      splitRoomAllocation("Værelse 2: 2 voksne + 3 børn (1, 5 og 6 år) (Beach Family værelse)"),
+      splitRoomAllocation("Værelse 3: Family Room · Inkl. 1 x yngste sover i forældrenes seng"),
     ).toEqual({
-      label: "Værelse 2",
-      rest: "2 voksne + 3 børn (1, 5 og 6 år) (Beach Family værelse)",
+      label: "Værelse 3",
+      rest: "Family Room · Inkl. 1 x yngste sover i forældrenes seng",
+    });
+  });
+
+  it("label med værelsestype i parentes fremhæves også (lang, men stadig en værelse-label)", () => {
+    // Findes i production på bookingerne 35617 og 35780; præfikset er 27-44 tegn,
+    // så en ren længdegrænse ville tabe dem.
+    expect(splitRoomAllocation("Værelse 4 (Flora 2 Bedroom): 4 rejsende")).toEqual({
+      label: "Værelse 4 (Flora 2 Bedroom)",
+      rest: "4 rejsende",
+    });
+    expect(
+      splitRoomAllocation("Værelse 1 (Deluxe Triple, Family Wing): 2 rejsende"),
+    ).toEqual({
+      label: "Værelse 1 (Deluxe Triple, Family Wing)",
+      rest: "2 rejsende",
+    });
+  });
+
+  it("label uden nummer fremhæves (fx 'Værelse til 4 personer')", () => {
+    expect(splitRoomAllocation("Værelse til 4 personer: 2 voksne + 2 børn")).toEqual({
+      label: "Værelse til 4 personer",
+      rest: "2 voksne + 2 børn",
     });
   });
 
   it("streng uden kolon vises uændret som rest (ingen kunstig label)", () => {
-    expect(splitRoomAllocation("2 voksne i Garden Bungalow")).toEqual({
+    // Alle fire findes i production (34566, 35559, 35528, 35545).
+    expect(splitRoomAllocation("Ønske om værelser ved siden af hinanden")).toEqual({
       label: "",
-      rest: "2 voksne i Garden Bungalow",
+      rest: "Ønske om værelser ved siden af hinanden",
+    });
+    expect(splitRoomAllocation("3 x Deluxe værelse")).toEqual({
+      label: "",
+      rest: "3 x Deluxe værelse",
+    });
+    expect(splitRoomAllocation("Twin seng + 1 ekstra opredning")).toEqual({
+      label: "",
+      rest: "Twin seng + 1 ekstra opredning",
     });
   });
 
-  it("kolon dybt inde i fritekst behandles ikke som label", () => {
+  it("kolon i fritekst bliver ikke til en label", () => {
+    // Præfikset her er 42 tegn — kortere end de lange ægte labels ovenfor, så
+    // det er begyndelsesordet og ikke længden der skiller dem ad.
     expect(
       splitRoomAllocation("Fordeling af værelserne aftales ved ankomst: spørg i receptionen"),
     ).toEqual({
       label: "",
       rest: "Fordeling af værelserne aftales ved ankomst: spørg i receptionen",
+    });
+    expect(splitRoomAllocation("Bemærk: morgenmad er ikke inkluderet")).toEqual({
+      label: "",
+      rest: "Bemærk: morgenmad er ikke inkluderet",
     });
   });
 
@@ -161,5 +198,9 @@ describe("splitRoomAllocation", () => {
       label: "Værelse 4",
       rest: "2 voksne",
     });
+  });
+
+  it("tom streng giver hverken label eller rest", () => {
+    expect(splitRoomAllocation("")).toEqual({ label: "", rest: "" });
   });
 });

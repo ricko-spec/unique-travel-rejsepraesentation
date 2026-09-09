@@ -47,14 +47,20 @@ export function formatCustomerPreview(name: string): string {
 
 // Splitter en roomAllocation-streng som 'Værelse 3: 3 børn (1, 5 og 6 år)' i en
 // fremhævet label ('Værelse 3') og resten — så gruppe-rejser kan vise en tydelig
-// værelse-for-værelse-fordeling. Strenge uden 'Label: ...'-form (eller med et
-// urimeligt langt præfiks, dvs. et kolon midt i fritekst) vises uændret som rest.
-const MAX_ALLOCATION_LABEL_LEN = 24;
+// værelse-for-værelse-fordeling.
+//
+// Kun præfikser der faktisk NAVNGIVER et værelse bliver til label. En ren
+// længdegrænse duer ikke: TravelWire skriver både korte 'Værelse 2:' og lange
+// 'Værelse 4 (Family Suite Jacuzzi, 2 Bedrooms):' (44 tegn), mens fritekst som
+// 'Fordeling af værelserne aftales ved ankomst: …' har sit kolon efter 42 tegn.
+// Længde alene kan altså ikke skille de to — men begyndelsesordet kan.
+// Alt andet vises uændret som rest, så ingen linje mister indhold.
+const ROOM_LABEL = /^(?:værelse|room|suite|villa|bungalow)\b[^:]{0,48}$/i;
 
 export function splitRoomAllocation(alloc: string): { label: string; rest: string } {
   const idx = alloc.indexOf(":");
-  if (idx <= 0 || idx > MAX_ALLOCATION_LABEL_LEN) {
-    return { label: "", rest: alloc.trim() };
-  }
-  return { label: alloc.slice(0, idx).trim(), rest: alloc.slice(idx + 1).trim() };
+  if (idx <= 0) return { label: "", rest: alloc.trim() };
+  const label = alloc.slice(0, idx).trim();
+  if (!ROOM_LABEL.test(label)) return { label: "", rest: alloc.trim() };
+  return { label, rest: alloc.slice(idx + 1).trim() };
 }

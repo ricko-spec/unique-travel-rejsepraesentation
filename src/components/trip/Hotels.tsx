@@ -127,12 +127,10 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                 </ul>
               </div>
             )}
-            {/* text-sm i stedet for text-xs/80% — noterne bærer reel information
-                (connecting doors, senge, måltidsregler) og var for svage at læse. */}
             {h.notes && h.notes.length > 0 && (
               <div className="px-6 pb-5">
                 {h.notes.map((note, idx) => (
-                  <p key={idx} className="text-sm text-grey-text italic mt-1">
+                  <p key={idx} className="text-xs text-grey-text/80 italic mt-1">
                     {note}
                   </p>
                 ))}
