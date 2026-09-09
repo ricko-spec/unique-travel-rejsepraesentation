@@ -1,11 +1,36 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-09** (PR #20 favicon live)
+> Sidst opdateret: **2026-09-09** (PR #2 værelsesfordeling live)
 
 ## Production
 
-- **Commit:** `79683d8` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `6e6d0c6` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #2 (`fix/preserve-room-blocks`)** — merged (fast-forward) og production-verificeret
+  **2026-09-09**, efter at have ligget åben som WIP siden 2026-07-29. Hotelkort med **2+
+  værelser** viser nu værelsesfordelingen i en afgrænset boks med headeren
+  "Værelsesfordeling · N værelser" og fed `Værelse N:`-label pr. linje. Kort med **ét**
+  værelse beholder den hidtidige diskrete visning, så par-rejser forbliver rolige.
+  **Root cause var rendering, ikke datatab:** `roomAllocations` har hele tiden været komplet
+  i `data`-jsonb — fordelingen stod bare som svag grå liste uden visuel afgrænsning.
+  Derfor ingen parserændring og ingen DB-migration.
+  Rebaset 26 commits frem fra `cc06d1a` til `78a8107`. To konflikter, begge "begge sider
+  tilføjede noget i slutningen af filen": `formatCustomerPreview` (PR #14) og
+  `splitRoomAllocation` lever nu side om side i `format.ts` + `format.test.ts`.
+  **To justeringer ved genbesøget** (commit `6e6d0c6` oven på den rebasede `e884f8d`):
+  (1) PR'ens notes-ændring (`text-xs`/80 % → `text-sm`) blev **rullet tilbage** — den ramte
+  446 hotelkort, hvoraf 366 slet ikke har flere værelser, altså langt uden for
+  room-blocks-scopet. Noterne står som før; kan tages op separat.
+  (2) Label-genkendelsen i `splitRoomAllocation` er **mønsterbaseret** i stedet for
+  længdebaseret. Den gamle grænse (kolon inden 24 tegn) tabte 7 ægte værelseslinjer på
+  bookingerne 35617/35780, hvor TravelWire skriver
+  `Værelse 4 (Family Suite Jacuzzi, 2 Bedrooms): …` (44 tegn). En højere grænse duer ikke —
+  fritekst som `Fordeling af værelserne aftales ved ankomst: …` har kolon allerede efter
+  42 tegn; begyndelsesordet skiller dem rent.
+  Testfixtures er udskiftet: booking 35518 er siden juli ændret til **to hoteller à tre
+  værelser uden noter**, så de gamle fixtures beskrev data der ikke findes længere.
+  Filer: `Hotels.tsx`, `format.ts`, `format.test.ts` — +147/−2. Uberørt: admin, auth,
+  bookingnummer-unlock, parser, DB, hero-logo, favicon og PR #16's `align-items: start`.
 - **PR #20 (`feature/favicon-brand-icon`)** — merged (fast-forward) og production-verificeret
   **2026-09-09**. Browserfanen viser nu **Unique Travels grønne Q/palme-ikon** i stedet for
   Next.js' standard-ikon. Sidste punkt i den brand-tråd hero-logoet (PR #18) startede.
@@ -98,19 +123,18 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `79683d8` (production) |
-| `fix/preserve-room-blocks` | **IKKE merged (WIP)** — åben PR #2. Worktree: `wt-room-blocks` |
+| `main` | = origin/main = `6e6d0c6` (production) |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
 
-Worktrees: kun `main` (Desktop). Den døde `wt-room-blocks`-registrering blev pruned
-2026-09-07 — branchen `fix/preserve-room-blocks` og PR #2 er uberørte.
+Worktrees: kun `main` (Desktop).
 `fix/jimbaran-location-and-hero-logo` (+ `wt-jimbaran`), `feature/admin-trip-search`
 (+ `wt-search`) og `fix/hotel-cards-natural-height` (+ `wt-cards`) blev alle slettet 2026-09-07
 efter merge (verificeret ancestor af `origin/main`). `feature/customer-hero-logo` (+ `wt-hero-logo`)
 slettet 2026-09-08 på samme vilkår. `feature/favicon-brand-icon` (+ `wt-favicon`) slettet
-2026-09-09 efter merge og production-verifikation.
+2026-09-09 efter merge og production-verifikation. `fix/preserve-room-blocks` (+ `wt-rooms`)
+slettet 2026-09-09 efter at PR #2 endelig blev merged.
 
 ## Åbne tråde
 
@@ -141,7 +165,23 @@ slettet 2026-09-08 på samme vilkår. `feature/favicon-brand-icon` (+ `wt-favico
 - **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
   sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
 
-## Seneste checks (2026-09-09, main `79683d8`)
+## Seneste checks (2026-09-09, main `6e6d0c6`)
+
+PR #2 (værelsesfordeling), 2026-09-09: **test ✅ 74/74** (8 nye `splitRoomAllocation`-tests
+med aktuelle production-strenge) · typecheck ✅ · lint ✅ (kun de 6 kendte img-warnings) ·
+build ✅. **Maskinel gennemgang af alle 219 aktive rejser:** 120 hotelkort på 48 rejser har
+2+ værelser; 333 værelseslinjer, hvoraf alle 333 nu får label (326 før justeringen),
+**0 tegn går tabt** og 0 linjer bliver tomme.
+Production-verificeret i Chromium på mobil 390 og desktop 1280 (cookie sat direkte, så
+unlock-flowet ikke skriver til `rate_limits`): 35518 → 2 bokse/6 labels/6 linjer;
+35617 + 35780 → 2 bokse/8 labels (de tidligere tabte lange labels er med); 35528
+(Sri Lanka-rundrejse) → 2 værelsesbokse + pakke-boks med 5 sub-hoteller intakt;
+35782 + 35789 → alternativ-bokse og Besparelse/Merpris uændret; **35579 (almindelig
+badeferie) fuldstændig uændret — nul nye elementer.** Ingen kort klipper indhold, ingen
+vandret overflow på 390 px, noter fortsat 12 px, hero-logo og favicon på alle sider.
+PR #16 intakt: `align-items: start` aktiv, kort i samme række har fortsat forskellige
+højder (fx 441+400 px). Bookingnummer-unlock uændret: uden cookie og med forkert cookie
+vises gaten og hverken hotelnavne eller værelsesdata lækker.
 
 PR #20 (favicon), 2026-09-09: typecheck ✅ · lint ✅ (kun de kendte img-warnings) · build ✅
 (`/icon.png` fremgår som statisk route) · test ✅ 66/66. Production efter merge: deploy READY
