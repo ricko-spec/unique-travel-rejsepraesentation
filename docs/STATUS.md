@@ -1,11 +1,30 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-09** (PR #21 hotel-noter live)
+> Sidst opdateret: **2026-09-09** (PR #22 programmet-label live)
 
 ## Production
 
-- **Commit:** `e39335b` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `7e116dc` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #22 (`fix/tour-toggle-label`)** — merged (fast-forward) og production-verificeret
+  **2026-09-09**. Tidslinjens udfold-knap sagde **"Læs om udflugten"** for alt med
+  `expandKind: "program"`, men den kategori dækker både endagsture og flerdagsforløb med
+  overnatning. En 14-dages rundrejse eller 5-dages safari er ikke en udflugt.
+  Optalt på 221 aktive rejser / 218 program-items: **81 flerdagsforløb** (SAFARI 31,
+  TURPROGRAM 19, RUNDREJSE 12, KRYDSTOGT 4, plus TREKKING, CRUISE, HALONG CRUISE, SAPA-TUR
+  m.fl.) får nu **"Læs om programmet"**, mens de **137 ægte endagsture** (UDFLUGT, AKTIVITET,
+  TILKØB, SIGHTSEEING TRANSFER) beholder **"Læs om udflugten"**. `Se flydetaljer` (1040) og
+  `Se udflugtsmuligheder` (64) er uberørte.
+  **"Programmet" frem for "rundrejsen"**, fordi gruppen også rummer safarier, krydstogter og
+  trekking, som ikke er rundrejser.
+  **Skillelinjen læses af `typeLabel`, ikke af `expand.days`.** Parseren bruger nemlig også
+  `days` til at dele ÉN dag op i "Formiddag"/"Eftermiddag", så 2 blokke kan sagtens være én
+  udflugt — 7 ægte endagsture ville have fået forkert etiket med days-metoden (fanget og
+  kasseret undervejs). `typeLabel` siger derimod enten `DAG 11` eller `DAG 7–8` /
+  `3 DAGE / 2 NÆTTER`; de to mønstre klassificerer alle 218 items korrekt uden én fejl.
+  Labellogikken er flyttet fra `Timeline.tsx` til `isMultiDayProgram` + `timelineToggleLabel`
+  i `format.ts`, så den kan testdækkes — komponenten blev 13 linjer kortere.
+  Ingen DB-migration, ingen parserændring, intet rejseindhold, ingen layoutændring.
 - **PR #21 (`fix/hotel-notes-readable`)** — merged (fast-forward) og production-verificeret
   **2026-09-09**. Hotel-noterne er nu læsbare: **fuld `text-grey-text` + `leading-relaxed`**,
   fortsat 12px og kursiv. Genoptager den notes-ændring der bevidst blev fjernet under
@@ -143,7 +162,7 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `e39335b` (production) |
+| `main` | = origin/main = `7e116dc` (production) |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -156,13 +175,15 @@ slettet 2026-09-08 på samme vilkår. `feature/favicon-brand-icon` (+ `wt-favico
 2026-09-09 efter merge og production-verifikation. `fix/preserve-room-blocks` (+ `wt-rooms`)
 slettet 2026-09-09 efter at PR #2 endelig blev merged. `fix/hotel-notes-readable`
 (+ `wt-notes`) slettet 2026-09-09 efter merge og production-verifikation.
+`fix/tour-toggle-label` (+ `wt-tour`) slettet samme dag på samme vilkår.
 
 ## Åbne tråde
 
 1. Mille: opret Japan/Kenya/Mauritius-lignende manglende destinationer + billeder i production (ren drift, ingen kode)
 2. ~~**Hero-logo (palme/Q)**~~ — **LØST 2026-09-08 i PR #18.** Ricko leverede de godkendte
    brand-assets, og heroen viser nu det hvide logo med Q/palme fra
-   `public/brand/unique-travel-logo-white.png`. Favicon udestår stadig — se backlog
+   `public/brand/unique-travel-logo-white.png`. **Mille har godkendt logoet** (meldt af
+   Ricko 2026-09-09). Favicon er også løst — se PR #20
 3. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
 4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive branches består)
 
@@ -172,21 +193,34 @@ slettet 2026-09-09 efter at PR #2 endelig blev merged. `fix/hotel-notes-readable
   kunne løftes til kundevendt visning (kræver afklaring af hvilke felter).
 - **Vandflyver-tag** — dedikeret markør/ikon for vandflyver-transfers og bagagebegrænsninger
   (i dag kun fri-tekst i noter).
-- **Favicon** — **Q/palme-logoet i heroen er løst 2026-09-08 (PR #18).** Tilbage står kun
-  **favicon**: der er stadig intet brandmark i browserfanen. Assetet findes nu — `Unique-travel-white-icon`
-  / `Unique-travel-green-icon` (icon-only, 920×992) er de oplagte kandidater, og de øvrige godkendte
-  varianter (grøn, sort, GREEN+GOLD) ligger hos Ricko. Kræver kun en lille beslutning om lys/mørk
-  variant — ikke længere blokeret på manglende materiale.
+- ~~**Favicon**~~ — **LØST 2026-09-09 i PR #20.** Browserfanen viser det grønne Q/palme-ikon
+  fra `src/app/icon.png` (512×512, 5,9 KB, genereret fra `Unique-travel-green-icon 1.png`).
 - **Supabase custom SMTP** — recovery-/system-mails rammer Supabase' delte mail-rate-limit;
   custom SMTP-domæne fjerner 429'erne (drift-opgave).
-- **"Læs om rundrejsen"-tekstlabel** — evt. tydeligere toggle-label for rundrejse-/programafsnittet
-  i rejseplanen (mindre UX-polish).
+- ~~**"Læs om rundrejsen"-tekstlabel**~~ — **LØST 2026-09-09 i PR #22.** Flerdagsforløb siger nu
+  "Læs om programmet"; ægte endagsudflugter beholder "Læs om udflugten".
 - **`parse_failures` oprydning** — pg_cron-job der sletter rækker > 30 dage (jf. `supabase/README.md`)
   er endnu ikke sat op.
 - **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
   sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
 
-## Seneste checks (2026-09-09, main `e39335b`)
+## Seneste checks (2026-09-09, main `7e116dc`)
+
+PR #22 (programmet-label), 2026-09-09: **test ✅ 84/84** (13 nye for `isMultiDayProgram` og
+`timelineToggleLabel`, med faktiske production-typeLabels som fixtures) · typecheck ✅ ·
+lint ✅ (kun de 6 kendte img-warnings) · build ✅.
+Før merge blev branchens produktionsbuild målt mod production på mobil 390 og desktop 1280:
+**sidehøjden var identisk på alle 16 målinger** — kun knap-etiketten var anderledes.
+Production efter merge, 10 rejser × 2 viewports: flerdagsforløb viser "Læs om programmet"
+(34952 safari, 35121 + 35528 rundrejse, 35729 m. alternativer); ægte endagsture viser fortsat
+"Læs om udflugten" (35133, 35579, og 2 af 3 på 34566); grænsetilfældet 35498 giver korrekt
+3× udflugten + 1× programmet. `Se flydetaljer` og `Se udflugtsmuligheder` uændrede.
+Booking 34566 er den stærkeste case: safari (5 dage/4 nætter) → programmet, mens halvdagstur
+og ballon-tilkøb → udflugten, alt sammen på samme side.
+Uberørt i samme kørsel: værelsesfordeling (35518: 2 bokse / 6 labels), hotel-noter
+(12px/19,5px), alternativ- og sub-hotel-bokse, `align-items: start`, hero-logo og favicon.
+0 kort klipper indhold, 0 vandret overflow på 390 px. Bookingnummer-unlock uændret: uden
+cookie og med forkert cookie vises gaten, og hverken hotelnavne eller etiketter lækker.
 
 PR #21 (hotel-noter), 2026-09-09: test ✅ 74/74 · typecheck ✅ · lint ✅ (kun de 6 kendte
 img-warnings) · build ✅. Branchens produktionsbuild blev målt mod production (= main
