@@ -1,11 +1,27 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-08** (PR #18 hero-logo live)
+> Sidst opdateret: **2026-09-09** (PR #20 favicon live)
 
 ## Production
 
-- **Commit:** `79b39e7` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `79683d8` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #20 (`feature/favicon-brand-icon`)** — merged (fast-forward) og production-verificeret
+  **2026-09-09**. Browserfanen viser nu **Unique Travels grønne Q/palme-ikon** i stedet for
+  Next.js' standard-ikon. Sidste punkt i den brand-tråd hero-logoet (PR #18) startede.
+  **Asset: `src/app/icon.png`** — 512×512 transparent PNG, **5,9 KB**, genereret fra Rickos
+  icon-only asset `Unique-travel-green-icon 1.png` (920×992): centreret på kvadratisk canvas
+  med 20px luft, så Q-cirklen ikke rører fanens kant, og gemt med 8-farvet PNG-palette.
+  Alle opake pixels holder brandets teal `rgb(7,78,80)` — ingen visuel ændring af brandet.
+  Grøn frem for hvid version, fordi faner og bogmærker typisk har lys baggrund.
+  Metoden er **Next.js 14 App Router file-based metadata**: filen hedder `icon.png` og ligger
+  direkte i `src/app/`, så Next selv injicerer `<link rel="icon" type="image/png"
+  sizes="512x512">` i root layout. `metadata`-objektet i `src/app/layout.tsx` er derfor
+  **ikke rørt** — title, description og robots er uforandrede.
+  **Kun én fil i hele PR'en** (`src/app/icon.png`, ny binary). Ingen DB-migration, ingen
+  parserændring, intet rejseindhold, og hero-logoet er uberørt.
+  Bemærk: der fandtes ingen favicon/icon i repoet i forvejen, og der er bevidst ikke lagt
+  en dublet i `public/brand`. Det hvide icon-only asset er ikke tilføjet (ingen aktuel brug).
 - **PR #18 (`feature/customer-hero-logo`)** — merged (fast-forward) og production-verificeret
   **2026-09-08**. Kunderejseplanens hero viser nu det **godkendte hvide Unique Travel-logo med
   Q/palme** i stedet for tekst-wordmarken. Løser den længe blokerede logo-tråd — blokeringen var
@@ -82,7 +98,7 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `79b39e7` (production) |
+| `main` | = origin/main = `79683d8` (production) |
 | `fix/preserve-room-blocks` | **IKKE merged (WIP)** — åben PR #2. Worktree: `wt-room-blocks` |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
@@ -93,7 +109,8 @@ Worktrees: kun `main` (Desktop). Den døde `wt-room-blocks`-registrering blev pr
 `fix/jimbaran-location-and-hero-logo` (+ `wt-jimbaran`), `feature/admin-trip-search`
 (+ `wt-search`) og `fix/hotel-cards-natural-height` (+ `wt-cards`) blev alle slettet 2026-09-07
 efter merge (verificeret ancestor af `origin/main`). `feature/customer-hero-logo` (+ `wt-hero-logo`)
-slettet 2026-09-08 på samme vilkår.
+slettet 2026-09-08 på samme vilkår. `feature/favicon-brand-icon` (+ `wt-favicon`) slettet
+2026-09-09 efter merge og production-verifikation.
 
 ## Åbne tråde
 
@@ -124,7 +141,15 @@ slettet 2026-09-08 på samme vilkår.
 - **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
   sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
 
-## Seneste checks (2026-09-08, main `79b39e7`)
+## Seneste checks (2026-09-09, main `79683d8`)
+
+PR #20 (favicon), 2026-09-09: typecheck ✅ · lint ✅ (kun de kendte img-warnings) · build ✅
+(`/icon.png` fremgår som statisk route) · test ✅ 66/66. Production efter merge: deploy READY
+på `79683d8`, `GET /icon.png` → 200 `image/png` 5919 bytes og **byte-identisk** (sha256) med
+`src/app/icon.png` i repoet. `<link rel="icon" href="/icon.png?…" sizes="512x512">` bekræftet
+på `/`, `/admin` og en rigtig kunderejseplan. Uforandret: `<title>Unique Travel</title>`,
+`description="Skræddersyede rejser"`, `robots="noindex, nofollow"` på alle tre, og
+hero-logoet (`/brand/unique-travel-logo-white.png` + `.hero-logo`) er stadig på kundesiden.
 
 typecheck ✅ · lint ✅ (0 fejl; 4 kendte img-warnings = PERF-3) · build ✅ ·
 test ✅ (66 tests / 6 filer: format, hotel-alternatives, normalize-trip, destination-match,
