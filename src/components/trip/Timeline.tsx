@@ -7,29 +7,18 @@ import type {
   ActivitiesExpand,
   FlightExpand,
 } from "@/lib/types";
+import { timelineToggleLabel } from "@/lib/format";
 import { SectionHeader } from "./SectionHeader";
 
 function TimelineItem({ item, defaultOpen }: { item: ItineraryItem; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(!!defaultOpen);
 
-  // A single optional activity is really an included excursion, not a list of
-  // options — so the label changes accordingly.
   const activitiesCount =
     item.expandKind === "activities" && item.expand && "activities" in item.expand
       ? (item.expand.activities?.length ?? 0)
       : 0;
-  const isSingleExcursion =
-    item.expandKind === "program" ||
-    (item.expandKind === "activities" && activitiesCount === 1);
 
-  const toggleLabel =
-    item.expandKind === "flight"
-      ? "Se flydetaljer"
-      : isSingleExcursion
-      ? "Læs om udflugten"
-      : item.expandKind === "activities"
-      ? "Se udflugtsmuligheder"
-      : null;
+  const toggleLabel = timelineToggleLabel(item.expandKind, item.typeLabel, activitiesCount);
 
   return (
     <div className="tl-item">

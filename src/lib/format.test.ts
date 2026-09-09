@@ -5,6 +5,8 @@ import {
   displayRoomLabel,
   formatCustomerPreview,
   splitRoomAllocation,
+  isMultiDayProgram,
+  timelineToggleLabel,
 } from "./format";
 
 // Fixture-strengene er de faktiske savings-varianter fra production-databasen
@@ -202,5 +204,86 @@ describe("splitRoomAllocation", () => {
 
   it("tom streng giver hverken label eller rest", () => {
     expect(splitRoomAllocation("")).toEqual({ label: "", rest: "" });
+  });
+});
+
+describe("isMultiDayProgram", () => {
+  // Alle strenge er faktiske typeLabels fra production (sep. 2026).
+  it("dagsinterval betyder flere dage", () => {
+    expect(isMultiDayProgram("AKTIVITET · DAG 7–8")).toBe(true);
+    expect(isMultiDayProgram("RUNDREJSE · 9 DAGE / 8 NÆTTER · DAG 4–12")).toBe(true);
+    expect(isMultiDayProgram("TURPROGRAM · 3N · DAG 8–11")).toBe(true);
+    // "1 DAG" i etiketten, men intervallet afslører at den spænder over to
+    expect(isMultiDayProgram("TURPROGRAM · 1 DAG · DAG 8–9")).toBe(true);
+  });
+
+  it("antal døgn betyder flere dage", () => {
+    expect(isMultiDayProgram("SAFARI · 4 DAGE / 3 NÆTTER · DAG 5–8")).toBe(true);
+    expect(isMultiDayProgram("UDFLUGT · 2 DAGE · DAG 20–21")).toBe(true);
+    expect(isMultiDayProgram("KRYDSTOGT · 2 DAGE / 1 NAT · DAG 3–4")).toBe(true);
+  });
+
+  it("enkelt dagsnummer er én dag", () => {
+    expect(isMultiDayProgram("UDFLUGT · DAG 3")).toBe(false);
+    expect(isMultiDayProgram("AKTIVITET · DAG 10")).toBe(false);
+    expect(isMultiDayProgram("TILKØB · DAG 6")).toBe(false);
+    expect(isMultiDayProgram("SIGHTSEEING TRANSFER · DAG 6")).toBe(false);
+    expect(isMultiDayProgram("UDFLUGT · DAG 27")).toBe(false);
+  });
+
+  it("tom eller manglende etiket er ikke flerdags", () => {
+    expect(isMultiDayProgram("")).toBe(false);
+    expect(isMultiDayProgram(null)).toBe(false);
+    expect(isMultiDayProgram(undefined)).toBe(false);
+  });
+});
+
+describe("timelineToggleLabel", () => {
+  // Optalt i production: 218 program-items = 81 flerdagsforløb (SAFARI 31,
+  // TURPROGRAM 19, RUNDREJSE 12, KRYDSTOGT 4, TREKKING/CRUISE m.fl.) og
+  // 137 endagsture (UDFLUGT, AKTIVITET, TILKØB, SIGHTSEEING TRANSFER).
+  it("flerdagsforløb kaldes program, ikke udflugt", () => {
+    expect(timelineToggleLabel("program", "SAFARI · 4 DAGE / 3 NÆTTER · DAG 5–8", 0)).toBe(
+      "Læs om programmet",
+    );
+    expect(timelineToggleLabel("program", "RUNDREJSE · 14 DAGE / 13 NÆTTER · DAG 3–16", 0)).toBe(
+      "Læs om programmet",
+    );
+    // Hedder "UDFLUGT", men er reelt to dage med overnatning
+    expect(timelineToggleLabel("program", "UDFLUGT · 2 DAGE / 1 NAT · DAG 7–8", 0)).toBe(
+      "Læs om programmet",
+    );
+  });
+
+  it("ægte endagsudflugt beholder sin etiket", () => {
+    expect(timelineToggleLabel("program", "UDFLUGT · DAG 3", 0)).toBe("Læs om udflugten");
+    expect(timelineToggleLabel("program", "AKTIVITET · DAG 10", 0)).toBe("Læs om udflugten");
+    expect(timelineToggleLabel("program", "TILKØB · DAG 6", 0)).toBe("Læs om udflugten");
+  });
+
+  it("én valgfri aktivitet er én udflugt; flere er muligheder at vælge i", () => {
+    expect(timelineToggleLabel("activities", "UDFLUGTER · DAG 9", 1)).toBe("Læs om udflugten");
+    expect(timelineToggleLabel("activities", "UDFLUGTER · DAG 3", 2)).toBe(
+      "Se udflugtsmuligheder",
+    );
+    expect(timelineToggleLabel("activities", "UDFLUGTER · DAG 3", 0)).toBe(
+      "Se udflugtsmuligheder",
+    );
+  });
+
+  it("activities påvirkes ikke af dagsinterval i etiketten", () => {
+    expect(timelineToggleLabel("activities", "UDFLUGTER · DAG 3–5", 3)).toBe(
+      "Se udflugtsmuligheder",
+    );
+  });
+
+  it("fly er uændret", () => {
+    expect(timelineToggleLabel("flight", "FLY · DAG 1", 0)).toBe("Se flydetaljer");
+  });
+
+  it("ukendt eller manglende expandKind giver ingen knap", () => {
+    expect(timelineToggleLabel(null, "HOTEL · 3 NÆTTER · DAG 2–5", 0)).toBeNull();
+    expect(timelineToggleLabel(undefined, "UDFLUGT · DAG 3", 2)).toBeNull();
+    expect(timelineToggleLabel("noget-nyt", "UDFLUGT · DAG 3", 2)).toBeNull();
   });
 });

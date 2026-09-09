@@ -64,3 +64,40 @@ export function splitRoomAllocation(alloc: string): { label: string; rest: strin
   if (!ROOM_LABEL.test(label)) return { label: "", rest: alloc.trim() };
   return { label, rest: alloc.slice(idx + 1).trim() };
 }
+
+// expandKind 'program' dækker to vidt forskellige ting: endagsudflugter og
+// flerdagsforløb (safari, rundrejse, turprogram, krydstogt, trekking). For de
+// sidste er "udflugten" misvisende — de har overnatninger.
+//
+// Skillelinjen læses af typeLabel, ikke af antallet af blokke i expand.days:
+// parseren bruger nemlig også days til at dele ÉN dag op i "Formiddag" og
+// "Eftermiddag", så 2 blokke kan sagtens være én udflugt. typeLabel siger
+// derimod enten "DAG 11" (én dag) eller "DAG 7–8" / "3 DAGE / 2 NÆTTER".
+// Målt på production (sep. 2026, 218 program-items) rammer de to mønstre 81
+// flerdagsforløb og 137 endagsture uden en eneste fejlklassifikation.
+const DAY_RANGE = /dag\s*\d+\s*[–—-]\s*\d+/i;
+const DAY_COUNT = /\d+\s*(dage|nætter|nat)\b/i;
+
+export function isMultiDayProgram(typeLabel: string | null | undefined): boolean {
+  const s = typeLabel ?? "";
+  return DAY_RANGE.test(s) || DAY_COUNT.test(s);
+}
+
+// Etiketten på tidslinjens udfold-knap. "Programmet" frem for "rundrejsen",
+// fordi gruppen også rummer safarier, krydstogter og trekking, som ikke er
+// rundrejser.
+export function timelineToggleLabel(
+  expandKind: string | null | undefined,
+  typeLabel: string | null | undefined,
+  activitiesCount: number,
+): string | null {
+  if (expandKind === "flight") return "Se flydetaljer";
+  if (expandKind === "program") {
+    return isMultiDayProgram(typeLabel) ? "Læs om programmet" : "Læs om udflugten";
+  }
+  // Én valgfri aktivitet er reelt én inkluderet udflugt, ikke en liste at vælge i.
+  if (expandKind === "activities") {
+    return activitiesCount === 1 ? "Læs om udflugten" : "Se udflugtsmuligheder";
+  }
+  return null;
+}
