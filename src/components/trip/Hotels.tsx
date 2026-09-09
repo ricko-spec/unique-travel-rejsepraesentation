@@ -127,10 +127,16 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                 </ul>
               </div>
             )}
+            {/* Noterne bærer reel information (transfer ved ankomst, late check-out,
+                connecting doors, babyseng), men stod i 80 % opacitet = 4,06:1 kontrast
+                mod kortets hvide bund — under WCAG AA's 4,5:1. Fuld grey-text giver
+                6,48:1. Størrelsen bliver på 12px, så noterne fortsat er tydeligt
+                sekundære i forhold til værelsesfordelingens 14px; leading-relaxed
+                giver luften der gør flerlinjede noter læsbare uden at ombryde dem. */}
             {h.notes && h.notes.length > 0 && (
               <div className="px-6 pb-5">
                 {h.notes.map((note, idx) => (
-                  <p key={idx} className="text-xs text-grey-text/80 italic mt-1">
+                  <p key={idx} className="text-xs leading-relaxed text-grey-text italic mt-1.5">
                     {note}
                   </p>
                 ))}
