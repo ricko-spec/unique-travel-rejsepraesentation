@@ -1,11 +1,31 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-09** (PR #2 værelsesfordeling live)
+> Sidst opdateret: **2026-09-09** (PR #21 hotel-noter live)
 
 ## Production
 
-- **Commit:** `6e6d0c6` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `e39335b` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #21 (`fix/hotel-notes-readable`)** — merged (fast-forward) og production-verificeret
+  **2026-09-09**. Hotel-noterne er nu læsbare: **fuld `text-grey-text` + `leading-relaxed`**,
+  fortsat 12px og kursiv. Genoptager den notes-ændring der bevidst blev fjernet under
+  genbesøget af PR #2 — denne gang som selvstændig, afgrænset ændring.
+  **Root cause er målbar:** `text-grey-text/80` gav `#7e7e7e` mod kortets hvide bund =
+  **4,06:1 kontrast**, under WCAG AA's krav på 4,5:1 for normal tekst. Fuld `text-grey-text`
+  (`#5e5e5e`) giver **6,48:1**.
+  **Størrelsen blev bevidst på 12px.** Fem varianter blev målt i Chromium mod rigtige
+  produktionssider først: `text-sm` gav +12 til +156px sidehøjde og ny ombrydning (op til
+  fire ekstra linjer pr. side) og ville gøre noterne lige så store som værelseslinjerne fra
+  PR #2. `leading-relaxed` (19,5px) giver i stedet luft mellem de linjer der allerede er:
+  **linjeantallet er uændret på samtlige testede sider**, og sidehøjden vokser kun 14-78px.
+  Ønskes `text-sm` alligevel, er det ét ord på samme linje i `Hotels.tsx`.
+  **Rækkevidde: 448 af 755 aktive hotelkort (59 %) på 200 af 220 rejser** har noter.
+  Note-typerne er reelt indholdsbærende: transport/transfer (145), måltider (89),
+  forbehold/garanti (87), check-in/check-ud-tider (53), babyseng (43), senge/værelsestype
+  (23), tilkøb (15), connecting doors (9). Kort uden noter er bit-for-bit uændrede.
+  Kun to Tailwind-klasser i `Hotels.tsx` — +7/−1, heraf 6 linjer kommentar. Ingen
+  DB-migration, ingen parserændring, ingen ændring af hoteldata, room-blocks, alternativer,
+  sub-hoteller, admin, auth eller bookingnummer-unlock.
 - **PR #2 (`fix/preserve-room-blocks`)** — merged (fast-forward) og production-verificeret
   **2026-09-09**, efter at have ligget åben som WIP siden 2026-07-29. Hotelkort med **2+
   værelser** viser nu værelsesfordelingen i en afgrænset boks med headeren
@@ -123,7 +143,7 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `6e6d0c6` (production) |
+| `main` | = origin/main = `e39335b` (production) |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -134,7 +154,8 @@ Worktrees: kun `main` (Desktop).
 efter merge (verificeret ancestor af `origin/main`). `feature/customer-hero-logo` (+ `wt-hero-logo`)
 slettet 2026-09-08 på samme vilkår. `feature/favicon-brand-icon` (+ `wt-favicon`) slettet
 2026-09-09 efter merge og production-verifikation. `fix/preserve-room-blocks` (+ `wt-rooms`)
-slettet 2026-09-09 efter at PR #2 endelig blev merged.
+slettet 2026-09-09 efter at PR #2 endelig blev merged. `fix/hotel-notes-readable`
+(+ `wt-notes`) slettet 2026-09-09 efter merge og production-verifikation.
 
 ## Åbne tråde
 
@@ -165,7 +186,21 @@ slettet 2026-09-09 efter at PR #2 endelig blev merged.
 - **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
   sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
 
-## Seneste checks (2026-09-09, main `6e6d0c6`)
+## Seneste checks (2026-09-09, main `e39335b`)
+
+PR #21 (hotel-noter), 2026-09-09: test ✅ 74/74 · typecheck ✅ · lint ✅ (kun de 6 kendte
+img-warnings) · build ✅. Branchens produktionsbuild blev målt mod production (= main
+`62dd490`) i Chromium på mobil 390 og desktop 1280 før merge, og production blev målt igen
+efter. Noterne står nu **12px / 19,5px / `rgb(94,94,94)` / kursiv** på alle sider med noter.
+**Uændret ±0px: rejse uden noter (34504) og booking 35518**, hvor de 2 værelsesbokse og
+6 labels fortsat er intakte. Øvrige: badeferie 35579 +14/+15px, rundrejse 34566 +65/+33px,
+alternativer 35729 +21/+14px, gruppe 35090 +78/+43px, lang note 35132 +44/+30px.
+Maskinelt bekræftet identisk før/efter: notetekstens tegnantal, værelsesbokse,
+værelseslabels, alternativ-bokse, sub-hotel-bokse, listeelementer og kortantal.
+PR #16 intakt: `align-items: start` aktiv, kort i samme række har fortsat forskellige
+højder (fx 546+772, 628+601 px). 0 kort klipper indhold, 0 vandret overflow på 390 px,
+hero-logo og favicon på alle sider. Bookingnummer-unlock uændret: uden cookie og med
+forkert cookie vises gaten, og hverken hotelnavne eller noter lækker.
 
 PR #2 (værelsesfordeling), 2026-09-09: **test ✅ 74/74** (8 nye `splitRoomAllocation`-tests
 med aktuelle production-strenge) · typecheck ✅ · lint ✅ (kun de 6 kendte img-warnings) ·
