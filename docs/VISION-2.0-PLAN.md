@@ -1,7 +1,9 @@
 # Vision 2.0 — implementeringsplan
 
 > Status: **udkast til godkendelse**. Ingen kode ændret. Ingen app-filer rørt.
-> Skrevet 2026-09-10 mod main `7fd5caa`.
+> Skrevet 2026-09-10 mod main `7fd5caa`. **Revideret 2026-09-10** efter Rickos
+> indvending: galleriet er polish, ikke en reel Vision 2.0-start. Fase 1 er nu
+> Hero + rejseoverblik.
 > Planen oversætter **eksisterende, godkendt designmateriale** til konkrete PR'er.
 > Der er bevidst **ikke** lavet et nyt designforslag.
 
@@ -50,7 +52,9 @@ mere luft, mindre tekst** inden for den palette der allerede er implementeret.
 - **Brandmærket er komplet:** hero-logo (PR #18) og favicon (PR #20).
 - **Nylig UX-oprydning:** værelsesfordeling (PR #2), hotelkortenes højde (PR #16),
   hotel-noternes læsbarhed og WCAG-kontrast (PR #21), programmet-labelen (PR #22),
-  transport-chips (PR #24).
+  transport-chips (PR #24), alternative hoteller (PR #26).
+
+Ingen af disse punkter skal genåbnes. Vision 2.0 bygger ovenpå dem.
 
 ### Målt tilstand på production (booking 34566, desktop 1280)
 
@@ -59,42 +63,70 @@ mere luft, mindre tekst** inden for den palette der allerede er implementeret.
 | Hero | 780 px | 11 % |
 | Nøgleinfo-stribe | 233 px | 3 % |
 | **Timeline** | **3817 px** | **54 %** |
-| **Destinationsgalleri** | **376 px** | **5 %** |
+| Destinationsgalleri | 376 px | 5 % |
 | Hoteller | 969 px | 14 % |
 | Pris + praktisk | 530 px | 8 % |
 | CTA + footer | 109 px | 2 % |
 
-### Gap 1 — billeder fylder for lidt (kernen i Vision 2.0)
+Hero + stribe udgør tilsammen 14 % af siden og er alt kunden ser før den 3817 px lange
+timeline. Det er her førstehåndsindtrykket afgøres.
+
+### Gap 1 — førstehåndsindtrykket læses som "PDF lagt på web" (fase 1)
+
+Målt på den nuværende hero:
+
+- **Alt indhold er klemt i én venstrekolonne.** Logo, kicker, titel, pills, intro og CTA
+  ligger alle inden for de yderste ~620 px; hele højre halvdel af hero-fotoet står tom.
+  Kompositionen er ikke stram og bevidst — den er en venstrestillet tekstblok på et foto.
+- **Intro-teksten er fire linjer brødtekst direkte på fotoet** (109 px høj, 17 px Open Sans,
+  median 563 tegn på tværs af alle rejser, max 785). Det er dokumenttekst, ikke
+  magasin-anslag. DBK-kravet er kortere tekster.
+- **Datoerne står to gange lige efter hinanden:** som pill i heroen
+  (`15. juli 2026 – 28. juli 2026`) og igen 100 px længere nede i striben som
+  `Afrejse` / `Hjemkomst`. Ren dublering i det vigtigste område af siden.
+- **Rejsens omfang fremgår ikke.** Kunden får to datoer og skal selv regne varigheden ud.
+  Antal nætter, antal destinationer og rutens form står ingen steder samlet.
+- **Pills blander to informationstyper** uden visuel forskel: ruten
+  (`2N. Arusha, 4N turprogram, 6N. Kendwa`) og datointervallet ser identiske ud.
+- **Nøgleinfo-striben er en 4-kolonners formular** — `Afrejse` / `Hjemkomst` / `Rejsende` /
+  `Rådgiver`. På rejser med mange rejsende løber navnelisten ud over stribens højde og
+  klippes visuelt. Det ligner et bookingsystem, ikke en præsentation.
+
+**Det er dette gap Vision 2.0 skal lukke først.** Ikke fordi heroen er teknisk forkert,
+men fordi den er det eneste sted hvor "eksklusivt visuelt udtryk" og "kunden skal visuelt
+forelske sig i produktet" afgøres.
+
+### Gap 2 — billeder fylder for lidt (fase 4)
 
 Billedmaterialet **findes allerede**: alle 15 destinationer har hero-billede og præcis
 3 galleribilleder, og galleriet vises på alle 230 aktive rejser. Men galleriet er kun
-**5 % af sidehøjden**, mens tekst (timeline) er 54 %. DBK-kravet om "store, flotte
-billeder" er ikke indfriet — billederne er der, de er bare små.
+**5 % af sidehøjden**, mens tekst (timeline) er 54 %.
 
-### Gap 2 — galleriet står uden for designsystemet
-
-`DestinationGallery.tsx` er den eneste kundevendte komponent der bruger rå
-Tailwind-utilities i stedet for projektets tokens:
+Galleriet står desuden som den eneste kundevendte komponent uden for designsystemet:
 
 - `rounded-lg` (8 px) — designsystemet bruger 2 px på kort, 999 px på pills
 - `bg-stone-100` — en Tailwind-grå der ikke findes i paletten
 - `max-w-5xl` (1024 px) — resten af siden er 1180 px
 - `px-4 md:px-8 py-12 md:py-16` — ikke sidens 28/56/72 px-rytme
 
-Galleriet er derfor **smallere end resten af siden** og har en fremmed hjørneradius.
+**Dette er billedlayout-polish, ikke en Vision 2.0-start.** Galleriet findes allerede,
+billederne vælges allerede manuelt, og kundens oplevelse ændres kun begrænset af at rette
+bredde, spacing, radius, baggrundsfarve og billedhøjde. Det hører hjemme i **fase 4**
+sammen med `next/image`, hvor det får reel effekt: større billeder giver først mening når
+de også leveres i rigtig størrelse.
 
-### Gap 3 — ingen billedoptimering
+### Gap 3 — ingen billedoptimering (fase 4)
 
 Ingen kundevendte billeder bruger `next/image` (kendt som PERF-3; kilden til de 6
 lint-warnings). Målt på production leveres hero-billedet i **5610×3739 px** til en
-1280 px-visning, og galleribilledernes bredde svinger fra 1000 til 4000 px. Skal
-billederne fylde mere, bliver det her et reelt problem — ikke bare en advarsel.
+1280 px-visning, og galleribilledernes bredde svinger fra 1000 til 4000 px.
 
-### Gap 4 — teksttyngde
+### Gap 4 — teksttyngde (fase 1 delvist, fase 2 resten)
 
-Intro-teksten er median **563 tegn** (max 785), og timeline fylder over halvdelen af
-siden. DBK-kravet er "kortere tekster". Dette er delvis en **indholds**-opgave
-(intro-stilen er brand-policy og redigeres af sælgerne), ikke kun en kode-opgave.
+Intro er median 563 tegn, og timeline fylder over halvdelen af siden. DBK-kravet er
+"kortere tekster". Intro-delen håndteres i fase 1 (visuel forkortelse, intet indhold
+slettes); timeline-tyngden i fase 2. Bemærk at intro-teksten er brand-policy og redigeres
+af sælgerne — **selve teksten ændres ikke af denne plan.**
 
 ### Gap 5 — fotostil er en indholdsbeslutning
 
@@ -109,131 +141,183 @@ og billeddriften. Nævnt her, så det ikke forveksles med et implementeringsgap.
 - Datamodellen (`Trip`, `itinerary`, `hotels`, `alternatives`, `roomAllocations`, `notes`)
 - Parser og prompt
 - Admin, auth, bookingnummer-unlock
-- Alt fra PR #2/#16/#18/#20/#21/#22/#23/#24
+- Alt fra PR #2/#16/#18/#20/#21/#22/#23/#24/#26
 
 ## Faseplan
 
 Hver fase er én PR, bygges på preview-branch og testes af Ricko før merge
 (jf. `docs/DECISIONS.md` 2026-07-21).
 
-### Fase 1 — Galleriet ind i designsystemet (anbefalet første PR)
+| Fase | Indhold | Risiko |
+|---|---|---|
+| **1** | **Hero + rejseoverblik / førstehåndsindtryk** | Middel |
+| 2 | Timeline / program | Høj |
+| 3 | Hoteller | Høj |
+| 4 | Billeder: galleri-polish + `next/image` | Middel |
+| 5 | Pris, praktisk info, CTA, mobil-polish | Lav-middel |
 
-| | |
+---
+
+## Fase 1 — Hero + rejseoverblik (første Vision 2.0-PR)
+
+### Hvad kunden ser anderledes
+
+1. **Et reelt rejseoverblik før timelinen.** Rejsens omfang samles ét sted: varighed,
+   antal destinationer og rutens form. Alt bygges på felter der **allerede findes på alle
+   230 aktive rejser** — `subtitle` (ruten), `hotels[].nights` (median 14 nætter, max 33)
+   og `hotels[].location` (median 3 destinationer, max 9). **Ingen ny data, intet nyt felt,
+   ingen parserændring.**
+2. **En roligere hero-komposition med mere luft.** Indholdet er i dag klemt i venstre
+   ~620 px med tom højreside. Fase 1 giver hero-blokken bevidst placering og vejrtrækning,
+   så fotoet får lov at virke — designmanualens "stram og minimalistisk komposition".
+3. **Intro som magasin-anslag frem for dokumenttekst.** Introen vises forkortet med
+   mulighed for at folde ud. **Hele teksten forbliver tilgængelig** — der slettes intet,
+   og selve teksten redigeres ikke (den er brand-policy og styres af sælgerne).
+4. **Datoerne står ét sted i stedet for to.** Dubleringen mellem hero-pill og
+   nøgleinfo-stribe fjernes.
+5. **Pills skelner mellem rute og tidsrum** i stedet for at se ens ud.
+6. **Nøgleinfo-striben bliver præsentation frem for formular.** Roligere hierarki, og
+   navnelisten under `Rejsende` klipper ikke længere på rejser med mange rejsende.
+
+### Hvordan det adskiller sig fra i dag
+
+| | I dag | Efter fase 1 |
+|---|---|---|
+| Rejsens omfang | Kun to datoer; kunden regner selv | Varighed + destinationer samlet |
+| Intro | 4 linjer brødtekst på fotoet | Kort anslag, fuld tekst et klik væk |
+| Datoer | To gange inden for 100 px | Ét sted |
+| Hero-komposition | Venstrestillet blok, tom højreside | Bevidst komposition med luft |
+| Nøgleinfo | 4-kolonners formular, navneliste klipper | Roligt hierarki, intet klipper |
+
+### Hvad der bevares uændret
+
+- Hero-logoet (PR #18) og dets placering
+- Kontakt-knappen øverst til højre og CTA'en `Kontakt os om rejsen`
+- Hero-fotoet, fallback-gradienten og overlay-lagene
+- Kicker-teksten `Rejseforslag`
+- **Alle data**: afrejse, hjemkomst, rejsende, rådgiver og bookingnummer vises fortsat
+- Farver, tokens og fonte
+
+### Hvad der kommer direkte fra det eksisterende designmateriale
+
+Intet i fase 1 er et nyt designforslag:
+
+- **Luft/whitespace og "store billeder"** → brand frameworkets DBK-krav
+- **Kortere tekster** → samme kilde, ordret
+- **Stram, minimalistisk komposition, ingen visuel støj** → designmanualens fotostil-afsnit
+- **Cool, intelligent, eksklusivt — ikke hyggeligt** → designmanualens tone-afsnit
+- **Cormorant til display, Open Sans til brødtekst** → uændret fra manualen og handoffet
+- **Paletten** → uændret; ingen nye farver introduceres
+
+### Filer
+
+- `src/components/trip/Hero.tsx`
+- `src/components/trip/TripDetails.tsx`
+- `src/app/globals.css`
+- Eventuelt én lille ny præsentationskomponent til rejseoverblikket, hvis det gør
+  `Hero.tsx` mere læsbar end at udvide den
+
+### Risici
+
+- **Heroen er kundens første indtryk** og det mest synlige sted at fejle.
+- `min-height`, overlay-gradienter og `hero-inner` er finjusteret; ændres højden, kan
+  fotoets beskæring flytte sig uheldigt på tværs af de 15 destinationsbilleder.
+- **Intro-forkortelse må aldrig skjule tekst permanent.** Udfoldning skal virke uden JS-fejl,
+  og hele teksten skal være i DOM'en.
+- Titlen er 124 px Cormorant på desktop; lange destinationsnavne
+  (`Sri Lanka & Maldiverne`, `Vietnam & Thailand & Sri Lanka & Maldiverne`) skal bryde pænt.
+- Rejseoverblikkets tal udledes af `hotels[]`. Rejser med 0 hoteller eller manglende
+  `nights` skal falde tilbage til ingenting frem for at vise `0 nætter`.
+
+### Testbookinger
+
+| Booking | Hvorfor |
 |---|---|
-| **Filer** | `src/components/trip/DestinationGallery.tsx`, `src/app/globals.css` |
-| **Ændring** | Erstat de rå Tailwind-utilities med semantiske klasser og tokens: 1180 px bredde, sidens padding-rytme (28/56/72 px), radius 2 px, `--sand-page` frem for `bg-stone-100`. Øg billedhøjden, så galleriet går fra 5 % mod ca. 12-15 % af siden. Ingen ændring af antal billeder eller datakilde |
-| **Risiko** | **Lav.** Én komponent uden datalogik. Vises på alle rejser, så en fejl er synlig — men den er også let at se og rulle tilbage |
-| **Testcases** | 34566 (Tanzania, 3 billeder) · 35528 (Sri Lanka & Maldiverne, kombi-destination) · 35579 (Thailand) · en rejse hvis destination mangler galleri (skal falde tilbage til ingenting) · mobil 390 + desktop 1280 |
-| **Accept** | Galleriet flugter med sidens bredde og radius · ingen nye farver uden for paletten · rejser uden galleri renderer stadig ingenting · ingen vandret overflow · alle øvrige sektioner uændrede i højde |
+| 34566 | Tanzania — reference-casen målt ovenfor; safari, 3 hoteller |
+| 35528 | `Sri Lanka & Maldiverne` — lang destinationstitel + kombi-rejse |
+| 35917 | Mauritius — ét hotel, korteste rejse; overblikket må ikke se tomt ud |
+| 35132 | Mange rejsende — navnelisten der klipper i dag |
+| 35498 | 27 itinerary-elementer, lang rejse |
+| — | Rejse med kort intro og rejse med den længste (785 tegn) |
 
-### Fase 2 — Hero + rejseoverblik
+Mobil 390 px og desktop 1280 px på alle, plus 760 px (tablet-brudpunktet).
 
-| | |
-|---|---|
-| **Filer** | `src/components/trip/Hero.tsx`, `src/components/trip/TripDetails.tsx`, `globals.css` |
-| **Ændring** | Mere luft omkring hero-indholdet, roligere hierarki mellem titel/pills/intro, blødere overgang fra hero til nøgleinfo-stribe. Intro får en maks-visningslængde med "læs mere", så DBK-kravet om kortere tekster opfyldes **uden at slette indhold** |
-| **Risiko** | **Middel.** Hero er det første kunden ser, og heroens `min-height` + overlay er finjusteret. Intro-forkortelse må aldrig skjule tekst permanent |
-| **Testcases** | Kort intro (ca. 200 tegn) · median (ca. 563) · længste (785) · rejse uden intro · rejse uden subtitle · lang destination ("Sri Lanka & Maldiverne") · mobil 390 + desktop 1280 |
-| **Accept** | Hero-logo og kontakt-knap uændrede · fuld intro tilgængelig · ingen tekst klippes · titel bryder pænt på mobil · unlock-flowet uændret |
+### Acceptkriterier
 
-### Fase 3 — Timeline / program
+- Rejseoverblikket viser korrekt varighed og antal destinationer på alle testbookinger
+- Rejser uden hoteldata viser intet overblik frem for nuller
+- **Fuld intro-tekst er tilgængelig**; intet indhold er slettet eller permanent skjult
+- Afrejse, hjemkomst, rejsende, rådgiver og bookingnummer fremgår fortsat
+- Hero-logo, kontakt-knap og CTA er visuelt uændrede
+- Ingen nye farver uden for paletten; ingen nye fonte
+- Lange destinationsnavne bryder pænt på 390 px
+- Navnelisten under `Rejsende` klipper ikke
+- Ingen vandret overflow på 390 px
+- Bookingnummer-unlock er uændret
+- Timeline, hoteller, pris og CTA er uændrede i højde og indhold
+
+### Hvad der eksplicit ikke må ændres i fase 1
+
+- `/[bookingId]/page.tsx` — sektionsrækkefølge og datahentning
+- `src/lib/types.ts`, `normalizeTrip` og datamodellen
+- `src/lib/claude.ts` — prompt og schema
+- Selve intro-**teksten** (brand-policy; kun visningen ændres)
+- Timeline, Hotels, PriceAndNote, ContactCTA, ActionBar, DestinationGallery
+- Admin, auth, bookingnummer-unlock, rate-limit, audit
+- Farvetokens og fonte
+- Alt fra PR #2/#16/#18/#20/#21/#22/#23/#24/#26
+
+---
+
+## Fase 2 — Timeline / program
 
 | | |
 |---|---|
 | **Filer** | `src/components/trip/Timeline.tsx`, `globals.css` |
 | **Ændring** | Reducér den visuelle tyngde af de 54 %: mere luft mellem kort, roligere chips, tydeligere skel mellem dagsblokke. **Ingen** ændring af hvad der vises |
 | **Risiko** | **Høj** — den største og mest datavarierede sektion (fly, transfer, hotel, aktivitet, program, activities), og den rummer PR #22's labels og PR #24's chips |
-| **Testcases** | 34566 (safari + halvdagstur + tilkøb) · 35528 (rundrejse + sub-hoteller) · 35498 (27 elementer) · 35579 (udflugtsmuligheder) · 35132 (kun fly) · mobil + desktop |
+| **Testbookinger** | 34566 (safari + halvdagstur + tilkøb) · 35528 (rundrejse + sub-hoteller) · 35498 (27 elementer) · 35579 (udflugtsmuligheder) · 35132 (kun fly) |
 | **Accept** | Alle elementtyper renderer som før · labels fra PR #22 uændrede · chips fra PR #24 uændrede · intet indhold klippes · udfold/kollaps virker |
 
-### Fase 4 — Hoteller
+## Fase 3 — Hoteller
 
 | | |
 |---|---|
 | **Filer** | `src/components/trip/Hotels.tsx`, `globals.css` |
-| **Ændring** | Mere luft i kortene, roligere typografisk hierarki. **Rør ikke** værelsesfordelingen (PR #2), noternes typografi (PR #21) eller `align-items: start` (PR #16) |
-| **Risiko** | **Høj** — fire nylige PR'er har rørt denne fil |
-| **Testcases** | 35518 (2×3 værelser) · 35528 (rundrejse + 5 sub-hoteller) · 35729/35782 (alternativer) · 35579 (almindelig) · 35132 (lange noter) · mobil + desktop |
-| **Accept** | Værelsesbokse, alternativ-bokse, sub-hotel-bokse og noter er uændrede i indhold og antal · ingen tom hvid bund · mobil uændret |
+| **Ændring** | Mere luft i kortene, roligere typografisk hierarki. **Rør ikke** værelsesfordelingen (PR #2), noternes typografi (PR #21), `align-items: start` (PR #16) eller alternativ-bokse (PR #7/#26) |
+| **Risiko** | **Høj** — fem PR'er har rørt denne fil |
+| **Testbookinger** | 35518 (2×3 værelser) · 35528 (rundrejse + 5 sub-hoteller) · 35917 (to alternativer) · 35729 (alternativ m. besparelse) · 35579 (almindelig) · 35132 (lange noter) |
+| **Accept** | Værelsesbokse, alternativ-bokse, sub-hotel-bokse og noter uændrede i indhold og antal · ingen tom hvid bund · mobil uændret |
 
-### Fase 5 — Pris, praktisk info, CTA og mobil-polish
+## Fase 4 — Billeder: galleri-polish + `next/image`
+
+| | |
+|---|---|
+| **Filer** | `src/components/trip/DestinationGallery.tsx`, `globals.css`, `next.config.mjs`, samt `<img>`-brug i `Hero.tsx` og `Hotels.tsx` |
+| **Ændring** | To ting der hører sammen: **(a)** galleriet ind i designsystemet — 1180 px bredde, sidens padding-rytme, radius 2 px, `--sand-page` frem for `bg-stone-100`, større billedhøjde. **(b)** kundevendte `<img>` → `next/image` med korrekte `sizes`, så større billeder ikke gør siden tungere |
+| **Risiko** | **Middel.** `next/image` kræver at Supabase Storage-domænet whitelistes i `next.config.mjs`; fejler et domæne, forsvinder billedet. Galleridelen alene er lav risiko |
+| **Testbookinger** | 34566 (billeder i 1000/4000/1200 px bredde) · 35528 (kombi-destination) · 35579 · 35621 (kort side) · en destination uden galleri |
+| **Accept** | Galleriet flugter med sidens bredde og radius · ingen nye farver uden for paletten · rejser uden galleri renderer stadig ingenting · alle billeder loader · lint-warnings for `no-img-element` er væk · ingen vandret overflow |
+
+## Fase 5 — Pris, praktisk info, CTA og mobil-polish
 
 | | |
 |---|---|
 | **Filer** | `src/components/trip/PriceAndNote.tsx`, `ContactCTA.tsx`, `ActionBar.tsx`, `globals.css` |
 | **Ændring** | Sidste rytme-justering og gennemgang af de tre brudpunkter (390/760/1024) |
 | **Risiko** | **Lav-middel.** CTA er konverteringspunktet og rummer rådgiver-matchet |
-| **Testcases** | Rejse med rådgiverprofil · rejse uden (CTA skal skjules) · mobil 390 + 360 · tablet 760 · desktop 1024 + 1280 |
+| **Testbookinger** | Rejse med rådgiverprofil · rejse uden (CTA skal skjules) · mobil 390 + 360 · tablet 760 · desktop 1024 + 1280 |
 | **Accept** | Rådgiver-CTA vises kun når profilen findes · sticky action bar dækker ikke indhold · telefonlink virker |
 
-### Tværgående — billedoptimering (PERF-3)
+## Kendte risici på tværs
 
-Ligger som **selvstændig PR mellem fase 1 og 2**, ikke som en del af en fase: skift
-kundevendte `<img>` til `next/image` med korrekte `sizes`. Det lukker de 6 kendte
-lint-warnings og er en forudsætning for at billeder må fylde mere uden at gøre siden tung.
-Risiko: middel — `next/image` kræver at Supabase Storage-domænet whitelistes i
-`next.config.mjs`, og fejler et domæne, forsvinder billedet.
-
-## Anbefalet første PR
-
-**Fase 1 — galleriet ind i designsystemet.**
-
-Ricko foreslog Hero + rejseoverblik som første fase. Jeg anbefaler at bytte om, af tre grunde:
-
-1. **Galleriet er det eneste sted med en objektiv, ubestridt afvigelse** — rå
-   Tailwind-utilities, fremmed hjørneradius og en bredde der ikke flugter med resten af
-   siden. Det er ikke en smagsdom; det afviger fra det design-handoff resten af siden følger.
-2. **"Store, flotte billeder" er DBK-kundens tydeligste krav**, og galleriet er hvor
-   billeder bor. At løfte 5 % mod 12-15 % er den største Vision 2.0-effekt pr. ændret linje.
-3. **Lavest risiko.** Komponenten har ingen datalogik, ingen betingelser ud over
-   "0 billeder → render intet", og den er rørt af nul af de sidste otte PR'er.
-   Hero derimod rummer logoet fra PR #18 og er kundens første indtryk.
-
-Hero bliver fase 2 og følger umiddelbart efter — rækkefølgen udskyder den, den fjerner den ikke.
-
-**Forventede filer i første PR:** `src/components/trip/DestinationGallery.tsx` og
-`src/app/globals.css` (nye galleri-regler ved siden af de eksisterende sektionsregler).
-Ingen andre. Ingen datamodel, ingen parser, ingen admin.
-
-## Testcases til første PR
-
-| Booking | Hvorfor |
-|---|---|
-| 34566 | Tanzania, 3 galleribilleder i vidt forskellig opløsning (1000/4000/1200 px bred) |
-| 35528 | Sri Lanka & Maldiverne — kombi-destination, tester destinations-matchet |
-| 35579 | Thailand, almindelig badeferie |
-| 35621 | Maldiverne, kort side — galleriets vægt er mest synlig her |
-| — | En destination uden galleri (skal rendere ingenting, ikke en tom sektion) |
-
-Mobil 390 px og desktop 1280 px på alle.
-
-## Kendte risici
-
-- **Galleriet vises på alle 230 aktive rejser.** En fejl rammer bredt. Til gengæld er
-  komponenten lille og isoleret, og rollback er én revert.
-- **Billedvægt.** Løfter vi billedhøjden før PERF-3, downloader kunden stadig 4000 px-billeder.
-  Derfor ligger billedoptimering som selvstændig PR lige efter fase 1 — eller før, hvis det
-  foretrækkes.
-- **Fotostilen er ikke en kodeopgave.** Nogle nuværende billeder matcher ikke manualens krav
-  om stram, støjfri æstetik. Større billeder gør afvigelsen mere synlig. Bør afklares med Mille
-  parallelt med fase 1.
-- **Fase 3 og 4 rører filer som otte nylige PR'er har ændret.** De skal bygges sent og
-  testes mod de bookinger der er nævnt pr. fase.
 - **Ingen automatiske UI-tests.** Verifikation er scriptet browsermåling før/efter, som i
-  PR #2/#21/#22/#24 — ikke en varig regressionstest.
+  PR #2/#21/#22/#24/#26 — ikke en varig regressionstest.
+- **Fase 2 og 3 rører filer som ni PR'er har ændret.** De skal bygges sent og testes mod
+  de bookinger der er nævnt pr. fase.
+- **Fotostilen er ikke en kodeopgave.** Nogle nuværende billeder matcher ikke manualens krav
+  om stram, støjfri æstetik. Større billeder i fase 4 gør afvigelsen mere synlig. Bør
+  afklares med Mille parallelt.
 - **Vision 2.0's scope har hidtil stået som "KRÆVER RICKO"** i `DECISIONS.md` og `ROADMAP.md`.
   Denne plan er et bud på at lukke det punkt, ikke en vedtagelse. Godkendes planen, bør
   begge dokumenter opdateres i samme ombæring.
-
-## Hvad der ikke må røres endnu
-
-Intet af nedenstående ændres før den relevante fase er godkendt:
-
-- `/[bookingId]/page.tsx` — sektionsrækkefølge og datahentning
-- `src/lib/types.ts` — `normalizeTrip` og hele datamodellen
-- `src/lib/claude.ts` — prompt og schema
-- Admin, auth, bookingnummer-unlock, rate-limit, audit
-- Farvetokens og fonte i `globals.css`
-- Hero-logo (PR #18) og favicon (PR #20)
-- Værelsesfordeling (PR #2), hotelkortenes højde (PR #16), hotel-noter (PR #21),
-  timeline-labels (PR #22), PDF-fejlbesked (PR #23), transport-chips (PR #24)
