@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { collectAlternatives } from "./hotel-alternatives";
 import { normalizeLocationLabel } from "./location-label";
+import { stripRedundantTransferChips } from "./transfer-chips";
 
 // ----- helpers -----
 // Accept null/undefined/anything coercible to string; default to "".
@@ -553,8 +554,12 @@ function reclassifyDestination(
 
 export function normalizeTrip(trip: Trip): Trip {
   const departure = trip.departure ?? "";
-  const itinerary = trip.itinerary.map((item, i) =>
-    normalizeItineraryItem(item, i, departure),
+  // Transporten står som fuldt beskrevne transfer-elementer; når den ALLIGEVEL
+  // hænger som en chip på hotel-elementet ("Vandflyver-adgang", "Speedbåd inkl."),
+  // gentager chippen kun rejseplanen. Fjernes ved render — rå data er urørt, og
+  // chippen bevares hvis rejsen ikke har et transfer-element med samme form.
+  const itinerary = stripRedundantTransferChips(
+    trip.itinerary.map((item, i) => normalizeItineraryItem(item, i, departure)),
   );
 
   // En rundrejse/pakke vises to steder: som "L\u00e6s om udflugten" (expandKind 'program')
