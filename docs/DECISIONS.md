@@ -5,6 +5,8 @@ Format: beslutning · begrundelse · kilde/commit.
 
 | Dato | Beslutning | Begrundelse | Reference |
 |---|---|---|---|
+| 2026-09-10 | **Vision 2.0-faseplanen er godkendt** — `docs/VISION-2.0-PLAN.md`. Fase 1 er **Hero + rejseoverblik / førstehåndsindtryk**; galleriet flyttes til fase 4 som billedlayout-polish sammen med `next/image` | Galleriet findes allerede (hero + 3 billeder, manuelt valgte); bredde/spacing/radius/højde ændrer kundens oplevelse begrænset og er ikke en reel 2.0-start. Førstehåndsindtrykket er hvor "kunden skal visuelt forelske sig" afgøres | PR #25, `fa9c7fe` |
+| 2026-09-10 | **Vision 2.0 implementeres fasevis, én PR pr. fase** — ingen samlet redesign af `/[bookingId]` i én ombæring, og intet 2.0-arbejde uden særskilt PR pr. fase | Faserne rører filer som ni tidligere PR'er har ændret; små, testbare skridt holder regressionsrisikoen nede | PR #25 |
 | 2026-07-21 | **Vision 2.0 planlægges som preview-branch før merge** — intet 2.0-arbejde direkte på main | main = production; visuelt løft skal kunne testes af Ricko/sælgere isoleret | Denne branch (`docs/ai-operating-model`) |
 | 2026-07-20 | **Destinationer oprettes manuelt i admin** ("Opret destination") — ingen auto-upsert fra trips endnu. Besluttet/preview-testet 2026-07-20, merged til main 2026-07-21 | Bevidst lille scope; auto-upsert (Fable DATA-4) er backlog | `6bb1498`, merge `6a81290` |
 | 2026-07-20 | **Store destinationsbilleder uploades via signed URL direkte til Supabase Storage** (`_staging` + finalize), op til 50 MB; bucket-grænse hævet 10→50 MB | Vercel afviser request-bodies > 4,5 MB ved platform-kanten; klient-side resize fravalgt pga. kvalitet (sharp server-side) | `324fae0`, `234d2e8` |
@@ -22,7 +24,6 @@ Format: beslutning · begrundelse · kilde/commit.
 
 ## Åbne beslutninger (KRÆVER RICKO)
 
-- **Vision 2.0 scope og indhold** — kun hensigt kendt (visuelt løft, galleri); ingen plan endnu
 - **Unlock-kode ≠ booking_no?** (backlog #21) — UX-friktion vs. risiko ved videresendt link+kode
 - **Slug-override-feltet i admin** — har aldrig virket (serveren ignorerer det); fjern eller gør funktionelt
 - **`stash@{0}` image-library WIP** — genoptag, flyt til branch, eller drop

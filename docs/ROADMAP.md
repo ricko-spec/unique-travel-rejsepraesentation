@@ -17,12 +17,16 @@ Prioriteret. Fuld backlog-detalje med severity/estimat: `OPGAVER-TIL-CLAUDE-CODE
 1. **AI Project Automation Kit-dokumentation** — denne branch (`docs/ai-operating-model`);
    godkendelse + merge er sidste skridt
 2. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
-3. **Vision 2.0 PLAN** — scope-afklaring med Ricko (KRÆVER RICKO), derefter plan-dokument
+3. **Vision 2.0 FASE 1 — Hero + rejseoverblik** — faseplanen er godkendt 2026-09-10
+   (`docs/VISION-2.0-PLAN.md`, PR #25). Bygges på preview-branch, testes af Ricko/sælgere
+   før merge (jf. beslutning 2026-07-21). Én PR pr. fase; intet samlet redesign af
+   `/[bookingId]`
 
-## Senere (afventer Vision 2.0-planen)
+## Senere (Vision 2.0, fase 2-5)
 
-- **Vision 2.0 PREVIEW** — implementering på preview-branch, testes af Ricko/sælgere før merge
-  (jf. beslutning 2026-07-21)
+- **Fase 2** Timeline/program · **Fase 3** Hoteller · **Fase 4** Billeder: galleri-polish +
+  `next/image` (lukker PERF-3) · **Fase 5** Pris/praktisk/CTA + mobil-polish.
+  Filer, risici, testbookinger og acceptkriterier står pr. fase i `docs/VISION-2.0-PLAN.md`
 
 ## Backlog (klar til at tage, prioriteret bud)
 
@@ -36,7 +40,6 @@ Prioriteret. Fuld backlog-detalje med severity/estimat: `OPGAVER-TIL-CLAUDE-CODE
 
 ## Skal besluttes af Ricko (blokerer det de står foran)
 
-- **Vision 2.0 scope/indhold** — blokerer plan og preview
 - **Unlock-kode ≠ booking_no?** (#21) — sikkerheds-/UX-afvejning
 - **Slug-override-feltet** — fjern eller gør funktionelt (har aldrig virket)
 - **`stash@{0}` image-library WIP** — genoptag, flyt til branch, eller drop

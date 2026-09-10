@@ -1,11 +1,34 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-10** (PR #26 alternative hoteller)
+> Sidst opdateret: **2026-09-10** (PR #25 Vision 2.0-faseplan godkendt)
 
 ## Production
 
-- **Commit:** `a2ae63d` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `fa9c7fe` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #25 (`vision/v2-implementation-plan`)** — merged (fast-forward efter rebase)
+  **2026-09-10**. **Vision 2.0-faseplanen er godkendt** og ligger i
+  `docs/VISION-2.0-PLAN.md`. Kun dokumentation — ingen app-kode, ingen CSS, ingen ændring
+  af `/[bookingId]`.
+  **Fase 1 er Hero + rejseoverblik / førstehåndsindtryk.** Første udkast havde galleriet som
+  fase 1; Ricko afviste det, fordi galleriet allerede findes (hero + 3 manuelt valgte
+  billeder) og bredde/spacing/radius/højde kun ændrer kundens oplevelse begrænset.
+  **Galleriet er flyttet til fase 4** som billedlayout-polish sammen med `next/image` —
+  de to hører sammen, for større billeder giver først mening når de leveres i rigtig størrelse.
+  Rækkefølge: **1** Hero + rejseoverblik · **2** Timeline · **3** Hoteller · **4** Billeder
+  (galleri + `next/image`, lukker PERF-3) · **5** Pris/CTA/mobil.
+  Planens hovedkonklusion: **der er intet farve- eller typografi-gap.** Alle 11 tokens i
+  `globals.css` er identiske med den oprindelige design-handoff, og Rainforest/Sand/Gold
+  matcher designmanualen. Vision 2.0 er *mere billede, mere luft, mindre tekst* inden for
+  den palette der allerede findes — jf. brand frameworkets DBK-krav.
+  Fase 1's gaps er målt på production (34566, desktop 1280): alt hero-indhold klemt i venstre
+  ~620 px med tom højreside · intro som fire linjer brødtekst på fotoet (median 563 tegn) ·
+  datoerne dubleret inden for 100 px (hero-pill + nøgleinfo-stribe) · rejsens omfang fremgår
+  ikke · nøgleinfo-striben er en 4-kolonners formular hvor navnelisten klipper.
+  Rejseoverblikket kan bygges **uden ny data**: `subtitle`, `hotels[].nights` og
+  `hotels[].location` findes på alle 230 aktive rejser (median 14 nætter, 3 destinationer).
+  `DECISIONS.md` og `ROADMAP.md` er opdateret i samme ombæring: Vision 2.0 står ikke længere
+  som KRÆVER RICKO, og det er noteret at implementeringen sker fasevis med én PR pr. fase.
 - **PR #26 (`fix/multiple-alternatives-from-hotel-notes`)** — merged (fast-forward) og
   production-verificeret **2026-09-10**. Christian fandt en Mauritius-rejse
   (**booking 35917**, Sugar Beach Resort) med to alternative hoteller, hvor kun det ene blev
@@ -233,7 +256,7 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `a2ae63d` (production) |
+| `main` | = origin/main = `fa9c7fe` (production) |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -250,7 +273,8 @@ slettet 2026-09-09 efter at PR #2 endelig blev merged. `fix/hotel-notes-readable
 `fix/friendly-invalid-pdf-error` (+ `wt-pdf`) slettet 2026-09-10 efter merge og
 production-verifikation. `fix/seaplane-hotel-tag` (+ `wt-sea`) slettet samme dag på samme
 vilkår. `fix/multiple-alternatives-from-hotel-notes` (+ `wt-alt`) slettet 2026-09-10 efter
-merge og production-verifikation.
+merge og production-verifikation. `vision/v2-implementation-plan` (+ `wt-v2`) slettet samme
+dag efter merge af faseplanen.
 
 ## Åbne tråde
 
@@ -282,7 +306,14 @@ merge og production-verifikation.
 - ~~**Pæn fejlbesked ved ugyldig PDF**~~ — **LØST 2026-09-10 i PR #23.** Fire fejltyper med
   hver sin danske besked i `src/lib/parse-errors.ts`; tekniske detaljer bliver server-side.
 
-## Seneste checks (2026-09-10, main `a2ae63d`)
+## Seneste checks (2026-09-10, main `fa9c7fe`)
+
+PR #25 (Vision 2.0-faseplan), 2026-09-10: **docs-only** — ingen tests, typecheck, lint eller
+build er relevante, og ingen kode blev rørt. `git diff 42587b3..fa9c7fe` viser præcis én fil:
+`docs/VISION-2.0-PLAN.md` (+323). Branchen var forgrenet fra `7fd5caa` og divergerede, da
+PR #26 kom til; den blev rebaset på `42587b3`, så merge kunne ske som fast-forward.
+Production er uændret af denne merge — Vercel bygger dokumentationen, men kundesiden er
+identisk med PR #26-tilstanden.
 
 PR #26 (alternative hoteller), 2026-09-10: **test ✅ 117/117** (9 nye i
 `hotel-alternatives.test.ts` med de faktiske production-noter som fixtures) · typecheck ✅ ·
