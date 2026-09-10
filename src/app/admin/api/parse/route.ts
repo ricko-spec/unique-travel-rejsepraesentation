@@ -4,6 +4,11 @@ import { getSupabaseService } from "@/lib/supabase/server";
 import { parsePdfWithClaude, extractPdfRawText } from "@/lib/claude";
 import { enrichAdvisorContact } from "@/lib/profiles";
 import { tripSchema, normalizeTrip } from "@/lib/types";
+import {
+  classifyParseFailure,
+  parseErrorMessage,
+  parseErrorStatus,
+} from "@/lib/parse-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,34 +76,27 @@ export async function POST(req: Request) {
       });
     }
     const msg = e instanceof Error ? e.message : "Ukendt fejl ved parsing";
-    if (typeof rawResp === "string") {
+    const claudeReplied = typeof rawResp === "string";
+    if (claudeReplied) {
       // Claude svarede, men svaret kunne ikke parses som JSON.
       await logParseFailure({ actor, kind: "invalid_json", rawResponse: rawResp, pdfName });
     } else {
       // Ingen rå response = fejlen kom fra Anthropic-kaldet selv (API/billing/config).
       await logParseFailure({ actor, kind: "anthropic_error", rawResponse: msg, pdfName });
     }
-    // Anthropic sender billing-fejl som rå API-tekst ("Your credit balance is too
-    // low...") — sælgerne skal ikke se den, kun en intern besked de kan handle på.
-    if (/credit balance|billing/i.test(msg)) {
-      console.error("[parse] Anthropic billing-fejl", msg);
-      return NextResponse.json(
-        {
-          error:
-            "AI-parseren kan ikke køre lige nu, fordi API-kontoen mangler credits. Kontakt Ricko/admin.",
-        },
-        { status: 502 },
-      );
-    }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const status = (e as { status?: number }).status;
+    const kind = classifyParseFailure({ message: msg, status, claudeReplied });
+    // Den tekniske tekst bliver her på serveren — sælgeren får en besked de kan
+    // handle på, og detaljerne ligger i logs + parse_failures til fejlsøgning.
+    console.error("[parse] fejl", { kind, status, msg });
+    return NextResponse.json(
+      { error: parseErrorMessage(kind) },
+      { status: parseErrorStatus(kind) },
+    );
   }
 
   const parsed = tripSchema.safeParse(raw);
   if (!parsed.success) {
-    const issues = parsed.error.issues.slice(0, 6).map((i) => ({
-      path: i.path.join("."),
-      message: i.message,
-    }));
     console.error("[parse] Schema validation failed", {
       issues: parsed.error.issues,
       raw,
@@ -110,13 +108,11 @@ export async function POST(req: Request) {
       issues: parsed.error.issues,
       pdfName,
     });
+    // issues og raw bliver på serveren: de er uforståelige for sælgeren, og raw
+    // indeholder kundedata der ikke har noget at gøre i et browsersvar.
     return NextResponse.json(
-      {
-        error: "Claude returnerede data der ikke matcher det forventede skema.",
-        issues,
-        raw,
-      },
-      { status: 422 },
+      { error: parseErrorMessage("unreadable") },
+      { status: parseErrorStatus("unreadable") },
     );
   }
 

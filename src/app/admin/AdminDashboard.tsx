@@ -80,13 +80,14 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     const res = await fetch("/admin/api/parse", { method: "POST", body: fd });
     setParsing(false);
     if (!res.ok) {
-      const j = await res.json().catch(() => ({ error: "Parsing fejlede" }));
-      const baseMsg = j.error ?? "Parsing fejlede";
-      const issues: { path: string; message: string }[] | undefined = j.issues;
-      const detail = issues?.length
-        ? ` — ${issues.map((i) => `${i.path || "(rod)"}: ${i.message}`).join("; ")}`
-        : "";
-      setParseError(baseMsg + detail);
+      // Serveren sender kun en færdig, sælgervendt besked — tekniske detaljer
+      // (Zod-issues, Claudes rå svar, Anthropics API-tekst) bliver på serveren
+      // i logs og parse_failures.
+      const j = await res.json().catch(() => ({ error: "" }));
+      setParseError(
+        j.error ||
+          "PDF'en kunne ikke læses. Tjek at det er en TravelWire-rejsebeskrivelse, og prøv igen.",
+      );
       return;
     }
     const j = await res.json();
