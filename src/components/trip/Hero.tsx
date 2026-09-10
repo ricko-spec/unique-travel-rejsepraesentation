@@ -2,12 +2,18 @@
 
 import { useState } from "react";
 import type { Trip } from "@/lib/types";
-import { formatMediumDateDK } from "@/lib/format";
+import { nightsLabel, totalNights } from "@/lib/trip-overview";
+import { HeroIntro } from "./HeroIntro";
 
 const ADVISOR_PHONE = "+4559498630";
 
 export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null }) {
   const [photoOk, setPhotoOk] = useState(true);
+
+  // Vision 2.0 fase 1: heroen svarer på "hvor, hvor længe og hvad" — datoerne
+  // står samlet i rejseoverblikket lige nedenfor, så de ikke gentages her.
+  // Varigheden er det tal kunden ellers selv skulle regne ud af to datoer.
+  const nights = nightsLabel(totalNights(trip.hotels));
 
   return (
     <section className="hero">
@@ -40,14 +46,14 @@ export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null
           <div className="hero-kicker">Rejseforslag</div>
           <h1 className="hero-title">{trip.destination}</h1>
 
-          <div className="hero-pills">
-            {trip.subtitle && <span className="hero-pill">{trip.subtitle}</span>}
-            <span className="hero-pill">
-              {formatMediumDateDK(trip.departure)} – {formatMediumDateDK(trip.return)}
-            </span>
-          </div>
+          {(nights || trip.subtitle) && (
+            <div className="hero-pills">
+              {nights && <span className="hero-pill is-key">{nights}</span>}
+              {trip.subtitle && <span className="hero-pill">{trip.subtitle}</span>}
+            </div>
+          )}
 
-          {trip.intro && <p className="hero-intro">{trip.intro}</p>}
+          {trip.intro && <HeroIntro text={trip.intro} />}
 
           <a className="hero-cta" href="#kontakt">
             <span>Kontakt os om rejsen</span>
