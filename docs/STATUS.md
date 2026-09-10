@@ -1,11 +1,30 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-10** (PR #23 pæn PDF-fejlbesked live)
+> Sidst opdateret: **2026-09-10** (PR #24 transport-chips ryddet)
 
 ## Production
 
-- **Commit:** `4169f19` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `9858c86` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #24 (`fix/seaplane-hotel-tag`)** — merged (fast-forward) og production-verificeret
+  **2026-09-10**. Redundante transport-chips er fjernet fra **hotel-elementer i tidslinjen**.
+  **Præcisering:** hotelKORTENE i "Jeres hoteller" har slet ingen tags — `Hotels.tsx`
+  renderer ingen chips. Det handlede udelukkende om hotel-elementer i rejseplanen.
+  Optalt på 229 aktive rejser: **512 unikke chips på hotel-elementer, hvoraf præcis 4 er
+  transportangivelser** — `Vandflyver-adgang` (35621), `Vandflyver t/r` (35582),
+  `Vandflyver-ø` (35649) og `Speedbåd inkl.` (35549), alle Maldiverne. På alle fire står
+  transferen i forvejen som dedikerede transfer-elementer begge veje, med egen titel,
+  rejsetid, chips og på 35621 en ankomstinstruktions-boks. Til sammenligning ligger
+  29 vandflyver-chips på transfer-elementer, hvor de hører hjemme.
+  Nyt modul **`src/lib/transfer-chips.ts`** fjerner chippen ved render, kaldt fra
+  `normalizeTrip` — samme mønster som `normalizeLocationLabel` (PR #12): rå jsonb er urørt,
+  og både nye og gemte rejser renses uden re-upload eller migration.
+  **Sikkerhedsnet:** chippen fjernes KUN når rejseplanen faktisk har et transfer-element med
+  samme transportform, så ingen transportoplysning kan forsvinde. En længdegrænse holder
+  fritekst som "Gå fra pier til hotellet ca. 600m" ude — kun korte, rene transportangivelser
+  rammes. Målt mod alle aktive rejser: **11.261 chips før, 11.257 efter** — præcis de 4
+  forventede, ingen chip ændret, transfer-elementernes egne chips urørte.
+  Ingen DB-migration, ingen parserændring, ingen ændring af hoteldata, admin eller auth.
 - **PR #23 (`fix/friendly-invalid-pdf-error`)** — merged (fast-forward) og production-verificeret
   **2026-09-10**. Fejler PDF-parsingen, får sælgeren nu en rolig dansk besked i stedet for
   Anthropics rå API-tekst, `Claude returnerede ikke gyldig JSON` eller en liste af
@@ -187,7 +206,7 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `4169f19` (production) |
+| `main` | = origin/main = `9858c86` (production) |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -202,7 +221,8 @@ slettet 2026-09-09 efter at PR #2 endelig blev merged. `fix/hotel-notes-readable
 (+ `wt-notes`) slettet 2026-09-09 efter merge og production-verifikation.
 `fix/tour-toggle-label` (+ `wt-tour`) slettet samme dag på samme vilkår.
 `fix/friendly-invalid-pdf-error` (+ `wt-pdf`) slettet 2026-09-10 efter merge og
-production-verifikation.
+production-verifikation. `fix/seaplane-hotel-tag` (+ `wt-sea`) slettet samme dag på samme
+vilkår.
 
 ## Åbne tråde
 
@@ -218,8 +238,11 @@ production-verifikation.
 
 - **Yderligere kommentarer fra PDF** — flere hotel-/programnoter der i dag ikke fanges struktureret,
   kunne løftes til kundevendt visning (kræver afklaring af hvilke felter).
-- **Vandflyver-tag** — dedikeret markør/ikon for vandflyver-transfers og bagagebegrænsninger
-  (i dag kun fri-tekst i noter).
+- **Vandflyver-tag** — **stadig åben.** PR #24 gjorde det modsatte: den *fjernede* de fire
+  redundante transport-chips fra hotel-elementer. Ønsket her er en **dedikeret markør/ikon**
+  for vandflyver-transfers og bagagebegrænsninger. Bemærk at bagagebegrænsning allerede
+  optræder som chip på transfer-elementet (set på 35649) — en markør ville være et
+  visuelt løft af noget der findes, ikke ny information.
 - ~~**Favicon**~~ — **LØST 2026-09-09 i PR #20.** Browserfanen viser det grønne Q/palme-ikon
   fra `src/app/icon.png` (512×512, 5,9 KB, genereret fra `Unique-travel-green-icon 1.png`).
 - **Supabase custom SMTP** — recovery-/system-mails rammer Supabase' delte mail-rate-limit;
@@ -231,7 +254,21 @@ production-verifikation.
 - ~~**Pæn fejlbesked ved ugyldig PDF**~~ — **LØST 2026-09-10 i PR #23.** Fire fejltyper med
   hver sin danske besked i `src/lib/parse-errors.ts`; tekniske detaljer bliver server-side.
 
-## Seneste checks (2026-09-10, main `4169f19`)
+## Seneste checks (2026-09-10, main `9858c86`)
+
+PR #24 (transport-chips), 2026-09-10: **test ✅ 109/109** (12 nye i `transfer-chips.test.ts`
+med de faktiske production-chips som fixtures) · typecheck ✅ · lint ✅ (kun de 6 kendte
+img-warnings) · build ✅. Audit mod alle aktive rejser: 3478 itinerary-elementer,
+11.261 chips → 11.257 — præcis de 4 forventede fjernet, ingen chip ændret.
+Production efter merge, 8 rejser × 2 viewports: hotel-elementernes transport-chips er tomme
+på 35621, 35582, 35649 og 35549, mens transfer-elementerne fortsat viser `Vandflyver` ×2
+hhv. `Speedbåd` ×2 begge veje. Uændret: 35579 (48 chips) og 35729 (36 chips),
+35518's 2 værelsesbokse / 6 labels, hotel-noternes 12px/19,5px, alternativ- og
+sub-hotel-bokse, `align-items: start`, hero-logo, favicon, og timeline-labels på 34566
+("Læs om udflugten" ×2 + "Læs om programmet" ×1). 0 kort klipper indhold, 0 vandret
+overflow på 390 px. Bookingnummer-unlock uændret: uden cookie og med forkert cookie vises
+gaten, og hverken hotelnavne eller vandflyver-tekst lækker. PDF-fejlbeskeden fra PR #23
+uændret (`401 {"error":"Ikke logget ind"}` uden session).
 
 PR #23 (PDF-fejlbesked), 2026-09-10: **test ✅ 97/97** (16 nye i `parse-errors.test.ts`, med
 de faktiske Anthropic-fejlstrenge som fixtures) · typecheck ✅ · lint ✅ (kun de 6 kendte
