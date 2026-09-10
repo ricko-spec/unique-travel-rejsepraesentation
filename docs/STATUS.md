@@ -1,11 +1,38 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-10** (PR #24 transport-chips ryddet)
+> Sidst opdateret: **2026-09-10** (PR #26 alternative hoteller)
 
 ## Production
 
-- **Commit:** `9858c86` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `a2ae63d` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #26 (`fix/multiple-alternatives-from-hotel-notes`)** — merged (fast-forward) og
+  production-verificeret **2026-09-10**. Christian fandt en Mauritius-rejse
+  (**booking 35917**, Sugar Beach Resort) med to alternative hoteller, hvor kun det ene blev
+  vist som alternativ-boks:
+  **Tamassa** lå i `hotel.alternative` (struktureret) → boks · **La Pirogue** lå KUN som
+  fritekst i `hotel.notes` → kursiv note.
+  Noten lyder `Alternativt hotel: La Pirogue — Deluxe Beach Family Pavilion værelse,
+  10 nætter, inkl. Halvpension. Merpris i alt for 10 nætter: ca. 30.200 kr.` — en **anden
+  TravelWire-formatvariant** end den PR #7 håndterer: ingen `·`-separatorer, men et navn
+  foran en tankestreg. `parseAlternativeNote` kunne derfor ikke genkende den.
+  Løsningen **udvider PR #7's helper** frem for at lave ny logik:
+  `parseLabelledAlternativeNote` i `src/lib/hotel-alternatives.ts` løfter noten til samme
+  struktur som øvrige alternativer. Rå jsonb er urørt; rensningen sker i
+  `collectAlternatives`, som allerede kaldes fra `normalizeTrip` — ingen reparse, ingen
+  migration.
+  **Mønstret er bevidst stramt: ENTAL plus kolon.** Der findes tre noter om alternative
+  hoteller i production, og to af dem må **ikke** løftes — `Alternative hoteller på Gili Air
+  vil være væsentlig dyrere` (35634, 35811) navngiver intet alternativ og skal blive stående
+  som note. Der kræves desuden en tankestreg mellem navn og beskrivelse og et navn på højst
+  60 tegn; ellers bevares noten.
+  **Faldgrube fanget under test:** prisdelen findes fra ordet Merpris/Besparelse og ud, ikke
+  ved at splitte på punktum — både `inkl.` og `ca.` har punktummer midt i sætningen, og en
+  sætningsopdeling rev beløbet af prisen (`… ca.` + `30.200 kr.`).
+  Målt på **783 hotelkort i 230 aktive rejser: præcis 2 kort ændrer sig** — 35917 (den nye
+  case) og 35493, som opfører sig som før.
+  Ingen DB-migration, ingen reparse, ingen parser- eller promptændring, ingen ændring af
+  admin, auth eller bookingnummer-unlock.
 - **PR #24 (`fix/seaplane-hotel-tag`)** — merged (fast-forward) og production-verificeret
   **2026-09-10**. Redundante transport-chips er fjernet fra **hotel-elementer i tidslinjen**.
   **Præcisering:** hotelKORTENE i "Jeres hoteller" har slet ingen tags — `Hotels.tsx`
@@ -206,7 +233,7 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `9858c86` (production) |
+| `main` | = origin/main = `a2ae63d` (production) |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -222,7 +249,8 @@ slettet 2026-09-09 efter at PR #2 endelig blev merged. `fix/hotel-notes-readable
 `fix/tour-toggle-label` (+ `wt-tour`) slettet samme dag på samme vilkår.
 `fix/friendly-invalid-pdf-error` (+ `wt-pdf`) slettet 2026-09-10 efter merge og
 production-verifikation. `fix/seaplane-hotel-tag` (+ `wt-sea`) slettet samme dag på samme
-vilkår.
+vilkår. `fix/multiple-alternatives-from-hotel-notes` (+ `wt-alt`) slettet 2026-09-10 efter
+merge og production-verifikation.
 
 ## Åbne tråde
 
@@ -254,7 +282,22 @@ vilkår.
 - ~~**Pæn fejlbesked ved ugyldig PDF**~~ — **LØST 2026-09-10 i PR #23.** Fire fejltyper med
   hver sin danske besked i `src/lib/parse-errors.ts`; tekniske detaljer bliver server-side.
 
-## Seneste checks (2026-09-10, main `9858c86`)
+## Seneste checks (2026-09-10, main `a2ae63d`)
+
+PR #26 (alternative hoteller), 2026-09-10: **test ✅ 117/117** (9 nye i
+`hotel-alternatives.test.ts` med de faktiske production-noter som fixtures) · typecheck ✅ ·
+lint ✅ (kun de 6 kendte img-warnings) · build ✅. Audit mod alle aktive rejser: 783
+hotelkort, præcis 2 ændrer sig.
+Production efter merge, 9 rejser × 2 viewports: **35917 viser nu Tamassa + La Pirogue som
+to alternativ-bokse**, La Pirogues merpris står som `Merpris i alt for 10 nætter:
+ca. 30.200 kr.`, og turistskat-noten er bevaret som eneste note (2 → 1).
+**35493 (PR #7-casen) uændret** med 2 alternativer og 2 noter. **35634 og 35811 uændrede** —
+Gili Air-noterne blev ikke flyttet, 0 alternativ-bokse. Uændret: 35729 (besparelse), 35579
+(almindelige noter), 35132 (ingen alternativer), 35518 (2 værelsesbokse / 6 labels),
+34566 (timeline-labels og tomme hotel-transport-chips). Hotel-noter fortsat 12px/19,5px,
+`align-items: start` aktiv, hero-logo og favicon på alle sider, 0 klipning, 0 vandret
+overflow. Bookingnummer-unlock uændret: uden cookie og med forkert cookie vises gaten, og
+hverken hotelnavne eller La Pirogue lækker. PDF-fejlbeskeden fra PR #23 uændret.
 
 PR #24 (transport-chips), 2026-09-10: **test ✅ 109/109** (12 nye i `transfer-chips.test.ts`
 med de faktiske production-chips som fixtures) · typecheck ✅ · lint ✅ (kun de 6 kendte
