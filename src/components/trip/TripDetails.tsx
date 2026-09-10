@@ -1,48 +1,76 @@
 import { type Trip, formatLongDateDK } from "@/lib/types";
+import {
+  destinationList,
+  destinationsLabel,
+  nightsLabel,
+  splitTravellers,
+  totalNights,
+} from "@/lib/trip-overview";
 
+// Vision 2.0 fase 1: rejseoverblik i stedet for den gamle 4-kolonners
+// nøgleinfo-stribe (Afrejse / Hjemkomst / Rejsende / Rådgiver), der læste som
+// en formular og klippede navnelisten på rejser med mange rejsende.
+//
+// Nu: rejseperioden samlet i ét felt, rejsens omfang som det kunden ellers
+// selv skulle regne ud, og rejsende med plads til at fylde. Datoerne står kun
+// her — heroen gentager dem ikke længere.
 export function TripDetails({ trip }: { trip: Trip }) {
+  const nights = nightsLabel(totalNights(trip.hotels));
+  const destinations = destinationList(trip.hotels);
+  const destLabel = destinationsLabel(destinations.length);
+  const { names, summary } = splitTravellers(trip.travellers);
+
+  const scope = [nights, destLabel].filter(Boolean).join(" · ");
+  const departure = formatLongDateDK(trip.departure);
+  const homecoming = formatLongDateDK(trip.return);
+
   return (
-    <section className="details-strip">
-      <div className="details-grid">
-        <div>
-          <div className="meta-label">Afrejse</div>
-          <div className="meta-value">{formatLongDateDK(trip.departure)}</div>
+    <section className="overview">
+      <div className="overview-inner">
+        <div className="overview-primary">
+          {(departure || homecoming) && (
+            <div className="overview-block">
+              <div className="meta-label">Rejseperiode</div>
+              <div className="overview-dates">
+                {departure && <span>{departure}</span>}
+                {departure && homecoming && <span className="overview-dash">–</span>}
+                {homecoming && <span>{homecoming}</span>}
+              </div>
+            </div>
+          )}
+
+          {scope && (
+            <div className="overview-block">
+              <div className="meta-label">Rejsens omfang</div>
+              <div className="overview-scope">{scope}</div>
+              {destinations.length > 1 && (
+                <div className="overview-route">{destinations.join(" · ")}</div>
+              )}
+            </div>
+          )}
         </div>
-        <div>
-          <div className="meta-label">Hjemkomst</div>
-          <div className="meta-value">{formatLongDateDK(trip.return)}</div>
-        </div>
-        <div>
-          <div className="meta-label">Rejsende</div>
-          <div className="meta-value">
-            {(() => {
-              const t = trip.travellers || "";
-              const m = t.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
-              const namesPart = m ? m[1] : t;
-              const summary = m ? m[2] : null;
-              const names = namesPart.split(/,\s*|\s+og\s+/).map((n) => n.trim()).filter(Boolean);
-              if (names.length <= 1) return t;
-              return (
-                <>
-                  <div
-                    className={
-                      names.length > 6
-                        ? "grid grid-cols-1 sm:grid-cols-2 gap-x-4 text-base"
-                        : ""
-                    }
-                  >
-                    {names.map((n, i) => <div key={i}>{n}</div>)}
-                  </div>
-                  {summary && <div className="mt-2 text-sm opacity-70">({summary})</div>}
-                </>
-              );
-            })()}
-          </div>
-        </div>
-        <div>
-          <div className="meta-label">Rådgiver</div>
-          <div className="meta-value">
-            {trip.advisor} · Booking #{trip.bookingNo}
+
+        <div className="overview-secondary">
+          {names.length > 0 && (
+            <div className="overview-block">
+              <div className="meta-label">Rejsende</div>
+              <div className="overview-travellers">
+                {names.map((n, i) => (
+                  <span key={i} className="overview-traveller">
+                    {n}
+                  </span>
+                ))}
+              </div>
+              {summary && <div className="overview-travellers-sum">{summary}</div>}
+            </div>
+          )}
+
+          <div className="overview-block">
+            <div className="meta-label">Rådgiver</div>
+            <div className="meta-value">
+              {trip.advisor}
+              <span className="overview-booking">Booking #{trip.bookingNo}</span>
+            </div>
           </div>
         </div>
       </div>

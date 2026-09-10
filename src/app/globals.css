@@ -155,6 +155,10 @@ section { width: 100%; }
 .hero-body {
   margin-top: auto;
   padding-top: 56px;
+  /* Vision 2.0 fase 1: hero-indholdet fik lov at flyde ud i hele bredden og
+     efterlod fotoets højre side tom. En maks-bredde giver blokken en bevidst
+     form og mere luft omkring — designmanualens "stram og minimalistisk". */
+  max-width: 720px;
 }
 @media (min-width: 760px) { .hero-body { padding-top: 80px; } }
 
@@ -195,6 +199,14 @@ section { width: 100%; }
   font-weight: 400;
   line-height: 1.3;
 }
+/* Varigheden er rejsens nøgletal og må ikke se ud som ruten ved siden af.
+   Guld-kanten er paletten, ikke en ny farve. */
+.hero-pill.is-key {
+  border-color: rgba(211, 167, 93, 0.75);
+  background: rgba(211, 167, 93, 0.16);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
 
 .hero-intro {
   color: rgba(255, 255, 255, 0.92);
@@ -207,6 +219,28 @@ section { width: 100%; }
 @media (min-width: 760px) {
   .hero-intro { font-size: 17px; max-width: 620px; }
 }
+
+/* Introen vises som anslag med udfoldning. Hele teksten ligger i DOM'en —
+   der forkortes kun visuelt, intet slettes. */
+.hero-intro-wrap { margin-bottom: 28px; }
+.hero-intro-wrap .hero-intro { margin-bottom: 10px; }
+
+.hero-intro-toggle {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+  padding: 2px 0;
+  color: rgba(255, 255, 255, 0.92);
+  font-family: var(--font-open-sans), sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+.hero-intro-toggle:hover { color: #fff; border-color: #fff; }
+.hero-intro-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
 .hero-cta {
   display: inline-flex;
@@ -228,21 +262,97 @@ section { width: 100%; }
 .hero-cta .arr { transition: transform 0.2s ease; }
 .hero-cta:hover .arr { transform: translateX(3px); }
 
-/* ===== Trip details strip ===== */
-.details-strip {
+/* ===== Rejseoverblik (Vision 2.0 fase 1) =====
+   Afløser den gamle 4-kolonners nøgleinfo-stribe. To grupper i stedet for fire
+   ens kolonner: rejsens fakta til venstre, menneskene til højre. Rejsende har
+   nu plads til at fylde i stedet for at klippe. */
+.overview {
   background: var(--rainforest);
   color: var(--sand);
-  padding: 28px 28px;
+  padding: 32px 28px;
 }
-@media (min-width: 760px) { .details-strip { padding: 36px 56px; } }
-@media (min-width: 1024px) { .details-strip { padding: 40px 72px; } }
-.details-grid {
+@media (min-width: 760px) { .overview { padding: 44px 56px; } }
+@media (min-width: 1024px) { .overview { padding: 52px 72px; } }
+
+.overview-inner {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 22px 28px;
+  grid-template-columns: 1fr;
+  gap: 28px;
 }
 @media (min-width: 760px) {
-  .details-grid { grid-template-columns: repeat(4, 1fr); gap: 32px; }
+  .overview-inner { grid-template-columns: 1fr 1fr; gap: 48px; }
+}
+@media (min-width: 1024px) {
+  .overview-inner { grid-template-columns: 1.1fr 1fr; gap: 64px; }
+}
+
+.overview-primary,
+.overview-secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+@media (min-width: 760px) {
+  .overview-primary, .overview-secondary { gap: 28px; }
+}
+
+.overview-dates {
+  font-family: var(--font-open-sans), sans-serif;
+  font-weight: 300;
+  color: var(--sand);
+  font-size: 16px;
+  line-height: 1.45;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+}
+.overview-dash { color: rgba(226, 220, 205, 0.55); }
+
+/* Rejsens omfang er det tal kunden ellers selv skulle regne ud af to datoer. */
+.overview-scope {
+  font-family: var(--font-cormorant), serif;
+  font-weight: 500;
+  color: #fff;
+  font-size: 26px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+@media (min-width: 760px) { .overview-scope { font-size: 30px; } }
+
+.overview-route {
+  margin-top: 8px;
+  color: rgba(226, 220, 205, 0.78);
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.5;
+}
+
+/* Navnene sættes som selvstændige elementer, så en lang liste bryder pænt i
+   stedet for at løbe ud over stribens højde. */
+.overview-travellers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  font-family: var(--font-open-sans), sans-serif;
+  font-weight: 300;
+  color: var(--sand);
+  font-size: 16px;
+  line-height: 1.45;
+}
+.overview-traveller { white-space: nowrap; }
+.overview-travellers-sum {
+  margin-top: 8px;
+  color: rgba(226, 220, 205, 0.7);
+  font-size: 13px;
+  font-weight: 300;
+}
+
+.overview-booking {
+  display: block;
+  margin-top: 4px;
+  color: rgba(226, 220, 205, 0.7);
+  font-size: 13px;
 }
 .meta-label {
   color: rgba(226, 220, 205, 0.6);
