@@ -1,11 +1,36 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-09** (PR #22 programmet-label live)
+> Sidst opdateret: **2026-09-10** (PR #23 pæn PDF-fejlbesked live)
 
 ## Production
 
-- **Commit:** `7e116dc` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `4169f19` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #23 (`fix/friendly-invalid-pdf-error`)** — merged (fast-forward) og production-verificeret
+  **2026-09-10**. Fejler PDF-parsingen, får sælgeren nu en rolig dansk besked i stedet for
+  Anthropics rå API-tekst, `Claude returnerede ikke gyldig JSON` eller en liste af
+  Zod-issues à la `itinerary.0.type: Invalid enum value…`.
+  Nyt modul **`src/lib/parse-errors.ts`** klassificerer fejlen i fire typer:
+  `unreadable` (422) → "PDF'en kunne ikke læses. Tjek at det er en TravelWire-rejsebeskrivelse,
+  og prøv igen." · `transient` (503) → "Rejseplanen kunne ikke læses lige nu. Prøv igen om
+  lidt." · `billing` (502) → credits-beskeden **bevaret ordret** · `config` (502) →
+  "AI-parseren er ikke sat rigtigt op lige nu. Kontakt Ricko/admin."
+  **Klassificeringen bygger på faktiske svar, ikke gæt:** en tom og en korrupt PDF blev sendt
+  gennem produktionsmodellen og gav 400 med hhv. `PDF cannot be empty` og
+  `The PDF specified was not valid.` — begge mønstre er dækket eksplicit. En ikke-TravelWire
+  PDF går derimod igennem til modellen, som svarer `{}`; den falder i schema-grenen og giver
+  også PDF-beskeden.
+  **Bevidst afvigelse fra oplægget:** "Claude svarede, men ikke med JSON" er klassificeret som
+  `transient`, ikke som PDF-fejl. Alle tre faktiske forekomster i `parse_failures` er fuldt
+  gyldige TravelWire-PDF'er, hvor modellen indledte med prosa — at bede sælgeren tjekke sin
+  PDF ville være vildledende. Samme grund gør 404 (udgået model-id) til `config`.
+  **Tekniske detaljer sendes ikke længere til browseren.** `issues` og `raw` blev tidligere
+  returneret i fejlsvaret; `raw` er hele det parsede trip-objekt med kundedata, og UI'et
+  brugte det aldrig. Server-side er alt bevaret: `logParseFailure` kaldes uændret for
+  `invalid_json`, `anthropic_error` og `schema_mismatch` med samme `raw_response`, `issues`
+  og `pdf_name`, og `console.error` får nu også fejltype og HTTP-status.
+  Succes-stien, auth, filstørrelses-tjek og `parse_failures` er uberørt. Ingen DB-migration,
+  ingen ændring af prompt eller schema, ingen kundeside.
 - **PR #22 (`fix/tour-toggle-label`)** — merged (fast-forward) og production-verificeret
   **2026-09-09**. Tidslinjens udfold-knap sagde **"Læs om udflugten"** for alt med
   `expandKind: "program"`, men den kategori dækker både endagsture og flerdagsforløb med
@@ -162,7 +187,7 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `7e116dc` (production) |
+| `main` | = origin/main = `4169f19` (production) |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -176,6 +201,8 @@ slettet 2026-09-08 på samme vilkår. `feature/favicon-brand-icon` (+ `wt-favico
 slettet 2026-09-09 efter at PR #2 endelig blev merged. `fix/hotel-notes-readable`
 (+ `wt-notes`) slettet 2026-09-09 efter merge og production-verifikation.
 `fix/tour-toggle-label` (+ `wt-tour`) slettet samme dag på samme vilkår.
+`fix/friendly-invalid-pdf-error` (+ `wt-pdf`) slettet 2026-09-10 efter merge og
+production-verifikation.
 
 ## Åbne tråde
 
@@ -201,10 +228,26 @@ slettet 2026-09-09 efter at PR #2 endelig blev merged. `fix/hotel-notes-readable
   "Læs om programmet"; ægte endagsudflugter beholder "Læs om udflugten".
 - **`parse_failures` oprydning** — pg_cron-job der sletter rækker > 30 dage (jf. `supabase/README.md`)
   er endnu ikke sat op.
-- **Pæn fejlbesked ved ugyldig PDF** — for ugyldig/tom PDF returneres Anthropics rå 400-tekst til
-  sælgeren (kun billing-fejl har særbesked). Overvej en generisk dansk besked.
+- ~~**Pæn fejlbesked ved ugyldig PDF**~~ — **LØST 2026-09-10 i PR #23.** Fire fejltyper med
+  hver sin danske besked i `src/lib/parse-errors.ts`; tekniske detaljer bliver server-side.
 
-## Seneste checks (2026-09-09, main `7e116dc`)
+## Seneste checks (2026-09-10, main `4169f19`)
+
+PR #23 (PDF-fejlbesked), 2026-09-10: **test ✅ 97/97** (16 nye i `parse-errors.test.ts`, med
+de faktiske Anthropic-fejlstrenge som fixtures) · typecheck ✅ · lint ✅ (kun de 6 kendte
+img-warnings) · build ✅. En test asserter eksplicit at ingen sælgervendt besked indeholder
+`JSON`, `schema`, `Zod`, `Anthropic`, `API_KEY`, `stack`, `undefined` eller `null`.
+Alle 11 fejlscenarier kørt gennem den faktiske modulkode — hver giver en pæn dansk besked.
+Production efter merge: `/admin` 200, `POST /admin/api/parse` uden session fortsat
+`401 {"error":"Ikke logget ind"}`. Den nye UI-fallbacktekst er i admin-bundtet, og den gamle
+`matcher det forventede skema` har **0 forekomster** i klient-bundtet. (`Invalid enum value`
+findes stadig i et chunk, men det er Zods eget errorMap-bibliotek, ikke vores fejltekst.)
+Kundeside-regression uændret: hero-logo, favicon, 35518's 2 værelsesbokse / 6 labels,
+hotel-noternes `leading-relaxed`, "Læs om programmet" 1× og "Læs om udflugten" 2× på 34566,
+sub-hotel-boks. `parse_failures` er tilgængelig og uændret (3 rækker, seneste 2026-09-07).
+**Udestår:** klik-test i admin (upload en PDF og se boksen) kræver login, som agenter ikke
+har jf. `docs/ACCESS_MATRIX.md`. Succes-stien er bit-for-bit urørt i diffen — kun de to
+fejl-grene er ændret. Ricko/sælger bekræfter i UI.
 
 PR #22 (programmet-label), 2026-09-09: **test ✅ 84/84** (13 nye for `isMultiDayProgram` og
 `timelineToggleLabel`, med faktiske production-typeLabels som fixtures) · typecheck ✅ ·
