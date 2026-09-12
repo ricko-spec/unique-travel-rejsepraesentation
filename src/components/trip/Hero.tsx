@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Trip } from "@/lib/types";
-import { nightsLabel, totalNights } from "@/lib/trip-overview";
+import { formatMediumDateDK } from "@/lib/format";
 import { HeroIntro } from "./HeroIntro";
 
 const ADVISOR_PHONE = "+4559498630";
@@ -10,10 +10,10 @@ const ADVISOR_PHONE = "+4559498630";
 export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null }) {
   const [photoOk, setPhotoOk] = useState(true);
 
-  // Vision 2.0 fase 1: heroen svarer på "hvor, hvor længe og hvad" — datoerne
-  // står samlet i rejseoverblikket lige nedenfor, så de ikke gentages her.
-  // Varigheden er det tal kunden ellers selv skulle regne ud af to datoer.
-  const nights = nightsLabel(totalNights(trip.hotels));
+  // Claude Design v2: to pills under titlen — ruten og datointervallet.
+  const period = [formatMediumDateDK(trip.departure), formatMediumDateDK(trip.return)]
+    .filter(Boolean)
+    .join(" – ");
 
   return (
     <section className="hero">
@@ -46,10 +46,10 @@ export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null
           <div className="hero-kicker">Rejseforslag</div>
           <h1 className="hero-title">{trip.destination}</h1>
 
-          {(nights || trip.subtitle) && (
+          {(trip.subtitle || period) && (
             <div className="hero-pills">
-              {nights && <span className="hero-pill is-key">{nights}</span>}
               {trip.subtitle && <span className="hero-pill">{trip.subtitle}</span>}
+              {period && <span className="hero-pill">{period}</span>}
             </div>
           )}
 

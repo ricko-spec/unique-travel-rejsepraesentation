@@ -155,20 +155,29 @@ section { width: 100%; }
 .hero-body {
   margin-top: auto;
   padding-top: 56px;
-  /* Vision 2.0 fase 1: hero-indholdet fik lov at flyde ud i hele bredden og
-     efterlod fotoets højre side tom. En maks-bredde giver blokken en bevidst
-     form og mere luft omkring — designmanualens "stram og minimalistisk". */
-  max-width: 720px;
 }
 @media (min-width: 760px) { .hero-body { padding-top: 80px; } }
 
+/* Claude Design v2: kickeren er en inline-flex med en 30px guldstreg foran
+   teksten — streg og tekst deler baseline med 14px mellemrum. */
 .hero-kicker {
   color: rgba(255, 255, 255, 0.85);
   text-transform: uppercase;
-  letter-spacing: 0.32em;
-  font-size: 11px;
+  letter-spacing: 0.4em;
+  font-size: 11.5px;
   font-weight: 400;
   margin-bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+.hero-kicker::before {
+  content: "";
+  width: 30px;
+  height: 1px;
+  background: var(--gold);
+  display: inline-block;
+  flex-shrink: 0;
 }
 
 .hero-title {
@@ -177,7 +186,8 @@ section { width: 100%; }
   color: #fff;
   font-size: clamp(54px, 11vw, 124px);
   line-height: 1.0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.018em;
+  text-shadow: 0 2px 40px rgba(0, 30, 30, 0.25);
   margin-bottom: 22px;
 }
 
@@ -189,23 +199,16 @@ section { width: 100%; }
 }
 .hero-pill {
   color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  padding: 8px 16px;
+  padding: 9px 18px;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 400;
+  letter-spacing: 0.02em;
   line-height: 1.3;
-}
-/* Varigheden er rejsens nøgletal og må ikke se ud som ruten ved siden af.
-   Guld-kanten er paletten, ikke en ny farve. */
-.hero-pill.is-key {
-  border-color: rgba(211, 167, 93, 0.75);
-  background: rgba(211, 167, 93, 0.16);
-  font-weight: 500;
-  letter-spacing: 0.01em;
 }
 
 .hero-intro {
@@ -220,8 +223,24 @@ section { width: 100%; }
   .hero-intro { font-size: 17px; max-width: 620px; }
 }
 
-/* Introen vises som anslag med udfoldning. Hele teksten ligger i DOM'en —
-   der forkortes kun visuelt, intet slettes. */
+/* To-niveau intro fra Claude Design v2: anslaget står større og i ren hvid,
+   resten i brødtekst. */
+.hero-intro .lead {
+  display: block;
+  font-size: 19px;
+  line-height: 1.5;
+  color: #fff;
+  margin-bottom: 8px;
+  font-weight: 300;
+}
+@media (min-width: 760px) {
+  .hero-intro .lead { font-size: 22px; }
+}
+.hero-intro .rest { display: block; }
+.hero-intro .rest[hidden] { display: none; }
+
+/* Rigtige introer er lange (median ~560 tegn). Resten foldes ud på klik —
+   hele teksten ligger i DOM'en, der forkortes kun visuelt. */
 .hero-intro-wrap { margin-bottom: 28px; }
 .hero-intro-wrap .hero-intro { margin-bottom: 10px; }
 
@@ -248,112 +267,53 @@ section { width: 100%; }
   gap: 10px;
   background: var(--gold);
   color: var(--rainforest);
-  padding: 13px 26px;
+  padding: 15px 30px;
   border-radius: 999px;
   text-decoration: none;
   font-family: var(--font-open-sans), sans-serif;
   font-size: 14px;
   font-weight: 500;
+  letter-spacing: 0.04em;
   min-height: 44px;
+  box-shadow: 0 12px 30px -10px rgba(211, 167, 93, 0.6);
   transition: background 0.2s ease, transform 0.2s ease;
   width: fit-content;
 }
-.hero-cta:hover { background: var(--gold-soft); }
+.hero-cta:hover { background: var(--gold-soft); transform: translateY(-1px); }
 .hero-cta .arr { transition: transform 0.2s ease; }
 .hero-cta:hover .arr { transform: translateX(3px); }
 
-/* ===== Rejseoverblik (Vision 2.0 fase 1) =====
-   Afløser den gamle 4-kolonners nøgleinfo-stribe. To grupper i stedet for fire
-   ens kolonner: rejsens fakta til venstre, menneskene til højre. Rejsende har
-   nu plads til at fylde i stedet for at klippe. */
-.overview {
+/* ===== Info-strip (Claude Design v2) =====
+   Egen sektion under hero: fire felter i 2 kolonner på mobil, 4 fra 760px. */
+.details-strip {
   background: var(--rainforest);
   color: var(--sand);
-  padding: 32px 28px;
+  padding: 28px 28px;
 }
-@media (min-width: 760px) { .overview { padding: 44px 56px; } }
-@media (min-width: 1024px) { .overview { padding: 52px 72px; } }
-
-.overview-inner {
+@media (min-width: 760px) { .details-strip { padding: 36px 56px; } }
+@media (min-width: 1024px) { .details-strip { padding: 40px 72px; } }
+.details-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 28px;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px 28px;
 }
 @media (min-width: 760px) {
-  .overview-inner { grid-template-columns: 1fr 1fr; gap: 48px; }
-}
-@media (min-width: 1024px) {
-  .overview-inner { grid-template-columns: 1.1fr 1fr; gap: 64px; }
+  .details-grid { grid-template-columns: repeat(4, 1fr); gap: 32px; }
 }
 
-.overview-primary,
-.overview-secondary {
+/* Rejsende-feltet: hvert navn på sin egen linje. To spalter blev prøvet, men
+   en strib-kolonne er for smal — efternavnene brød midt over. */
+.meta-names {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 2px;
 }
-@media (min-width: 760px) {
-  .overview-primary, .overview-secondary { gap: 28px; }
-}
-
-.overview-dates {
-  font-family: var(--font-open-sans), sans-serif;
-  font-weight: 300;
-  color: var(--sand);
-  font-size: 16px;
-  line-height: 1.45;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 10px;
-}
-.overview-dash { color: rgba(226, 220, 205, 0.55); }
-
-/* Rejsens omfang er det tal kunden ellers selv skulle regne ud af to datoer. */
-.overview-scope {
-  font-family: var(--font-cormorant), serif;
-  font-weight: 500;
-  color: #fff;
-  font-size: 26px;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-}
-@media (min-width: 760px) { .overview-scope { font-size: 30px; } }
-
-.overview-route {
-  margin-top: 8px;
-  color: rgba(226, 220, 205, 0.78);
-  font-size: 14px;
-  font-weight: 300;
-  line-height: 1.5;
-}
-
-/* Navnene sættes som selvstændige elementer, så en lang liste bryder pænt i
-   stedet for at løbe ud over stribens højde. */
-.overview-travellers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
-  font-family: var(--font-open-sans), sans-serif;
-  font-weight: 300;
-  color: var(--sand);
-  font-size: 16px;
-  line-height: 1.45;
-}
-.overview-traveller { white-space: nowrap; }
-.overview-travellers-sum {
-  margin-top: 8px;
-  color: rgba(226, 220, 205, 0.7);
-  font-size: 13px;
-  font-weight: 300;
-}
-
-.overview-booking {
-  display: block;
-  margin-top: 4px;
+.meta-sub {
+  margin-top: 6px;
   color: rgba(226, 220, 205, 0.7);
   font-size: 13px;
 }
+
 .meta-label {
   color: rgba(226, 220, 205, 0.6);
   text-transform: uppercase;
