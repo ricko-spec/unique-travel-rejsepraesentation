@@ -1,11 +1,43 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-10** (PR #25 Vision 2.0-faseplan godkendt)
+> Sidst opdateret: **2026-09-12** (PR #27 revideret efter Claude Design-handoff — under review)
 
 ## Production
 
 - **Commit:** `fa9c7fe` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
+- **PR #27 (`vision/v2-phase-1-hero-overview`)** — **ÅBEN, under review. IKKE merged.**
+  Vision 2.0 **fase 1** (hero + førstehåndsindtryk). Seneste commit **`33505d2`**
+  (2026-09-12), som **reviderer** den første udgave (`8137a69`).
+  Første udgave var vores egen fortolkning af faseplanen. Ricko leverede derefter et
+  **Claude Design-handoff**, som nu er **source of truth** for udtrykket, og heroen +
+  strippen er rettet til efter det frem for efter egenfortolkningen.
+  Rettet efter designet: **guldstreg** (30×1 px, `--gold`) foran `REJSEFORSLAG` via
+  `.hero-kicker::before` (inline-flex, 14 px gap, 11,5 px, `0.4em`) · **hero-pills er
+  igen designets to**: rute (`subtitle`) + datointerval, med glasværdierne fyld `.10`,
+  kant `.28`, `9px 18px`, `0.02em`, `blur(6px)` · **info-strippen er igen fire felter**
+  (Afrejse / Hjemkomst / Rejsende / Rådgiver + bookingnr.), 2 kolonner mobil → 4 fra
+  760 px · hero-titel `-0.018em` + `text-shadow` · hero-CTA `15px 30px`, `0.04em`,
+  guldglød · introen i designets to niveauer (`.lead` + `.rest`).
+  Fjernet fra første udgave: rejseoverblikket som to-kolonne-blok (`.overview*`) ·
+  **“N destinationer” er fjernet fra toppen** · den guldkantede nætter-pille
+  (`hero-pill.is-key`) · `max-width: 720px` på `.hero-body` · `trip-overview.ts`'
+  nætter- og destinations-helpers, som intet brugte længere (filen er omdøbt til
+  `src/lib/travellers.ts` med kun `splitTravellers`).
+  Bevaret fra første udgave: rigtige trip-data (ingen demo-data), hero-logo, kontaktknap,
+  hero-foto med gradient-fallback, rejsende-split der respekterer aldersparenteser,
+  “Læs mere” på lange introer og enhedstestene.
+  **Ingen ændring** af parser, DB/skema, admin, auth eller unlock. Timeline, hoteller,
+  galleri, pris og CTA længere nede er urørte.
+  **Arbejdsreference:** hele handoffet lå i `reference/claude-design-v2/` (README,
+  DATA-MAPPING, VISUAL-DETAILS, DO-NOT-CHANGE, ASSETS, `code/`, `screenshots/`).
+  **Mappen er bevidst IKKE committet.** Kun de to generelle designkontrakt-filer er taget
+  med i repoet som `docs/design/VISUAL-DETAILS.md` og `docs/design/DO-NOT-CHANGE.md` —
+  de indeholder hverken kundedata, bookingnumre, navne eller screenshots, og de er den
+  visuelle kontrakt fase 2–5 skal følge.
+  Checks på `33505d2`: `npm test` **131/131** (10 filer) · `npm run typecheck` OK ·
+  `npm run lint` OK (kun de kendte `no-img-element`-warnings) · `npm run build` OK.
+  **Merges ikke uden Rickos OK.**
 - **PR #25 (`vision/v2-implementation-plan`)** — merged (fast-forward efter rebase)
   **2026-09-10**. **Vision 2.0-faseplanen er godkendt** og ligger i
   `docs/VISION-2.0-PLAN.md`. Kun dokumentation — ingen app-kode, ingen CSS, ingen ændring
@@ -257,6 +289,7 @@ Kun WIP/aktive branches består.
 | Branch | Tilstand |
 |---|---|
 | `main` | = origin/main = `fa9c7fe` (production) |
+| `vision/v2-phase-1-hero-overview` | **IKKE merged — åben som PR #27** på `33505d2`, under review |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -283,7 +316,8 @@ dag efter merge af faseplanen.
    brand-assets, og heroen viser nu det hvide logo med Q/palme fra
    `public/brand/unique-travel-logo-white.png`. **Mille har godkendt logoet** (meldt af
    Ricko 2026-09-09). Favicon er også løst — se PR #20
-3. Vision 2.0: scope KRÆVER RICKO — intet påbegyndt
+3. Vision 2.0: **fase 1 er i gang** — PR #27 (`33505d2`) er åben og afventer Rickos review
+   på Vercel-previewet. Fase 2–5 er ikke påbegyndt
 4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive branches består)
 
 ## Backlog (fra august-review)
@@ -306,7 +340,15 @@ dag efter merge af faseplanen.
 - ~~**Pæn fejlbesked ved ugyldig PDF**~~ — **LØST 2026-09-10 i PR #23.** Fire fejltyper med
   hver sin danske besked i `src/lib/parse-errors.ts`; tekniske detaljer bliver server-side.
 
-## Seneste checks (2026-09-10, main `fa9c7fe`)
+## Seneste checks (2026-09-12, main `fa9c7fe`)
+
+PR #27 (Vision 2.0 fase 1, revideret efter Claude Design-handoff), 2026-09-12 på `33505d2`:
+**test ✅ 131/131** i 10 filer · **typecheck ✅** · **lint ✅** (uændret warning-sæt: de seks
+kendte `no-img-element` i fem filer) · **build ✅** (`Compiled successfully`).
+Testtallet faldt fra 137 til 131, fordi 12 tests for de nu slettede nætter-/destinations-
+helpers er væk, mens `splitIntro` har fået seks nye i `src/lib/hero-intro.test.ts`.
+Render-verificeret lokalt mod prod-DB på to rejser × to viewports (1440/390): én med lang
+intro og én med mange rejsende. Kun læseadgang — ingen writes.
 
 PR #25 (Vision 2.0-faseplan), 2026-09-10: **docs-only** — ingen tests, typecheck, lint eller
 build er relevante, og ingen kode blev rørt. `git diff 42587b3..fa9c7fe` viser præcis én fil:
@@ -451,5 +493,6 @@ Tidligere: PR #16 og #12 verificeret 2026-09-07; PR #5 og #9 2026-08-26.
 
 ## Næste anbefalede outcome
 
-1. **Vision 2.0 scope-afklaring og plan** med Ricko — ingen kode endnu (planlægges som preview-branch før merge)
+1. **Rickos review af PR #27** på Vercel-previewet — derefter fast-forward-merge og
+   production-verifikation, før fase 2 (timeline) påbegyndes
 2. **Backlog-prioritering** — vælg næste kundevendte forbedring fra listen ovenfor
