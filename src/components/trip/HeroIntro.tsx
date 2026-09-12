@@ -1,30 +1,33 @@
 "use client";
 
 import { useState } from "react";
+import { splitIntro } from "@/lib/hero-intro";
 
-// Introen er median 563 tegn og fylder fire linjer brødtekst direkte på
-// hero-fotoet. Her vises et kort anslag, mens resten foldes ud på klik.
-// Teksten forkortes ALDRIG i data — hele introen ligger i DOM'en, og
-// intet omskrives. Er teksten kort nok, vises den bare som før.
-const CLAMP_AT = 180;
-
+// Claude Design v2 sætter introen i to niveauer: et fremhævet anslag (.lead)
+// og resten i brødtekst (.rest). Vores intro er én rådgiverskrevet tekst, så
+// anslaget er tekstens egen første sætning — intet omskrives, intet slettes.
+// Rigtige introer er median ~560 tegn og ville fylde fotoet, så resten foldes
+// ud på klik. Hele teksten ligger i DOM'en hele tiden.
 export function HeroIntro({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
-  const full = text.trim();
-  if (!full) return null;
+  const { lead, rest, leadTruncated } = splitIntro(text);
+  if (!lead) return null;
 
-  if (full.length <= CLAMP_AT) {
-    return <p className="hero-intro">{full}</p>;
+  if (!rest) {
+    return (
+      <p className="hero-intro">
+        <span className="lead">{lead}</span>
+      </p>
+    );
   }
-
-  // Bryd ved sidste ordgrænse før grænsen, så anslaget ikke ender midt i et ord.
-  const cut = full.lastIndexOf(" ", CLAMP_AT);
-  const teaser = full.slice(0, cut > 0 ? cut : CLAMP_AT).replace(/[.,;:\s]+$/, "");
 
   return (
     <div className="hero-intro-wrap">
       <p className="hero-intro" id="hero-intro-text">
-        {open ? full : `${teaser} …`}
+        <span className="lead">{!open && leadTruncated ? `${lead} …` : lead}</span>
+        <span className="rest" hidden={!open}>
+          {rest}
+        </span>
       </p>
       <button
         type="button"

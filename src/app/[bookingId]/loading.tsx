@@ -25,21 +25,12 @@ export default function Loading() {
           </div>
         </div>
       </section>
-      {/* Skeletonet skal spejle rejseoverblikkets to grupper, ellers hopper
-          layoutet når det rigtige indhold lander. */}
-      <section className="overview">
-        <div className="overview-inner">
-          {[0, 1].map((col) => (
-            <div key={col} className={col === 0 ? "overview-primary" : "overview-secondary"}>
-              {[0, 1].map((i) => (
-                <div key={i} className="overview-block">
-                  <div className="meta-label">&nbsp;</div>
-                  <div
-                    className="skeleton"
-                    style={{ height: 20, background: "rgba(226,220,205,0.2)" }}
-                  />
-                </div>
-              ))}
+      <section className="details-strip">
+        <div className="details-grid">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i}>
+              <div className="meta-label">&nbsp;</div>
+              <div className="skeleton" style={{ height: 16, background: "rgba(226,220,205,0.2)" }} />
             </div>
           ))}
         </div>
