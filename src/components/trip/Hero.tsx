@@ -3,11 +3,17 @@
 import { useState } from "react";
 import type { Trip } from "@/lib/types";
 import { formatMediumDateDK } from "@/lib/format";
+import { HeroIntro } from "./HeroIntro";
 
 const ADVISOR_PHONE = "+4559498630";
 
 export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null }) {
   const [photoOk, setPhotoOk] = useState(true);
+
+  // Claude Design v2: to pills under titlen — ruten og datointervallet.
+  const period = [formatMediumDateDK(trip.departure), formatMediumDateDK(trip.return)]
+    .filter(Boolean)
+    .join(" – ");
 
   return (
     <section className="hero">
@@ -40,14 +46,14 @@ export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null
           <div className="hero-kicker">Rejseforslag</div>
           <h1 className="hero-title">{trip.destination}</h1>
 
-          <div className="hero-pills">
-            {trip.subtitle && <span className="hero-pill">{trip.subtitle}</span>}
-            <span className="hero-pill">
-              {formatMediumDateDK(trip.departure)} – {formatMediumDateDK(trip.return)}
-            </span>
-          </div>
+          {(trip.subtitle || period) && (
+            <div className="hero-pills">
+              {trip.subtitle && <span className="hero-pill">{trip.subtitle}</span>}
+              {period && <span className="hero-pill">{period}</span>}
+            </div>
+          )}
 
-          {trip.intro && <p className="hero-intro">{trip.intro}</p>}
+          {trip.intro && <HeroIntro text={trip.intro} />}
 
           <a className="hero-cta" href="#kontakt">
             <span>Kontakt os om rejsen</span>

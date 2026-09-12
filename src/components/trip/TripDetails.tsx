@@ -1,6 +1,16 @@
 import { type Trip, formatLongDateDK } from "@/lib/types";
+import { splitTravellers } from "@/lib/travellers";
 
+// Info-strippen fra Claude Design v2: egen mørkegrøn sektion under hero med
+// fire felter — Afrejse / Hjemkomst / Rejsende / Rådgiver (+ bookingnr.).
+// To kolonner på mobil, fire fra 760px.
+//
+// Det eneste vi lægger oven i designet er Rejsende-feltet: navnelisten sættes
+// med ét navn pr. linje, så rejser med mange rejsende hverken klipper navne af
+// eller brækker et efternavn midt over. Ingen navne fjernes.
 export function TripDetails({ trip }: { trip: Trip }) {
+  const { names, summary } = splitTravellers(trip.travellers);
+
   return (
     <section className="details-strip">
       <div className="details-grid">
@@ -15,28 +25,18 @@ export function TripDetails({ trip }: { trip: Trip }) {
         <div>
           <div className="meta-label">Rejsende</div>
           <div className="meta-value">
-            {(() => {
-              const t = trip.travellers || "";
-              const m = t.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
-              const namesPart = m ? m[1] : t;
-              const summary = m ? m[2] : null;
-              const names = namesPart.split(/,\s*|\s+og\s+/).map((n) => n.trim()).filter(Boolean);
-              if (names.length <= 1) return t;
-              return (
-                <>
-                  <div
-                    className={
-                      names.length > 6
-                        ? "grid grid-cols-1 sm:grid-cols-2 gap-x-4 text-base"
-                        : ""
-                    }
-                  >
-                    {names.map((n, i) => <div key={i}>{n}</div>)}
-                  </div>
-                  {summary && <div className="mt-2 text-sm opacity-70">({summary})</div>}
-                </>
-              );
-            })()}
+            {names.length <= 1 ? (
+              trip.travellers
+            ) : (
+              <>
+                <div className="meta-names">
+                  {names.map((n, i) => (
+                    <span key={i}>{n}</span>
+                  ))}
+                </div>
+                {summary && <div className="meta-sub">({summary})</div>}
+              </>
+            )}
           </div>
         </div>
         <div>
