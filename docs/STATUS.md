@@ -1,14 +1,35 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-12** (PR #27 revideret efter Claude Design-handoff — under review)
+> Sidst opdateret: **2026-09-14** (PR #28 + PR #27 merged og live · Vision 2.0 fase 2 startet)
 
 ## Production
 
-- **Commit:** `fa9c7fe` på `main` — Vercel READY, `https://rejseplaner.uniquetravel.dk`
-- **PR #27 (`vision/v2-phase-1-hero-overview`)** — **ÅBEN, under review. IKKE merged.**
-  Vision 2.0 **fase 1** (hero + førstehåndsindtryk). Seneste commit **`33505d2`**
-  (2026-09-12), som **reviderer** den første udgave (`8137a69`).
+- **Commit:** `2480daf` på `main` — Vercel READY (`dpl_Fus5S62m…`), `https://rejseplaner.uniquetravel.dk`
+- **Vision 2.0 fase 2 (`vision/v2-phase-2-timeline`)** — **startet 2026-09-14**, forgrenet fra
+  `2480daf`. **Visuel opgradering af timeline/program-sektionen**, primært CSS i
+  `src/app/globals.css`, efter `docs/design/VISUAL-DETAILS.md` og `DO-NOT-CHANGE.md`:
+  kort med 16 px radius og lagdelte skygger, spor og prikker, chips, OBS-bokse, fold-ud,
+  foldeknap som rund pille med guld chevron, og flydetaljer stylet på de **eksisterende**
+  label/value-rækker. Implementeringsplanen er godkendt af Ricko.
+  **Bevidst ikke med:** dag-skillelinjer og fly-rutediagram (data har intet stabilt
+  `day`-nummer og ingen strukturerede flyfelter — må ikke gættes), ingen ny struktur ud fra
+  `dateLabel`, `typeLabel`/`dateLabel` og "Læs om programmet"/"Læs om udflugten" uændrede,
+  `program-pdf-note` og tom flight-state bevaret med uændret tekst.
+  **Ingen ændring** af parser, DB/skema, admin, auth, unlock, hoteller, galleri, pris, CTA
+  eller hero/info-strip. **Merges ikke uden Rickos OK.**
+- **PR #28 (`fix/anthropic-usage-limit-error-message`)** — merged (fast-forward) og live
+  **2026-09-14**: main `8bb1d63` → `4b3e536`, production-deploy `dpl_7NQDnfi2…` READY.
+  Anthropics "You have reached your specified API usage limits" (400) blev klassificeret som
+  ulæselig PDF; `BILLING`-mønstret i `src/lib/parse-errors.ts` fanger nu usage/spend limit, og
+  billing-beskeden nævner både forbrugsgrænse og credits. Kun `parse-errors.ts` +
+  `parse-errors.test.ts`. Ingen ændring af parser-prompt, schema, DB, admin-UI eller kundeside.
+- **PR #27 (`vision/v2-phase-1-hero-overview`)** — merged (fast-forward efter rebase på
+  PR #28) og live **2026-09-14**: main `4b3e536` → **`2480daf`**, production-deploy
+  `dpl_Fus5S62m…` READY. **Vision 2.0 fase 1 er live.** Rebasen var konfliktfri (ingen
+  fælles filer med #28); commits skiftede SHA fra `33505d2`/`3b55413` til `8326d75`/`2480daf`.
+  Vision 2.0 **fase 1** (hero + førstehåndsindtryk). Revisionen **`33505d2`**
+  (2026-09-12) **reviderede** den første udgave (`8137a69`).
   Første udgave var vores egen fortolkning af faseplanen. Ricko leverede derefter et
   **Claude Design-handoff**, som nu er **source of truth** for udtrykket, og heroen +
   strippen er rettet til efter det frem for efter egenfortolkningen.
@@ -37,7 +58,7 @@
   visuelle kontrakt fase 2–5 skal følge.
   Checks på `33505d2`: `npm test` **131/131** (10 filer) · `npm run typecheck` OK ·
   `npm run lint` OK (kun de kendte `no-img-element`-warnings) · `npm run build` OK.
-  **Merges ikke uden Rickos OK.**
+  Merged med Rickos OK 2026-09-14 — se "Seneste checks" for production-verifikationen.
 - **PR #25 (`vision/v2-implementation-plan`)** — merged (fast-forward efter rebase)
   **2026-09-10**. **Vision 2.0-faseplanen er godkendt** og ligger i
   `docs/VISION-2.0-PLAN.md`. Kun dokumentation — ingen app-kode, ingen CSS, ingen ændring
@@ -288,8 +309,10 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `fa9c7fe` (production) |
-| `vision/v2-phase-1-hero-overview` | **IKKE merged — åben som PR #27** på `33505d2`, under review |
+| `main` | = origin/main = `2480daf` (production) |
+| `vision/v2-phase-2-timeline` | **IKKE merged — Vision 2.0 fase 2 i gang** (forgrenet fra `2480daf`) |
+| `vision/v2-phase-1-hero-overview` | Merged som PR #27 (`2480daf` er ancestor af main) — bevares indtil Ricko beslutter oprydning |
+| `fix/anthropic-usage-limit-error-message` | Merged som PR #28 (`4b3e536`) — bevares indtil Ricko beslutter oprydning |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -316,8 +339,8 @@ dag efter merge af faseplanen.
    brand-assets, og heroen viser nu det hvide logo med Q/palme fra
    `public/brand/unique-travel-logo-white.png`. **Mille har godkendt logoet** (meldt af
    Ricko 2026-09-09). Favicon er også løst — se PR #20
-3. Vision 2.0: **fase 1 er i gang** — PR #27 (`33505d2`) er åben og afventer Rickos review
-   på Vercel-previewet. Fase 2–5 er ikke påbegyndt
+3. Vision 2.0: **fase 1 er live** (PR #27, 2026-09-14). **Fase 2 (timeline/program) er i gang**
+   på `vision/v2-phase-2-timeline`. Fase 3–5 er ikke påbegyndt
 4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive branches består)
 
 ## Backlog (fra august-review)
@@ -340,7 +363,22 @@ dag efter merge af faseplanen.
 - ~~**Pæn fejlbesked ved ugyldig PDF**~~ — **LØST 2026-09-10 i PR #23.** Fire fejltyper med
   hver sin danske besked i `src/lib/parse-errors.ts`; tekniske detaljer bliver server-side.
 
-## Seneste checks (2026-09-12, main `fa9c7fe`)
+## Seneste checks (2026-09-14, main `2480daf`)
+
+PR #28 + PR #27, 2026-09-14. PR #27 rebaset på `4b3e536` og kørt igen før merge:
+**test ✅ 133/133** i 10 filer · **typecheck ✅** · **lint ✅** · **build ✅**. Begge deploys READY.
+Production efter merge af #27, målt i Chromium på **34566, 35528, 35917 og 34952 × 390/768/1280**
+(12 kørsler, cookie sat direkte — unlock-formularen ikke brugt, ingen writes):
+guldstreg foran `REJSEFORSLAG` (30 px, `rgb(211,167,93)`) · 2 hero-pills (rute + dato) ·
+"destinationer" optræder ikke i heroen · info-strip = Afrejse / Hjemkomst / Rejsende / Rådgiver ·
+"Læs mere" folder introen ud (`aria-expanded` false → true) · 0 vandret overflow.
+**Alt under hero + info-strip er byte-identisk med før merge** (hash af DOM uden hero/strip/scripts,
+alle 12 kørsler) — timeline, hoteller, galleri, pris og CTA urørte.
+**35917:** 2 alternativ-bokse, som før. **Unlock uændret:** uden cookie og med forkert cookie vises
+formularen, med korrekt cookie vises rejsen. `git diff 8bb1d63..2480daf` rører ingen filer i
+unlock, API, admin, Supabase, Hotels, Gallery, Price, CTA eller Timeline.
+Bemærk: kundesiden ligger på `/<slug>` (12-tegns token), ikke på bookingnummeret — `/34566`
+er en 404-side. Testscripts slår slug op ud fra `booking_no` server-side.
 
 PR #27 (Vision 2.0 fase 1, revideret efter Claude Design-handoff), 2026-09-12 på `33505d2`:
 **test ✅ 131/131** i 10 filer · **typecheck ✅** · **lint ✅** (uændret warning-sæt: de seks
@@ -493,6 +531,7 @@ Tidligere: PR #16 og #12 verificeret 2026-09-07; PR #5 og #9 2026-08-26.
 
 ## Næste anbefalede outcome
 
-1. **Rickos review af PR #27** på Vercel-previewet — derefter fast-forward-merge og
-   production-verifikation, før fase 2 (timeline) påbegyndes
+1. **Vision 2.0 fase 2** — implementér timeline/program-løftet på `vision/v2-phase-2-timeline`,
+   mål før/efter på 34566, 35528, 35498, 35649, 35518, 35917, 35579 og 35132 × 390/768/1280,
+   åbn PR og afvent Rickos OK
 2. **Backlog-prioritering** — vælg næste kundevendte forbedring fra listen ovenfor
