@@ -1,13 +1,22 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-14** (PR #28 + PR #27 merged og live · Vision 2.0 fase 2 startet)
+> Sidst opdateret: **2026-09-14** (PR #29 merged og live · Vision 2.0 fase 2 live)
 
 ## Production
 
-- **Commit:** `2480daf` på `main` — Vercel READY (`dpl_Fus5S62m…`), `https://rejseplaner.uniquetravel.dk`
-- **Vision 2.0 fase 2 (`vision/v2-phase-2-timeline`)** — **startet 2026-09-14**, forgrenet fra
-  `2480daf`. **Visuel opgradering af timeline/program-sektionen**, primært CSS i
+- **Commit:** `8c4e301` på `main` — Vercel READY (`dpl_CXGynSS8FgagwTd6C2pZUQR1ABip`), `https://rejseplaner.uniquetravel.dk`
+- **PR #29 (`vision/v2-phase-2-timeline`)** — merged (fast-forward) og production-verificeret
+  **2026-09-14**: main `2480daf` → **`8c4e301`**. **Vision 2.0 fase 2 er live.**
+  Kun CSS i timeline-blokken i `src/app/globals.css` (+ STATUS) — `Timeline.tsx`, tekster,
+  labels og data uændrede.
+  **Fejlrettelse undervejs:** fold-ud havde `max-height: 2000px`, som klippede bunden af lange
+  programmer på production — 35528 (14-dages rundrejse) er 2228 px høj ved 390 px, så
+  "Inkluderet"-listen manglede for kunden. Fold-ud animeres nu via `grid-template-rows`
+  (0fr → 1fr) uden loft; skillelinje og luft ligger i `.tl-expand-inner::before`, så en lukket
+  fold er 0 px. Kræver Chrome 107+ / Safari 16+ / Firefox 66+ for animationen — ældre browsere
+  åbner/lukker uden animation, men klipper ikke.
+  **Vision 2.0 fase 2** — **visuel opgradering af timeline/program-sektionen**, primært CSS i
   `src/app/globals.css`, efter `docs/design/VISUAL-DETAILS.md` og `DO-NOT-CHANGE.md`:
   kort med 16 px radius og lagdelte skygger, spor og prikker, chips, OBS-bokse, fold-ud,
   foldeknap som rund pille med guld chevron, og flydetaljer stylet på de **eksisterende**
@@ -17,7 +26,7 @@
   `dateLabel`, `typeLabel`/`dateLabel` og "Læs om programmet"/"Læs om udflugten" uændrede,
   `program-pdf-note` og tom flight-state bevaret med uændret tekst.
   **Ingen ændring** af parser, DB/skema, admin, auth, unlock, hoteller, galleri, pris, CTA
-  eller hero/info-strip. **Merges ikke uden Rickos OK.**
+  eller hero/info-strip. Merged med Rickos OK 2026-09-14.
 - **PR #28 (`fix/anthropic-usage-limit-error-message`)** — merged (fast-forward) og live
   **2026-09-14**: main `8bb1d63` → `4b3e536`, production-deploy `dpl_7NQDnfi2…` READY.
   Anthropics "You have reached your specified API usage limits" (400) blev klassificeret som
@@ -309,10 +318,7 @@ Kun WIP/aktive branches består.
 
 | Branch | Tilstand |
 |---|---|
-| `main` | = origin/main = `2480daf` (production) |
-| `vision/v2-phase-2-timeline` | **IKKE merged — Vision 2.0 fase 2 i gang** (forgrenet fra `2480daf`) |
-| `vision/v2-phase-1-hero-overview` | Merged som PR #27 (`2480daf` er ancestor af main) — bevares indtil Ricko beslutter oprydning |
-| `fix/anthropic-usage-limit-error-message` | Merged som PR #28 (`4b3e536`) — bevares indtil Ricko beslutter oprydning |
+| `main` | = origin/main (production) |
 | `docs/status-after-sebastian-fixes` | **IKKE merged (WIP)** — bevares |
 | `feature/individuelle-logins-profiles` | Merged/legacy, lokal + remote — bevares indtil Ricko beslutter om den skal slettes |
 | `gallery-upload-diagnose` (kun remote) | **IKKE merged** — bevares indtil afklaret |
@@ -331,6 +337,11 @@ production-verifikation. `fix/seaplane-hotel-tag` (+ `wt-sea`) slettet samme dag
 vilkår. `fix/multiple-alternatives-from-hotel-notes` (+ `wt-alt`) slettet 2026-09-10 efter
 merge og production-verifikation. `vision/v2-implementation-plan` (+ `wt-v2`) slettet samme
 dag efter merge af faseplanen.
+**2026-09-14, med Rickos OK:** `fix/anthropic-usage-limit-error-message` (PR #28, + `wt-usage-limit`),
+`vision/v2-phase-1-hero-overview` (PR #27, + `wt-p1`) og `vision/v2-phase-2-timeline`
+(PR #29, + `wt-p2`) slettet lokalt og på remote efter merge og production-verifikation — alle
+tre verificeret som ancestor af `origin/main` og uden ucommittede ændringer. Måle-worktreet
+`wt-base` (detached på `2480daf`) er også fjernet.
 
 ## Åbne tråde
 
@@ -339,8 +350,8 @@ dag efter merge af faseplanen.
    brand-assets, og heroen viser nu det hvide logo med Q/palme fra
    `public/brand/unique-travel-logo-white.png`. **Mille har godkendt logoet** (meldt af
    Ricko 2026-09-09). Favicon er også løst — se PR #20
-3. Vision 2.0: **fase 1 er live** (PR #27, 2026-09-14). **Fase 2 (timeline/program) er i gang**
-   på `vision/v2-phase-2-timeline`. Fase 3–5 er ikke påbegyndt
+3. Vision 2.0: **fase 1 og 2 er live** (PR #27 og #29, 2026-09-14). Fase 3 (hoteller), 4
+   (billeder + `next/image`) og 5 (pris/CTA/mobil) er ikke påbegyndt
 4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive branches består)
 
 ## Backlog (fra august-review)
@@ -363,7 +374,29 @@ dag efter merge af faseplanen.
 - ~~**Pæn fejlbesked ved ugyldig PDF**~~ — **LØST 2026-09-10 i PR #23.** Fire fejltyper med
   hver sin danske besked i `src/lib/parse-errors.ts`; tekniske detaljer bliver server-side.
 
-## Seneste checks (2026-09-14, main `2480daf`)
+## Seneste checks (2026-09-14, main `8c4e301`)
+
+PR #29 (Vision 2.0 fase 2, timeline/program), 2026-09-14 på `8c4e301`:
+**test ✅ 133/133** i 10 filer · **typecheck ✅** · **lint ✅** (kun de seks kendte
+`no-img-element`) · **build ✅**. Vercel-preview og production-deploy
+`dpl_CXGynSS8FgagwTd6C2pZUQR1ABip` READY.
+**Før merge:** lokale production-builds af main og branchen mod prod-DB. **Efter merge:**
+production målt før og efter deploy med samme script. Begge gange 8 rejser
+(34566, 35528, 35498, 35649, 35518, 35917, 35579, 35132) × 390/768/1280 = 24 kørsler,
+**0 afvigelser**, cookie sat direkte (ingen writes):
+nyt layout aktivt (kort-radius 2 px → 16 px, foldeknap som pille) · **identisk tekst** i
+`.timeline` (hash) · **identisk antal** `.tl-item`/`.chip`/`.obs`/`.tl-toggle`/`.day`/
+`.activity-item`/`.flight-detail-row` · type-labels og knaptekster uændrede ("Se flydetaljer",
+"Læs om programmet", "Læs om udflugten", "Se udflugtsmuligheder") · **alle** folds åbner og
+lukker (`aria-expanded`, lukket = 0 px) · **klippede folds 1 → 0** (35528 @390) · 0 vandret
+overflow, 0 chips uden for kortet · alt uden for rejseplanen byte-identisk (hero, info-strip,
+hoteller, galleri, pris, CTA) · 35518 2 værelsesbokse · 35917 2 alternativ-bokse ·
+35649 vandflyver-transfer og hotel-chips identiske. Ingen `day-divider` eller fly-rutediagram
+i markup. Fold-animation også testet uden reduced-motion: 2297/2297 px åben, 0 px lukket.
+Unlock uændret (uden cookie og forkert cookie → gate; korrekt → rejse). `/admin` 200,
+`POST /admin/api/parse` og `GET /admin/api/trips` uden session → 401.
+`git diff 2480daf..8c4e301` = `docs/STATUS.md` + `src/app/globals.css`; ingen CSS-linjer uden
+for timeline-blokken. **Ikke set i browser:** tom flight-state (ingen af testrejserne har den).
 
 PR #28 + PR #27, 2026-09-14. PR #27 rebaset på `4b3e536` og kørt igen før merge:
 **test ✅ 133/133** i 10 filer · **typecheck ✅** · **lint ✅** · **build ✅**. Begge deploys READY.
@@ -531,7 +564,7 @@ Tidligere: PR #16 og #12 verificeret 2026-09-07; PR #5 og #9 2026-08-26.
 
 ## Næste anbefalede outcome
 
-1. **Vision 2.0 fase 2** — implementér timeline/program-løftet på `vision/v2-phase-2-timeline`,
-   mål før/efter på 34566, 35528, 35498, 35649, 35518, 35917, 35579 og 35132 × 390/768/1280,
-   åbn PR og afvent Rickos OK
+1. **Vision 2.0 fase 3 (hoteller)** — plan efter `docs/VISION-2.0-PLAN.md` og
+   `docs/design/VISUAL-DETAILS.md`; rør ikke værelsesfordeling (PR #2), noter (PR #21),
+   `align-items: start` (PR #16) eller alternativ-bokse (PR #7/#26). Afvent Rickos OK på planen
 2. **Backlog-prioritering** — vælg næste kundevendte forbedring fra listen ovenfor
