@@ -6,7 +6,10 @@
 export type ParseErrorKind = "billing" | "config" | "transient" | "unreadable";
 
 // Anthropic sender billing-fejl som rå API-tekst ("Your credit balance is too low…").
-const BILLING = /credit balance|billing|insufficient[_ ]quota|payment required/i;
+// Forbrugsgrænsen sat i Anthropic Console kommer som 400 invalid_request_error:
+// "You have reached your specified API usage limits…" (set i production sep. 2026).
+const BILLING =
+  /credit balance|billing|insufficient[_ ]quota|payment required|usage limits?|spend(ing)? limits?/i;
 // Manglende/forkert nøgle er en driftsfejl, ikke sælgerens PDF.
 const CONFIG = /ANTHROPIC_API_KEY|invalid x-api-key|authentication[_ ]error|not configured|ikke konfigureret/i;
 // Netværk og midlertidig utilgængelighed — et nyt forsøg plejer at virke.
@@ -42,7 +45,7 @@ export function classifyParseFailure(input: {
 
 const MESSAGES: Record<ParseErrorKind, string> = {
   billing:
-    "AI-parseren kan ikke køre lige nu, fordi API-kontoen mangler credits. Kontakt Ricko/admin.",
+    "AI-parseren kan ikke køre lige nu, fordi API-kontoen har nået sin forbrugsgrænse eller mangler credits. Kontakt Ricko/admin.",
   config: "AI-parseren er ikke sat rigtigt op lige nu. Kontakt Ricko/admin.",
   transient: "Rejseplanen kunne ikke læses lige nu. Prøv igen om lidt.",
   unreadable:

@@ -84,6 +84,27 @@ describe("classifyParseFailure", () => {
     // Anthropic sender billing som 400 — den må ikke ende som 'unreadable'
     expect(kindOf("Your credit balance is too low", { status: 400 })).toBe("billing");
   });
+
+  it("Anthropics forbrugsgrænse er billing, ikke en ulæselig PDF", () => {
+    // Det faktiske production-svar (14/9-2026), som før endte som 'unreadable'.
+    const faktisk =
+      '400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-10-01 at 00:00 UTC."},"request_id":"req_test"}';
+    expect(kindOf(faktisk, { status: 400 })).toBe("billing");
+    expect(kindOf(faktisk, { status: 400 })).not.toBe("unreadable");
+    expect(parseErrorMessage(kindOf(faktisk, { status: 400 }))).not.toMatch(/PDF/);
+    expect(kindOf("You have reached your spend limit", { status: 400 })).toBe("billing");
+  });
+
+  it("en almindelig ulæselig PDF er stadig 'unreadable' efter forbrugsgrænse-reglen", () => {
+    expect(
+      kindOf(
+        '400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.0.content.0.pdf.source.base64.data: The PDF specified was not valid."}}',
+        { status: 400 },
+      ),
+    ).toBe("unreadable");
+    // 'rate limit' er fortsat transient, ikke billing
+    expect(kindOf("Rate limit exceeded", { status: 429 })).toBe("transient");
+  });
 });
 
 describe("parseErrorMessage / parseErrorStatus", () => {
@@ -107,9 +128,9 @@ describe("parseErrorMessage / parseErrorStatus", () => {
     );
   });
 
-  it("billing-beskeden er bevaret ordret fra før", () => {
+  it("billing-beskeden nævner både forbrugsgrænse og credits", () => {
     expect(parseErrorMessage("billing")).toBe(
-      "AI-parseren kan ikke køre lige nu, fordi API-kontoen mangler credits. Kontakt Ricko/admin.",
+      "AI-parseren kan ikke køre lige nu, fordi API-kontoen har nået sin forbrugsgrænse eller mangler credits. Kontakt Ricko/admin.",
     );
   });
 
