@@ -410,6 +410,15 @@ section { width: 100%; }
 .section-header .line { flex: 1; height: 1px; background: var(--gold); opacity: 0.55; }
 
 /* ===== Timeline ===== */
+/* Vision 2.0 fase 2: visuel opgradering efter docs/design/VISUAL-DETAILS.md.
+   Kun styling — markup, tekster og data er uændrede. Dag-skillelinjer og
+   fly-rutediagram er bevidst udeladt (data har hverken day-nummer eller
+   strukturerede flyfelter). */
+:root {
+  --card-radius: 16px;
+  --ease-lux: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
 .timeline {
   position: relative;
   padding: 0 28px 24px;
@@ -421,6 +430,7 @@ section { width: 100%; }
   position: relative;
   padding-left: 42px;
 }
+/* Sporet fader ud i begge ender */
 .tl-track::before {
   content: "";
   position: absolute;
@@ -428,30 +438,36 @@ section { width: 100%; }
   top: 12px;
   bottom: 12px;
   width: 1px;
-  background: rgba(0, 78, 80, 0.18);
+  background: linear-gradient(180deg,
+    rgba(0, 78, 80, 0) 0%,
+    rgba(0, 78, 80, 0.20) 8%,
+    rgba(0, 78, 80, 0.20) 92%,
+    rgba(0, 78, 80, 0) 100%);
 }
 
 .tl-item {
   position: relative;
-  margin-bottom: 22px;
+  margin-bottom: 18px;
 }
+/* Prik: 18px, 1.5px kant i typefarven, 7px kerne, sand-halo så sporet læses rent */
 .tl-dot {
   position: absolute;
-  left: -42px;
-  top: 22px;
-  width: 22px;
-  height: 22px;
+  left: -40px;
+  top: 26px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--white);
-  border: 2px solid var(--rainforest);
+  border: 1.5px solid var(--rainforest);
+  box-shadow: 0 0 0 5px var(--sand-page);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .tl-dot::after {
   content: "";
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--rainforest);
 }
@@ -464,17 +480,29 @@ section { width: 100%; }
 
 .tl-card {
   background: var(--white);
-  padding: 20px 22px;
-  border-radius: 2px;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px rgba(0, 60, 60, 0.04);
+  padding: 26px 28px;
+  border-radius: var(--card-radius);
+  box-shadow:
+    0 1px 2px rgba(0, 60, 60, 0.04),
+    0 20px 44px -26px rgba(0, 50, 50, 0.32);
+  transition: transform 0.4s var(--ease-lux), box-shadow 0.4s var(--ease-lux);
 }
-@media (min-width: 760px) { .tl-card { padding: 24px 28px; } }
+@media (min-width: 760px) { .tl-card { padding: 30px 34px; } }
+/* Løft kun på enheder med rigtig hover og kun når bevægelse er tilladt */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .tl-card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 1px 2px rgba(0, 60, 60, 0.05),
+      0 30px 56px -28px rgba(0, 50, 50, 0.40);
+  }
+}
 
 .tl-type {
   font-size: 10px;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: 9px;
   font-weight: 500;
 }
 .tl-type.is-flight { color: var(--rainforest); }
@@ -486,49 +514,55 @@ section { width: 100%; }
   font-family: var(--font-cormorant), serif;
   font-style: italic;
   font-weight: 500;
-  font-size: 24px;
+  font-size: 26px;
   line-height: 1.15;
   color: var(--black);
   margin-bottom: 8px;
-  letter-spacing: -0.005em;
+  letter-spacing: 0;
 }
-@media (min-width: 760px) { .tl-title { font-size: 28px; } }
+@media (min-width: 760px) { .tl-title { font-size: 30px; } }
 
 .tl-details {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--grey-text);
   font-weight: 300;
   line-height: 1.55;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
+/* Chips: delikate outline-piller */
 .chips {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 .chip {
-  border: 1px solid var(--rainforest);
+  border: 1px solid rgba(0, 78, 80, 0.28);
   color: var(--rainforest);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  padding: 5px 11px;
-  border-radius: 100px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  padding: 6px 13px;
+  border-radius: 999px;
   text-transform: uppercase;
   font-weight: 500;
-  background: transparent;
+  background: rgba(0, 78, 80, 0.015);
+  white-space: nowrap;
+  transition: background 0.25s ease, border-color 0.25s ease;
+}
+@media (hover: hover) {
+  .chip:hover { background: rgba(0, 78, 80, 0.05); border-color: rgba(0, 78, 80, 0.4); }
 }
 
 .obs {
-  margin-top: 14px;
+  margin-top: 16px;
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  background: #fbf2dc;
+  background: linear-gradient(180deg, #fcf5e2 0%, #faf0d6 100%);
   border: 1px solid #ecd9a3;
   border-left: 3px solid var(--gold-soft);
-  padding: 12px 14px;
-  border-radius: 2px;
+  padding: 14px 16px;
+  border-radius: 12px;
 }
 .obs-icon {
   flex-shrink: 0;
@@ -563,43 +597,70 @@ section { width: 100%; }
   margin-bottom: 2px;
 }
 
+/* Foldeknap: rund outline-pille med guld chevron; fyldes ved hover og åben */
 .tl-toggle {
-  margin-top: 18px;
-  background: var(--rainforest);
-  color: var(--gold);
-  border: none;
+  margin-top: 20px;
+  background: transparent;
+  color: var(--rainforest);
+  border: 1px solid rgba(0, 78, 80, 0.35);
   text-transform: uppercase;
-  letter-spacing: 0.22em;
+  letter-spacing: 0.18em;
   font-size: 10.5px;
-  padding: 13px 18px;
+  padding: 12px 24px;
   cursor: pointer;
   font-family: var(--font-open-sans), sans-serif;
   font-weight: 500;
-  border-radius: 1px;
+  border-radius: 999px;
   min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 12px;
-  transition: background 0.2s ease;
+  transition: background 0.3s var(--ease-lux), color 0.3s var(--ease-lux),
+              border-color 0.3s var(--ease-lux), transform 0.3s var(--ease-lux);
 }
-.tl-toggle:hover { background: var(--rainforest-deep); }
 .tl-toggle .arrow {
   display: inline-block;
+  color: var(--gold);
+  font-size: 11px;
   transition: transform 0.3s ease;
-  font-size: 12px;
 }
 .tl-toggle.open .arrow { transform: rotate(180deg); }
-
-.tl-expand {
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+.tl-toggle.open {
+  background: var(--rainforest);
+  color: var(--sand);
+  border-color: var(--rainforest);
 }
-.tl-expand.open { max-height: 2000px; }
+@media (hover: hover) {
+  .tl-toggle:hover {
+    background: var(--rainforest);
+    color: var(--sand);
+    border-color: var(--rainforest);
+  }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .tl-toggle:hover { transform: translateY(-1px); }
+}
 
+/* Fold-ud animeres via grid-rækken (0fr → 1fr) i stedet for max-height,
+   så langt indhold aldrig klippes. Det gamle loft på 2000px skar bunden af
+   lange programmer på mobil (fx en 14-dages rundrejse ved 390px). */
+.tl-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  transition: grid-template-rows 0.45s var(--ease-lux);
+}
+.tl-expand.open { grid-template-rows: 1fr; }
+
+/* Luft + skillelinje ligger i ::before, så de folder med sammen til 0 —
+   padding/margin/border på selve grid-elementet kan ikke skrumpe med rækken. */
 .tl-expand-inner {
-  padding-top: 22px;
-  margin-top: 22px;
+  min-height: 0;
+}
+.tl-expand-inner::before {
+  content: "";
+  display: block;
+  margin: 24px 0;
   border-top: 1px solid var(--grey-light);
 }
 
@@ -704,8 +765,8 @@ section { width: 100%; }
 }
 
 .program-pdf-note {
-  margin-bottom: 22px;
-  padding: 12px 16px;
+  margin-bottom: 24px;
+  padding: 14px 16px;
   background: rgba(211, 167, 93, 0.08);
   border-left: 2px solid var(--gold);
   font-family: var(--font-open-sans), sans-serif;
@@ -714,46 +775,58 @@ section { width: 100%; }
   font-size: 13px;
   color: var(--grey-text);
   line-height: 1.55;
-  border-radius: 2px;
+  border-radius: 12px;
 }
 
 /* ===== Flight details (key/value list inside flight expand) ===== */
+/* Designets tekniske flytabel, lagt på de eksisterende label/value-rækker */
 .flight-details {
   display: grid;
-  gap: 12px;
+  margin: 0;
 }
 .flight-detail-row {
   display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 16px;
-  align-items: baseline;
-  padding-bottom: 12px;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  padding: 13px 0;
   border-bottom: 1px solid var(--grey-light);
 }
+.flight-detail-row:first-child { padding-top: 0; }
 .flight-detail-row:last-child {
   border-bottom: none;
   padding-bottom: 0;
 }
+@media (min-width: 560px) {
+  .flight-detail-row {
+    grid-template-columns: 132px 1fr;
+    gap: 20px;
+    align-items: baseline;
+  }
+}
 .flight-detail-label {
   color: var(--grey-text);
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  font-size: 9.5px;
   font-weight: 500;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .flight-detail-value {
-  color: var(--black);
+  color: var(--rainforest);
   font-size: 13.5px;
   font-weight: 300;
-  line-height: 1.55;
+  line-height: 1.5;
   white-space: pre-line;
   margin: 0;
 }
-@media (max-width: 759px) {
-  .flight-detail-row {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-card,
+  .tl-toggle,
+  .tl-toggle .arrow,
+  .tl-expand,
+  .chip { transition: none; }
 }
 
 /* ===== Hotels ===== */
