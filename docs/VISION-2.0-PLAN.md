@@ -1,11 +1,21 @@
 # Vision 2.0 — implementeringsplan
 
-> Status: **udkast til godkendelse**. Ingen kode ændret. Ingen app-filer rørt.
-> Skrevet 2026-09-10 mod main `7fd5caa`. **Revideret 2026-09-10** efter Rickos
-> indvending: galleriet er polish, ikke en reel Vision 2.0-start. Fase 1 er nu
-> Hero + rejseoverblik.
-> Planen oversætter **eksisterende, godkendt designmateriale** til konkrete PR'er.
-> Der er bevidst **ikke** lavet et nyt designforslag.
+> Skrevet 2026-09-10 mod main `7fd5caa`, revideret samme dag (fase 1 = Hero + rejseoverblik,
+> galleriet flyttet til fase 4). Planen oversætter **eksisterende, godkendt designmateriale**
+> til konkrete PR'er — der er bevidst ikke lavet et nyt designforslag.
+
+## Status (2026-09-15)
+
+| Fase | Indhold | Tilstand |
+|---|---|---|
+| **1** | Hero + rejseoverblik / førstehåndsindtryk | ✅ **Live** (PR #27) — implementeret efter Claude Design-handoffet, **ikke** efter fase 1-beskrivelsen nedenfor. Se historisk-note ved fase 1 |
+| **2** | Timeline / program | ✅ **Live** (PR #29) |
+| **3** | Hoteller | ✅ **Live** (PR #31) |
+| **4** | Billeder: galleri-polish + `next/image` | Næste |
+| **5** | Pris, praktisk info, CTA, mobil-polish | Senere |
+
+`docs/design/VISUAL-DETAILS.md` + `docs/design/DO-NOT-CHANGE.md` er den varige designkontrakt
+for fase 4-5 (se `docs/DECISIONS.md`) — ikke fase 1-afsnittet nedenfor, som er historisk.
 
 ## Kilder
 
@@ -148,15 +158,23 @@ og billeddriften. Nævnt her, så det ikke forveksles med et implementeringsgap.
 Hver fase er én PR, bygges på preview-branch og testes af Ricko før merge
 (jf. `docs/DECISIONS.md` 2026-07-21).
 
-| Fase | Indhold | Risiko |
-|---|---|---|
-| **1** | **Hero + rejseoverblik / førstehåndsindtryk** | Middel |
-| 2 | Timeline / program | Høj |
-| 3 | Hoteller | Høj |
-| 4 | Billeder: galleri-polish + `next/image` | Middel |
-| 5 | Pris, praktisk info, CTA, mobil-polish | Lav-middel |
+| Fase | Indhold | Risiko | Status |
+|---|---|---|---|
+| **1** | **Hero + rejseoverblik / førstehåndsindtryk** | Middel | ✅ Live (PR #27) |
+| 2 | Timeline / program | Høj | ✅ Live (PR #29) |
+| 3 | Hoteller | Høj | ✅ Live (PR #31) |
+| 4 | Billeder: galleri-polish + `next/image` | Middel | Næste |
+| 5 | Pris, praktisk info, CTA, mobil-polish | Lav-middel | Senere |
 
 ---
+
+> **Historisk — ikke hvad der blev implementeret.** Fase 1-beskrivelsen nedenfor er den
+> oprindelige plan, skrevet FØR Ricko leverede Claude Design-handoffet. Det faktisk
+> implementerede resultat (PR #27, `33505d2`) fulgte handoffet i `docs/design/VISUAL-DETAILS.md`
+> + `DO-NOT-CHANGE.md` i stedet — bl.a. er "rejseoverblikket som to-kolonne-blok" og den
+> guldkantede nætter-pille, som er beskrevet herunder, **ikke** en del af det, der er live.
+> Læs som baggrund for hvorfor fase 1 blev prioriteret som den blev, ikke som instruktion til
+> geninmplementering. Se `docs/STATUS.md` (PR #27) for hvad der faktisk ændrede sig.
 
 ## Fase 1 — Hero + rejseoverblik (første Vision 2.0-PR)
 

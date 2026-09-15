@@ -5,6 +5,8 @@ Format: beslutning · begrundelse · kilde/commit.
 
 | Dato | Beslutning | Begrundelse | Reference |
 |---|---|---|---|
+| 2026-09-15 | **Projekt-dokumentationen er strammet op** (Issue #30): `docs/STATUS.md` er kort og operationel uden PR-genfortællinger, GitHub (issues/PR'er) er backlog- og historik-sandheden, ekstern Cowork-fil er ikke længere omtalt som primær kilde | Docs var drevet fra virkeligheden og var blevet en token-kilde; agenter genlæste stale planer og gentog checks | Issue #30, denne PR |
+| 2026-09-12 | **Claude Design-handoffet er source of truth for Vision 2.0's visuelle udtryk** — `docs/design/VISUAL-DETAILS.md` + `DO-NOT-CHANGE.md` er den varige designkontrakt. Egen fortolkning af faseplanen (før handoffet) viger for handoffet, hvor de er uenige | Ricko leverede et konkret designhandoff efter fase 1's første udkast; forhindrer at senere faser genimplementerer før-handoff-designet | PR #27 (`33505d2`) |
 | 2026-09-10 | **Vision 2.0-faseplanen er godkendt** — `docs/VISION-2.0-PLAN.md`. Fase 1 er **Hero + rejseoverblik / førstehåndsindtryk**; galleriet flyttes til fase 4 som billedlayout-polish sammen med `next/image` | Galleriet findes allerede (hero + 3 billeder, manuelt valgte); bredde/spacing/radius/højde ændrer kundens oplevelse begrænset og er ikke en reel 2.0-start. Førstehåndsindtrykket er hvor "kunden skal visuelt forelske sig" afgøres | PR #25, `fa9c7fe` |
 | 2026-09-10 | **Vision 2.0 implementeres fasevis, én PR pr. fase** — ingen samlet redesign af `/[bookingId]` i én ombæring, og intet 2.0-arbejde uden særskilt PR pr. fase | Faserne rører filer som ni tidligere PR'er har ændret; små, testbare skridt holder regressionsrisikoen nede | PR #25 |
 | 2026-07-21 | **Vision 2.0 planlægges som preview-branch før merge** — intet 2.0-arbejde direkte på main | main = production; visuelt løft skal kunne testes af Ricko/sælgere isoleret | Denne branch (`docs/ai-operating-model`) |
@@ -27,4 +29,3 @@ Format: beslutning · begrundelse · kilde/commit.
 - **Unlock-kode ≠ booking_no?** (backlog #21) — UX-friktion vs. risiko ved videresendt link+kode
 - **Slug-override-feltet i admin** — har aldrig virket (serveren ignorerer det); fjern eller gør funktionelt
 - **`stash@{0}` image-library WIP** — genoptag, flyt til branch, eller drop
-- **Sletning af gamle branches** (`dest-admin`, `feature/individuelle-logins-profiles`, `feature/redigerbar-intro`, `gallery-upload-diagnose`) — alt er merged, men sletning afventer OK

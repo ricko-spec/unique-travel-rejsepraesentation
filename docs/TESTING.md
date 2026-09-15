@@ -4,15 +4,27 @@
 
 ```bash
 npm ci                                 # ALTID først på frisk checkout (sharp er dependency)
+npm test                               # vitest run — >130 tests i src/lib/*.test.ts
 npm run typecheck                      # tsc --noEmit — skal være grøn før push
-npm run lint                           # 0 fejl kræves; 4 kendte no-img-element-warnings er OK (PERF-3)
+npm run lint                           # 0 fejl kræves; 6 kendte no-img-element-warnings er OK (PERF-3)
 npm run build                          # ved ændringer i routes/config/deps (skriver .next lokalt)
 node scripts/check-schema-drift.mjs    # ved alt DB-arbejde; exit 0 = ingen drift (kræver .env.local)
 ```
 
-**Kendt hul:** der findes **ingen test-suite** — intet `test`-script, ingen testfiler (TEST-1 i
-`docs/ROADMAP.md`). Regressioner fanges i dag kun af typecheck/lint/build + manuel test.
-Oplagte første tests: JSON-salvage, Zanzibar-routing, dato-helpers (se backlog #14).
+Vitest-suiten dækker bl.a. JSON-salvage/normalisering (`normalize-trip`), dato-formatering,
+hotel-alternativer, room-allocations, transport-chips, destination-matching og
+parse-fejl-klassificering — se `src/lib/*.test.ts`.
+
+## Testniveau efter ændringstype
+
+Kør ikke mere end ændringen kræver:
+
+- **Docs-only:** ingen af ovenstående — `git diff --check` er nok.
+- **Ren lib/logik** (`src/lib/*.ts`): `npm test` + `npm run typecheck`.
+- **Komponent/route:** + `npm run lint` + `npm run build`.
+- **DB-arbejde:** + `node scripts/check-schema-drift.mjs`.
+- **Visuel ændring på kundesiden:** targeted browsermåling på de testbookinger opgaven
+  navngiver — ikke hele viewport-/bookingsmatrixen, medmindre opgaven eksplicit kræver det.
 
 ## Hvornår testes hvor
 
