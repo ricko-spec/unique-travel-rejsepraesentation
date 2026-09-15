@@ -340,6 +340,7 @@ section { width: 100%; }
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-top: 1px solid var(--grey-light);
+  border-radius: 18px 18px 0 0;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
   display: flex;
   gap: 10px;
@@ -977,12 +978,44 @@ section { width: 100%; }
 .price {
   background: var(--rainforest);
   color: var(--sand);
-  border-radius: 4px;
+  border-radius: var(--card-radius);
   padding: 36px 28px;
   text-align: center;
 }
 @media (min-width: 760px) {
   .price { padding: 56px 48px; text-align: left; display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 32px; }
+}
+
+/* Vision 2.0 fase 5: tom-tilstand — 21 af 237 aktive rejser har tom price.total.
+   Rådgiverhenvisningen (.pe-sub) er eksisterende price.note, ikke opdigtet tekst. */
+.price-empty {
+  background: var(--rainforest);
+  color: var(--sand);
+  border-radius: var(--card-radius);
+  padding: 48px 28px;
+  text-align: center;
+  box-shadow: 0 24px 50px -30px rgba(0, 50, 50, 0.5);
+}
+@media (min-width: 760px) { .price-empty { padding: 64px 48px; } }
+.price-empty .pe-line {
+  width: 40px;
+  height: 1px;
+  background: var(--gold);
+  margin: 0 auto 18px;
+}
+.price-empty .pe-text {
+  font-family: var(--font-cormorant), serif;
+  font-style: italic;
+  font-weight: 500;
+  color: #fff;
+  font-size: clamp(24px, 4vw, 32px);
+  line-height: 1.25;
+  margin-bottom: 12px;
+}
+.price-empty .pe-sub {
+  color: rgba(226, 220, 205, 0.7);
+  font-size: 13px;
+  font-weight: 300;
 }
 
 .price-label {
@@ -1040,6 +1073,7 @@ section { width: 100%; }
 .note {
   background: rgba(255, 255, 255, 0.55);
   border-left: 2px solid var(--gold);
+  border-radius: 12px;
   padding: 18px 22px;
   font-size: 13.5px;
   color: var(--black);
@@ -1067,14 +1101,15 @@ section { width: 100%; }
   background: var(--gold);
   color: var(--rainforest);
   padding: 28px;
-  border-radius: 4px;
+  border-radius: var(--card-radius);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px rgba(0, 60, 60, 0.05);
+  /* Designets guldglød i hvile — erstatter den tidligere teal-skygge */
+  box-shadow: 0 24px 50px -28px rgba(211, 167, 93, 0.7);
   transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   min-height: 88px;
 }
