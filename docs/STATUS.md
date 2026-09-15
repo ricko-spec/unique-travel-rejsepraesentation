@@ -1,24 +1,22 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-15** (PR #31 — Vision 2.0 fase 3 — hoteller — under review, IKKE merged endnu)
-
-## Under review — endnu ikke merged
-
-- **PR #31** (`vision/v2-phase-3-hotels`, fra main `c89dc62`) — **Vision 2.0 fase 3: hoteller.**
-  Kun `src/app/globals.css` og `src/components/trip/Hotels.tsx`. Hotelkortene løftet til
-  designets radius/skygge/hover/padding/typografi (`docs/design/VISUAL-DETAILS.md`), en
-  eksisterende klassefejl rettet (`.hotel-sub` → `.hotel-loc`), sektionsheaderen flyttet
-  uden for `.hotels`-griddet, og de indre bokses indrykning fulgt med til 28px — indhold,
-  farver og logik i boksene er 1:1 uændrede. Scope godkendt af Ricko 2026-09-15.
-  **PR #31 er åben og under review. Ikke merged.**
-  **test ✅ 133/133** · **typecheck ✅** · **lint ✅** (kun de kendte seks `no-img-element`)
-  · **build ✅**.
-  **Næste handling:** Rickos endelige OK → fast-forward-merge → production-verifikation.
+> Sidst opdateret: **2026-09-15** (PR #31 merged · Vision 2.0 fase 3 — hoteller — live)
 
 ## Production
 
-- **Commit:** `8c4e301` på `main` — Vercel READY (`dpl_CXGynSS8FgagwTd6C2pZUQR1ABip`), `https://rejseplaner.uniquetravel.dk`
+- **Commit:** `8c7ce5f` på `main` — Vercel READY (`dpl_7jCE9UzzkbQf7kruU1EJj2gtWHSU`), `https://rejseplaner.uniquetravel.dk`
+- **PR #31 (`vision/v2-phase-3-hotels`)** — merged (rebase, lineær historie) og
+  production-verificeret **2026-09-15**: main `c89dc62` → **`8c7ce5f`**.
+  **Vision 2.0 fase 3 er live.** Kun `src/app/globals.css` og `src/components/trip/Hotels.tsx`
+  (+ STATUS). Hotelkortene har designets 16px radius, lagdelte skygge, hover-løft, padding og
+  typografi; `.hotel-sub` → `.hotel-loc` (klassefejl rettet); sektionsheaderen flyttet uden for
+  `.hotels`-griddet; indre bokses indrykning fulgt med til 28px, ellers 1:1 uændrede.
+  Godkendt af Ricko 2026-09-15. Fuld detalje: se PR #31-beskrivelsen på GitHub.
+  **Smoke-test på production** (35518, 35917, 35579, read-only, cookie sat direkte): 200 OK,
+  hotelkort renderer med korrekt antal, radius 16px, `.hotel-loc` stylet, ingen vandret
+  overflow. Uden cookie: hotelområdet ikke i HTML (gate uændret).
+  **test ✅ 133/133** · **typecheck ✅** · **lint ✅** · **build ✅**.
 - **PR #29 (`vision/v2-phase-2-timeline`)** — merged (fast-forward) og production-verificeret
   **2026-09-14**: main `2480daf` → **`8c4e301`**. **Vision 2.0 fase 2 er live.**
   Kun CSS i timeline-blokken i `src/app/globals.css` (+ STATUS) — `Timeline.tsx`, tekster,
@@ -363,10 +361,9 @@ tre verificeret som ancestor af `origin/main` og uden ucommittede ændringer. M�
    brand-assets, og heroen viser nu det hvide logo med Q/palme fra
    `public/brand/unique-travel-logo-white.png`. **Mille har godkendt logoet** (meldt af
    Ricko 2026-09-09). Favicon er også løst — se PR #20
-3. Vision 2.0: **fase 1 og 2 er live** (PR #27 og #29, 2026-09-14). **Fase 3 (hoteller)
-   har en PR klar til review på `vision/v2-phase-3-hotels`, 2026-09-15 — IKKE merged, se
-   "Under review" ovenfor.** Fase 4 (billeder + `next/image`) og 5 (pris/CTA/mobil) er ikke
-   påbegyndt
+3. Vision 2.0: **fase 1, 2 og 3 er live** (PR #27, #29, #31 — sidst 2026-09-15, hoteller).
+   Fase 4 (billeder + `next/image`) og 5 (pris/CTA/mobil) er ikke påbegyndt. **Sat på pause**
+   for GitHub Issue #30 (projekt-refresh og AI-workflow-opstramning) — se næste punkt
 4. Branch-oprydning — **fuldført 2026-08-26** (kun WIP/aktive branches består)
 
 ## Backlog (fra august-review)
@@ -579,7 +576,7 @@ Tidligere: PR #16 og #12 verificeret 2026-09-07; PR #5 og #9 2026-08-26.
 
 ## Næste anbefalede outcome
 
-1. **Rickos review af `vision/v2-phase-3-hotels`** — PR er oprettet og afventer OK. Ved
-   godkendelse: fast-forward-merge, production-verifikation, branch-/worktree-oprydning
-2. **Vision 2.0 fase 4 (billeder + `next/image`)** når fase 3 er landet
+1. **GitHub Issue #30** — projekt-refresh og AI-workflow-opstramning. Næste kapitel;
+   Vision 2.0 fase 4 sættes bevidst på pause til Issue #30 er afklaret
+2. **Vision 2.0 fase 4 (billeder + `next/image`)** når Issue #30 er landet
 3. **Backlog-prioritering** — vælg næste kundevendte forbedring fra listen ovenfor
