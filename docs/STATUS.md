@@ -10,9 +10,15 @@
   (denne fil hardcoder bevidst ikke en SHA — den bliver stale ved næste merge):
   [commits på main](https://github.com/ricko-spec/unique-travel-rejsepraesentation/commits/main) ·
   [Vercel-deploys](https://vercel.com/unique-travel/unique-travel-rejsepraesentation/deployments).
-- **Aktivt kapitel:** ingen — Issue #30 (projekt-refresh) er afsluttet via PR #33.
-  **Næste produktkapitel er Vision 2.0 fase 4** (billeder: galleri-polish + `next/image`).
-  Detaljer og faseplan: `docs/VISION-2.0-PLAN.md`.
+- **Aktivt kapitel:** Vision 2.0 fase 4 (billeder: galleri-polish + `next/image`),
+  Issue #34 — implementeret på branchen `vision/v2-phase-4-images`, **under review**.
+  Denne fil hardcoder bevidst intet PR-nummer/merget-tidspunkt (bliver forkert ved næste
+  merge) — se [åbne PR'er](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pulls)
+  for aktuel status. Scope: `DestinationGallery` ind i designkontrakten (1180px-bredde,
+  28/56/72px padding, 20/24px gap, 16px radius, 4:3-fliser, 1→3 kolonner fra 760px);
+  hero-foto (LCP/priority) og hero-logo på `next/image`. Kundevendte `no-img-element`-
+  warnings 0 (2 tilbage, begge i admin — uden for scope). `npm test`/typecheck/lint/build
+  grønne. Detaljer og faseplan: `docs/VISION-2.0-PLAN.md`.
 
 ## Seneste 3 relevante ændringer
 
@@ -47,4 +53,5 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-Vision 2.0 fase 4 — billeder: galleri-polish + `next/image` (se `docs/VISION-2.0-PLAN.md`).
+Rickos review af fase 4-PR'en (Issue #34) → merge når godkendt → production-verifikation
+→ Vision 2.0 fase 5 (pris/praktisk/CTA/mobil-polish).

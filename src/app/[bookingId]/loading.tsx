@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 export default function Loading() {
   return (
     <div className="page">
@@ -6,12 +8,13 @@ export default function Loading() {
         <div className="hero-overlay" />
         <div className="hero-inner">
           <div className="hero-top">
-            <img
+            <Image
               className="hero-logo"
               src="/brand/unique-travel-logo-white.png"
               alt="Unique Travel"
               width={987}
               height={332}
+              sizes="(min-width: 760px) 168px, 124px"
             />
           </div>
           <div className="hero-body">
