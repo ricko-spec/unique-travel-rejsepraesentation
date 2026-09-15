@@ -11,8 +11,8 @@
 | **1** | Hero + rejseoverblik / førstehåndsindtryk | ✅ **Live** (PR #27) — implementeret efter Claude Design-handoffet, **ikke** efter fase 1-beskrivelsen nedenfor. Se historisk-note ved fase 1 |
 | **2** | Timeline / program | ✅ **Live** (PR #29) |
 | **3** | Hoteller | ✅ **Live** (PR #31) |
-| **4** | Billeder: galleri-polish + `next/image` | Næste |
-| **5** | Pris, praktisk info, CTA, mobil-polish | Senere |
+| **4** | Billeder: galleri-polish + `next/image` | ✅ **Live** (PR #35) |
+| **5** | Pris, praktisk info, CTA, mobil-polish | Næste |
 
 `docs/design/VISUAL-DETAILS.md` + `docs/design/DO-NOT-CHANGE.md` er den varige designkontrakt
 for fase 4-5 (se `docs/DECISIONS.md`) — ikke fase 1-afsnittet nedenfor, som er historisk.
@@ -163,8 +163,8 @@ Hver fase er én PR, bygges på preview-branch og testes af Ricko før merge
 | **1** | **Hero + rejseoverblik / førstehåndsindtryk** | Middel | ✅ Live (PR #27) |
 | 2 | Timeline / program | Høj | ✅ Live (PR #29) |
 | 3 | Hoteller | Høj | ✅ Live (PR #31) |
-| 4 | Billeder: galleri-polish + `next/image` | Middel | Næste |
-| 5 | Pris, praktisk info, CTA, mobil-polish | Lav-middel | Senere |
+| 4 | Billeder: galleri-polish + `next/image` | Middel | ✅ Live (PR #35) |
+| 5 | Pris, praktisk info, CTA, mobil-polish | Lav-middel | Næste |
 
 ---
 

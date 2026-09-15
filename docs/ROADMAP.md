@@ -14,15 +14,13 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
 - README nævner nu AGENTS.md/CLAUDE.md-strukturen (var åbent punkt, løst)
 - **Projekt-refresh — GitHub som sandhed, kortere docs**
   ([Issue #30](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/30), PR #33)
+- **Vision 2.0 fase 4** — billeder: galleri-polish + `next/image`, lukker PERF-3
+  ([Issue #34](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/34), PR #35)
 
 ## Næste
 
-1. **Vision 2.0 fase 4** — billeder: galleri-polish + `next/image` (lukker PERF-3)
+1. **Vision 2.0 fase 5** — pris, praktisk info, CTA og mobil-polish. Detaljer: `docs/VISION-2.0-PLAN.md`
 2. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
-
-## Senere
-
-**Vision 2.0 fase 5** — pris, praktisk info, CTA og mobil-polish. Detaljer: `docs/VISION-2.0-PLAN.md`.
 
 ## Backlog (uprioriteret — se GitHub Issues for fuld liste)
 
