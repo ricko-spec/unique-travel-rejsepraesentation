@@ -43,8 +43,10 @@ og sælgeren bruger under et minut på at lave den.
 
 ## Vision 2.0
 
-Planlagt som **næste visuelle løft** af kundepræsentationen — **ikke implementeret, ikke påbegyndt**.
-Referencemateriale ligger i `Brandfarver og præsentationsside-design/v2-redesign/` (uden for repoet).
-Kendt hensigt: bl.a. galleri-forbedringer (galleriet skjuler sig allerede automatisk ved 0 billeder;
-en tærskel-regel er triviel at tilføje). **Scope og indhold: KRÆVER RICKO** — planen skal laves som
-preview-branch før merge (se `docs/DECISIONS.md` og `docs/ROADMAP.md`).
+Visuelt løft af kundepræsentationen efter Claude Design-handoffet, som er source of truth for
+udtrykket (`docs/design/VISUAL-DETAILS.md` + `DO-NOT-CHANGE.md`; se `docs/DECISIONS.md`).
+
+**Status:** fase 1 (hero), fase 2 (timeline) og fase 3 (hoteller) er **live** — se `docs/STATUS.md`
+for hvilke PR'er. **Næste:** fase 4 (billeder: galleri-polish + `next/image`), derefter fase 5
+(pris/praktisk/CTA + mobil-polish). Fuld faseplan, filer, risici og acceptkriterier pr. fase:
+`docs/VISION-2.0-PLAN.md`.

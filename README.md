@@ -48,7 +48,9 @@ npm run dev
 ```
 
 - `/admin` — log ind med din email + adgangskode, upload PDF, opret link. `/admin/profil` — rediger eget navn, telefon og rådgivernavn.
-- `/[slug]` — den genererede kundeside (slug = booking-nr).
+- `/[slug]` — den genererede kundeside. **Slug er et tilfældigt 12-tegns token, IKKE
+  bookingnummeret** — bookingnummeret er den adgangskode kunden selv taster ind på siden
+  (AccessGate), ikke en del af URL'en.
 
 ## Stack
 

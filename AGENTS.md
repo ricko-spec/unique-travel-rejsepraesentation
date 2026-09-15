@@ -15,6 +15,14 @@ altid forud. Kilder: `docs/PROJECT_PROFILE.md` (tilstand) og `docs/SYSTEM-ARKITE
 | **Claude Code** | Implementering: kode, migrationer, checks, preview-deploys via branch-push. Se `CLAUDE.md` |
 | **Mille** | Drift af destinationsbilleder (eneste bruger af upload-flowet). Ikke en agent |
 
+## Opgavegrundlag og token-disciplin
+
+- En **GitHub issue eller PR er opgavens grundlag** — undgå store copy/paste-prompts uden om GitHub.
+- Ved sessionstart: læs `docs/STATUS.md` + den aktuelle issue/PR + de filer opgaven navngiver.
+  **Scan ikke hele repoet** "for en sikkerheds skyld" — issue/PR-scopet afgrænser hvad der skal læses.
+- Stop og spørg Ricko frem for at gætte videre, og frem for at gentage samme check eller
+  handling uden ny information (se Stopbetingelser nedenfor).
+
 ## Git-regler
 
 1. **`main` = production.** Hvert push til main er en produktionsudgivelse (Vercel auto-deploy).
@@ -49,9 +57,9 @@ altid forud. Kilder: `docs/PROJECT_PROFILE.md` (tilstand) og `docs/SYSTEM-ARKITE
 
 ## Testkrav
 
-Før push af kode-ændringer (ikke ren markdown): `npm run typecheck` + `npm run lint` grønne;
-`npm run build` ved ændringer i routes/config; drift-tjek ved DB-arbejde.
-Fuldt overblik og manuelle testlister: `docs/TESTING.md`. Der findes ingen automatiske tests (kendt hul).
+**Vitest-suiten findes og skal køres** (`npm test` = `vitest run`, >130 tests i `src/lib/*.test.ts`).
+Testniveau afhænger af ændringstype (docs-only → lib/logik → komponent/route → DB) — se
+`docs/TESTING.md` for den præcise matrix, så fuld build/browsermatrix ikke køres uden grund.
 
 ## Stopbetingelser — stop og spørg Ricko når:
 

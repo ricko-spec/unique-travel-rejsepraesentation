@@ -1,47 +1,46 @@
 # ROADMAP
 
-Prioriteret. Fuld backlog-detalje med severity/estimat: `OPGAVER-TIL-CLAUDE-CODE.md`
-(Cowork-mappen, uden for repo). Numre (#N) refererer dertil.
+Prioriteret. **GitHub issues er backlog-sandheden** — ikke en ekstern fil. Lukkede punkter og
+deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gengivet her.
 
-## Lukket (2026-06/07)
+## Lukket (seneste)
 
-- Sikkerhedsbatch SEC-1/SEC-2/SEC-3/DATA-1 + central writeAudit
-- Password-skift med nuværende-kode-verifikation, rate-limit og audit
-- Destinations-upload: signed URL, `_staging`, finalize, 50 MB, WebP (sharp)
-- "Opret destination" i admin + rettet hjælpetekst
-- DB-versionering (migrationer 001-008) + mekanisk schema-drift-check
-- `docs/SYSTEM-ARKITEKTUR.md` (komplet + ajourført)
+- Sikkerhedsbatch, password-flow, destinations-upload, DB-versionering (migrationer 001-008)
+  + mekanisk schema-drift-check — se `docs/SYSTEM-ARKITEKTUR.md`
+- `trips.created_by` ved oprettelse + `parse_failures` dead-letter-logging (PR #5)
+- Egentlig test-suite (Vitest, `npm test`, >130 tests) — se `docs/TESTING.md`
+- Pæn dansk fejlbesked ved ugyldig PDF (PR #23)
+- Vision 2.0 fase 1-3: hero, timeline, hoteller (PR #27, #29, #31)
+- README nævner nu AGENTS.md/CLAUDE.md-strukturen (var åbent punkt, løst)
 
 ## Næste
 
-1. **AI Project Automation Kit-dokumentation** — denne branch (`docs/ai-operating-model`);
-   godkendelse + merge er sidste skridt
-2. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
-3. **Vision 2.0 FASE 1 — Hero + rejseoverblik** — faseplanen er godkendt 2026-09-10
-   (`docs/VISION-2.0-PLAN.md`, PR #25). Bygges på preview-branch, testes af Ricko/sælgere
-   før merge (jf. beslutning 2026-07-21). Én PR pr. fase; intet samlet redesign af
-   `/[bookingId]`
+1. **[Issue #30](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/30) —
+   projekt-refresh** (denne PR): GitHub som sandhed, kortere docs, AI-workflow-opstramning
+2. **Vision 2.0 fase 4** — billeder: galleri-polish + `next/image` (lukker PERF-3)
+3. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
-## Senere (Vision 2.0, fase 2-5)
+## Senere
 
-- **Fase 2** Timeline/program · **Fase 3** Hoteller · **Fase 4** Billeder: galleri-polish +
-  `next/image` (lukker PERF-3) · **Fase 5** Pris/praktisk/CTA + mobil-polish.
-  Filer, risici, testbookinger og acceptkriterier står pr. fase i `docs/VISION-2.0-PLAN.md`
+**Vision 2.0 fase 5** — pris, praktisk info, CTA og mobil-polish. Detaljer: `docs/VISION-2.0-PLAN.md`.
 
-## Backlog (klar til at tage, prioriteret bud)
+## Backlog (uprioriteret — se GitHub Issues for fuld liste)
 
-- **#5 `created_by` ved trip-oprettelse** — DB-siden klar (migration 006); én linje i upsert + UI senere
-- **#6 `parse_failures`-integration** — dead-letter-tabellen (007) er klar; insert i parse-routens fejlgrene + oprydnings-job
 - **Hotel-website-links** på trip-detalje-siden — handoff klar (`handoff-hotel-links.md`)
-- **TEST-1: egentlig test-suite** — Vitest + JSON-salvage/Zanzibar-routing/dato-tests; kendt hul (ingen tests overhovedet)
-- **PERF-3: billed-performance** — `next/image` på hero/galleri (de 4 kendte lint-warnings)
-- **Storage bucket-config i drift-tjekket** — udvid `schema_snapshot()`/scriptet til `storage.buckets` (lukker den kendte blinde vinkel)
-- Småting: ERR-1 (max_tokens-detektion), ERR-3 (fejltilstand i trips-listen), PERF-1 (trim dashboard-select), SEC-4 (rate-limit + magic bytes på parse), SEC-6 (envDiagnostics ud af fejlsvar), PAIN-1 (deploy-SHA i admin-footer), staging-oprydning som rigtig cron
+- **Vandflyver-tag** — dedikeret markør/ikon for vandflyver-transfers (transport-chips blev
+  bevidst fjernet fra hotel-elementer i PR #24; ønsket er et visuelt løft, ikke ny information)
+- **Storage bucket-config i drift-tjekket** — udvid drift-scriptet til `storage.buckets`
+  (kendt blind vinkel)
+- **Supabase custom SMTP** — fjerner Supabase' delte mail-rate-limit på recovery-/system-mails
+- **`parse_failures`-oprydning** — pg_cron-job der sletter rækker > 30 dage
+- Småting: ERR-1 (max_tokens-detektion), ERR-3 (fejltilstand i trips-listen),
+  PERF-1 (trim dashboard-select), SEC-4 (rate-limit + magic bytes på parse),
+  SEC-6 (envDiagnostics ud af fejlsvar), PAIN-1 (deploy-SHA i admin-footer),
+  staging-oprydning som rigtig cron
 
-## Skal besluttes af Ricko (blokerer det de står foran)
+## Skal besluttes af Ricko
 
-- **Unlock-kode ≠ booking_no?** (#21) — sikkerheds-/UX-afvejning
-- **Slug-override-feltet** — fjern eller gør funktionelt (har aldrig virket)
+- **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning
+- **Slug-override-feltet i admin** — har aldrig virket (serveren ignorerer det); fjern eller
+  gør funktionelt
 - **`stash@{0}` image-library WIP** — genoptag, flyt til branch, eller drop
-- **Sletning af merged branches** — oprydning afventer OK
-- **README-opdatering** — README nævner ikke AGENTS/kit-strukturen endnu (forslag, se STATUS)

@@ -32,3 +32,15 @@ Følg de fælles agent-regler i **@AGENTS.md** — de vinder ved konflikt.
 
 Merge/deploy, destruktive handlinger, udokumenterede designbeslutninger, adgang uden for
 `docs/ACCESS_MATRIX.md`, uklare check-fejl, alt markeret KRÆVER RICKO.
+
+## Modelvalg
+
+- **Haiku** — simple opslag, ren dokumentation der ikke kræver krydstjek mod flere kilder.
+- **Sonnet** — standard til kode, debugging og normale ændringer. Default med mindre andet er sagt.
+- **Opus** — kun svær arkitektur, sikkerhed eller afvejninger der spænder over mange filer.
+
+## Stop mod loops
+
+Kør ikke samme check eller samme handling gentagne gange uden ny information imellem.
+Ramler du ind i en fejl du ikke forstår — spørg Ricko, gæt ikke videre. Scan ikke bredt i
+repoet, når opgaven (issue/PR) allerede navngiver de relevante filer.
