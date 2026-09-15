@@ -102,7 +102,7 @@ export default async function TripPage({ params }: { params: { bookingId: string
       <PriceAndNote trip={trip} />
       <ContactCTA trip={trip} />
       <Footer />
-      <ActionBar />
+      <ActionBar hasContact={!!trip.advisorEmail} />
     </div>
   );
 }
