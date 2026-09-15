@@ -16,11 +16,16 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
   ([Issue #30](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/30), PR #33)
 - **Vision 2.0 fase 4** — billeder: galleri-polish + `next/image`, lukker PERF-3
   ([Issue #34](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/34), PR #35)
+- **Vision 2.0 fase 5 — pris, praktisk info, CTA og mobil-polish. Vision 2.0 afsluttet
+  (fase 1-5 alle live)**
+  ([Issue #36](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/36), PR #37)
 
 ## Næste
 
-1. **Vision 2.0 fase 5** — pris, praktisk info, CTA og mobil-polish. Detaljer: `docs/VISION-2.0-PLAN.md`
-2. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
+Intet forudbestemt — Vision 2.0 var det planlagte produktkapitel og er nu afsluttet.
+Næste punkt vælges af Ricko fra backloggen nedenfor eller GitHub Issues.
+
+1. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
 ## Backlog (uprioriteret — se GitHub Issues for fuld liste)
 
