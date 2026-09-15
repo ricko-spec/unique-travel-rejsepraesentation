@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import type { Trip } from "@/lib/types";
 import { formatMediumDateDK } from "@/lib/format";
 import { HeroIntro } from "./HeroIntro";
@@ -19,10 +20,15 @@ export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null
     <section className="hero">
       <div className="hero-fallback" />
       {heroPhoto && photoOk && (
-        <img
+        // Above-the-fold/LCP-billede: priority + fetchPriority slår lazy-load fra.
+        // onError bevarer den eksisterende gradient-fallback uændret (DO-NOT-CHANGE §2).
+        <Image
           className="hero-photo-img"
           src={heroPhoto}
           alt=""
+          fill
+          sizes="100vw"
+          priority
           onError={() => setPhotoOk(false)}
         />
       )}
@@ -30,12 +36,13 @@ export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null
       <div className="hero-ornament" />
       <div className="hero-inner">
         <div className="hero-top">
-          <img
+          <Image
             className="hero-logo"
             src="/brand/unique-travel-logo-white.png"
             alt="Unique Travel"
             width={987}
             height={332}
+            sizes="(min-width: 760px) 168px, 124px"
           />
           <a className="hero-kontakt-btn" href="#kontakt">
             Kontakt

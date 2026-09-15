@@ -829,6 +829,34 @@ section { width: 100%; }
   .chip { transition: none; }
 }
 
+/* ===== Gallery ===== */
+/* Vision 2.0 fase 4: galleriet ind i designsystemet efter
+   docs/design/VISUAL-DETAILS.md § Galleri — 1180px sidebredde (arvet fra
+   .page, ingen egen smallere max-width), sidens 28/56/72px padding-rytme,
+   1 kolonne mobil → 3 fra 760px, 20/24px gap, 4:3 fliser, --card-radius.
+   Enkelt-/dobbeltbillede-rejser beholder en fornuftig 1/2-kolonne-visning
+   i stedet for en tredjedel-bred flise med tomt rum ved siden af. */
+.gallery {
+  padding: 0 28px;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 760px) {
+  .gallery { padding: 0 56px; gap: 24px; }
+  .gallery.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .gallery.cols-3 { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1024px) { .gallery { padding: 0 72px; } }
+.gallery-item {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  background: var(--sand-page);
+}
+.gallery-photo { object-fit: cover; }
+
 /* ===== Hotels ===== */
 .hotels {
   padding: 0 28px;
