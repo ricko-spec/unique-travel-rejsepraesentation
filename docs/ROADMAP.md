@@ -12,13 +12,13 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
 - Pæn dansk fejlbesked ved ugyldig PDF (PR #23)
 - Vision 2.0 fase 1-3: hero, timeline, hoteller (PR #27, #29, #31)
 - README nævner nu AGENTS.md/CLAUDE.md-strukturen (var åbent punkt, løst)
+- **Projekt-refresh — GitHub som sandhed, kortere docs**
+  ([Issue #30](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/30), PR #33)
 
 ## Næste
 
-1. **[Issue #30](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/30) —
-   projekt-refresh** (denne PR): GitHub som sandhed, kortere docs, AI-workflow-opstramning
-2. **Vision 2.0 fase 4** — billeder: galleri-polish + `next/image` (lukker PERF-3)
-3. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
+1. **Vision 2.0 fase 4** — billeder: galleri-polish + `next/image` (lukker PERF-3)
+2. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
 ## Senere
 

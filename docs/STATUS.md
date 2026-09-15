@@ -6,28 +6,28 @@
 
 ## Nu
 
-- **main = production:** `b069880` — Vercel READY (`dpl_4NoCYaG3UGN7oKFTmdUkjiT54LuM`),
-  `https://rejseplaner.uniquetravel.dk`
-- **Aktivt kapitel:** [GitHub Issue #30](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/30)
-  — projekt-refresh (docs/process only, denne PR). Ingen produktkode ændres.
-- **Vision 2.0:** fase 1 (hero), 2 (timeline) og 3 (hoteller) er **live**. Fase 4
-  (billeder + `next/image`) er næste produktkapitel — sat på pause til Issue #30 er landet.
+- **Production:** Vision 2.0 fase 1-3 live. Aktuel main/deploy verificeres i GitHub/Vercel
+  (denne fil hardcoder bevidst ikke en SHA — den bliver stale ved næste merge):
+  [commits på main](https://github.com/ricko-spec/unique-travel-rejsepraesentation/commits/main) ·
+  [Vercel-deploys](https://vercel.com/unique-travel/unique-travel-rejsepraesentation/deployments).
+- **Aktivt kapitel:** ingen — Issue #30 (projekt-refresh) er afsluttet via PR #33.
+  **Næste produktkapitel er Vision 2.0 fase 4** (billeder: galleri-polish + `next/image`).
   Detaljer og faseplan: `docs/VISION-2.0-PLAN.md`.
 
 ## Seneste 3 relevante ændringer
 
-1. **[PR #31](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/31) —
+1. **[PR #33](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/33) —
+   projekt-refresh (Issue #30), 2026-09-15.** Docs/process only: `STATUS.md` kortet fra
+   582 til ~50 linjer, GitHub (issues/PR'er) er nu backlog- og historik-sandheden i stedet
+   for en ekstern Cowork-fil, flere stale udsagn rettet (test-suite, Vision 2.0-status,
+   slug vs. bookingnummer). Ingen produktkode ændret.
+2. **[PR #31](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/31) —
    Vision 2.0 fase 3 (hoteller), 2026-09-15.** Hotelkort løftet til designkontrakten
    (16px radius, lagdelt skygge, hover-løft, padding, typografi); `.hotel-sub` → `.hotel-loc`
-   klassefejl rettet; sektionsheader flyttet uden for griddet. `main c89dc62 → 8c7ce5f`.
-2. **[PR #29](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/29) —
+   klassefejl rettet; sektionsheader flyttet uden for griddet.
+3. **[PR #29](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/29) —
    Vision 2.0 fase 2 (timeline), 2026-09-14.** Rejseplanen restylet efter designkontrakten;
    fold-ud animeres uden højdeloft (rettede en klipningsfejl på lange programmer).
-   `main 2480daf → 8c4e301`.
-3. **[PR #27](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/27) —
-   Vision 2.0 fase 1 (hero), 2026-09-14.** Hero + info-strip rettet efter Claude
-   Design-handoffet, som blev source of truth for udtrykket (se `docs/DECISIONS.md`).
-   `main 4b3e536 → 2480daf`.
 
 Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pulls?q=is%3Apr+is%3Amerged).
 
@@ -47,4 +47,4 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-Rickos OK på denne PR (Issue #30) → merge → Vision 2.0 fase 4 (billeder + `next/image`).
+Vision 2.0 fase 4 — billeder: galleri-polish + `next/image` (se `docs/VISION-2.0-PLAN.md`).
