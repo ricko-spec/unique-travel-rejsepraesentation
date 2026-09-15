@@ -8,14 +8,17 @@ import { SectionHeader } from "./SectionHeader";
 
 export function Hotels({ hotels }: { hotels: Hotel[] }) {
   return (
-    <section className="hotels">
+    <section>
       <SectionHeader label="Jeres hoteller" />
+      {/* Headeren ligger uden for griddet, som i designet — ellers optager den
+          første celle i 2-kolonne-layoutet og skubber første kort til højre. */}
+      <div className="hotels">
         {hotels.map((h, i) => (
           <div className="hotel" key={i}>
             <div className="hotel-head">
               <div>
                 <div className="hotel-name">{h.name}</div>
-                <div className="hotel-sub">{h.location}</div>
+                <div className="hotel-loc">{h.location}</div>
               </div>
               <div className="hotel-nights">
                 <div className="hotel-nights-num">{h.nights}</div>
@@ -47,7 +50,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                 værelse-for-værelse-fordelingen uden PDF'en. Én enkelt linje
                 beholder den diskrete visning, så par-rejser forbliver rolige. */}
             {h.roomAllocations && h.roomAllocations.length > 1 && (
-              <div className="mx-6 mb-5 mt-1 p-4 bg-rainforest/5 border border-rainforest/20 rounded-lg">
+              <div className="mx-7 mb-5 mt-1 p-4 bg-rainforest/5 border border-rainforest/20 rounded-lg">
                 <div className="text-xs uppercase tracking-wider text-rainforest/80 mb-3 font-medium">
                   Værelsesfordeling · {h.roomAllocations.length} værelser
                 </div>
@@ -70,7 +73,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
               </div>
             )}
             {h.roomAllocations && h.roomAllocations.length === 1 && (
-              <div className="px-6 pb-5">
+              <div className="px-7 pb-5">
                 <div className="text-xs uppercase tracking-wider text-rainforest/70 mb-2 font-medium">
                   Værelsesfordeling
                 </div>
@@ -87,7 +90,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
               </div>
             )}
             {h.isPackage && h.subHotels && h.subHotels.length > 0 && (
-              <div className="mx-6 mb-5 mt-1 p-4 bg-rainforest/5 border border-rainforest/20 rounded-lg">
+              <div className="mx-7 mb-5 mt-1 p-4 bg-rainforest/5 border border-rainforest/20 rounded-lg">
                 <div className="text-xs uppercase tracking-wider text-rainforest/80 mb-3 font-medium">
                   Hotellerne på pakke-rejsen
                 </div>
@@ -104,7 +107,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
               </div>
             )}
             {h.included && h.included.length > 0 && (
-              <div className="px-6 pb-3">
+              <div className="px-7 pb-3">
                 <div className="text-xs uppercase tracking-wider text-rainforest/70 mb-2 font-medium">
                   Inkluderet i prisen
                 </div>
@@ -116,7 +119,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
               </div>
             )}
             {h.notIncluded && h.notIncluded.length > 0 && (
-              <div className="px-6 pb-3">
+              <div className="px-7 pb-3">
                 <div className="text-xs uppercase tracking-wider text-rainforest/70 mb-2 font-medium">
                   Ikke inkluderet
                 </div>
@@ -134,7 +137,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                 sekundære i forhold til værelsesfordelingens 14px; leading-relaxed
                 giver luften der gør flerlinjede noter læsbare uden at ombryde dem. */}
             {h.notes && h.notes.length > 0 && (
-              <div className="px-6 pb-5">
+              <div className="px-7 pb-5">
                 {h.notes.map((note, idx) => (
                   <p key={idx} className="text-xs leading-relaxed text-grey-text italic mt-1.5">
                     {note}
@@ -143,7 +146,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
               </div>
             )}
             {(h.alternatives ?? []).map((alt, altIdx) => (
-              <div key={altIdx} className="mx-6 mb-5 mt-1 p-4 bg-sand-page/60 border border-sand rounded-lg">
+              <div key={altIdx} className="mx-7 mb-5 mt-1 p-4 bg-sand-page/60 border border-sand rounded-lg">
                 <div className="text-xs uppercase tracking-wider text-gold mb-2 font-medium">
                   Dette resort kunne også være noget for jer
                 </div>
@@ -171,6 +174,7 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
             ))}
           </div>
         ))}
+      </div>
     </section>
   );
 }
