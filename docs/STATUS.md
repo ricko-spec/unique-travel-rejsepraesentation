@@ -1,38 +1,20 @@
 # STATUS
 
 > Læs denne før hver arbejdsrunde. Opdatér den ved hvert milepæl og inden en session slutter.
-> Sidst opdateret: **2026-09-15** (PR til Vision 2.0 fase 3 — hoteller — klar til Rickos review, IKKE merged endnu)
+> Sidst opdateret: **2026-09-15** (PR #31 — Vision 2.0 fase 3 — hoteller — under review, IKKE merged endnu)
 
 ## Under review — endnu ikke merged
 
-- **`vision/v2-phase-3-hotels`** (fra main `c89dc62`) — **Vision 2.0 fase 3: hoteller.**
-  Kun `src/app/globals.css` og `src/components/trip/Hotels.tsx`. Scope godkendt af Ricko
-  2026-09-15 mod `docs/VISION-2.0-PLAN.md` og `docs/design/VISUAL-DETAILS.md`.
-  **Ændring:** hotelkortene løftet til designets 16px radius, lagdelte skygge og hover-løft
-  (kun `hover: hover` + uden `prefers-reduced-motion`), designets header-/body-padding
-  (26/28 og 26/28/30) og typografi (navn 26px, nætter-tal 48px). Rettet en eksisterende
-  klassefejl: `.hotel-sub` fandtes ingen steder i CSS'en, så lokationen har stået ustylet
-  siden `ba50857` — nu `.hotel-loc` (designets 10px caps, 60 % sand). Sektionsheaderen
-  flyttet uden for `.hotels`-griddet (den lå som en gridcelle og skubbede første kort til
-  højre kolonne fra 1024px — ikke i designet, rettet efter Rickos OK). De indre bokse
-  (værelsesfordeling, pakke, inkluderet, noter, alternativer) har kun fået indrykningen
-  ændret fra 24 til 28px (`mx-6`/`px-6` → `mx-7`/`px-7`) — design, farver, tekst og logik
-  er 1:1 uændret. Defensive `min-width: 0` + `overflow-wrap: anywhere` på navn/lokation/
-  værdier, så lange felter (navn op til 94 tegn, lokation 79, måltider 123) ombrydes i
-  stedet for at skubbe nætter-tallet ud.
-  **Bevidst ikke med:** sektionstotal ("N nætter · N hoteller") — droppet fordi "N hoteller"
-  er misvisende på pakkerejser med sub-hoteller, og kun "N nætter" ville være en afvigelse
-  fra designet. Scroll-reveal/stagger, nyt design af de indre bokse, hotelbilleder/
-  -beskrivelser/-links, ændret datoformat, printregler.
-  **Målt read-only mod production-DB** (cookie sat direkte, ingen unlock-writes) på
-  18 rejser × 4 breddepunkter (390/768/1024/1280) = 72 kørsler: **0 afvigelser** i
-  hash af hotelteksten, antal hotelkort, værelsesbokse, pakke-/sub-hotel-bokse,
-  alternativ-bokse, noter, listelinjer, `align-items: start`, klippede nætter-tal eller
-  vandret overflow. Alt uden for `.hotels` byte-identisk. Unlock uændret (35493, 35518,
-  35917 testet uden cookie / forkert cookie / korrekt cookie).
+- **PR #31** (`vision/v2-phase-3-hotels`, fra main `c89dc62`) — **Vision 2.0 fase 3: hoteller.**
+  Kun `src/app/globals.css` og `src/components/trip/Hotels.tsx`. Hotelkortene løftet til
+  designets radius/skygge/hover/padding/typografi (`docs/design/VISUAL-DETAILS.md`), en
+  eksisterende klassefejl rettet (`.hotel-sub` → `.hotel-loc`), sektionsheaderen flyttet
+  uden for `.hotels`-griddet, og de indre bokses indrykning fulgt med til 28px — indhold,
+  farver og logik i boksene er 1:1 uændrede. Scope godkendt af Ricko 2026-09-15.
+  **PR #31 er åben og under review. Ikke merged.**
   **test ✅ 133/133** · **typecheck ✅** · **lint ✅** (kun de kendte seks `no-img-element`)
   · **build ✅**.
-  **PR endnu ikke oprettet/merged — afventer Rickos OK.**
+  **Næste handling:** Rickos endelige OK → fast-forward-merge → production-verifikation.
 
 ## Production
 
