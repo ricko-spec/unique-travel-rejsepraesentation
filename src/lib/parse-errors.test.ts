@@ -6,8 +6,10 @@ import {
   type ParseErrorKind,
 } from "./parse-errors";
 
-const kindOf = (message: string, extra: { status?: number; claudeReplied?: boolean } = {}) =>
-  classifyParseFailure({ message, ...extra });
+const kindOf = (
+  message: string,
+  extra: { status?: number; claudeReplied?: boolean; truncated?: boolean } = {},
+) => classifyParseFailure({ message, ...extra });
 
 describe("classifyParseFailure", () => {
   it("billing genkendes på Anthropics rå tekst", () => {
@@ -105,10 +107,23 @@ describe("classifyParseFailure", () => {
     // 'rate limit' er fortsat transient, ikke billing
     expect(kindOf("Rate limit exceeded", { status: 429 })).toBe("transient");
   });
+
+  it("ERR-1: message.stop_reason === 'max_tokens' klassificeres som max_tokens, ikke transient/unreadable", () => {
+    // truncated kommer fra et eksplicit Anthropic-signal (stop_reason), ikke
+    // en tekst-heuristik — den skal derfor vinde over enhver anden regel,
+    // uanset hvad fejlteksten tilfældigvis indeholder.
+    expect(kindOf("Claude-svaret blev afbrudt af max_tokens-grænsen.", { truncated: true })).toBe(
+      "max_tokens",
+    );
+    expect(kindOf("Rate limit", { status: 429, truncated: true })).toBe("max_tokens");
+    expect(
+      kindOf("Your credit balance is too low", { status: 400, truncated: true }),
+    ).toBe("max_tokens");
+  });
 });
 
 describe("parseErrorMessage / parseErrorStatus", () => {
-  const alle: ParseErrorKind[] = ["billing", "config", "transient", "unreadable"];
+  const alle: ParseErrorKind[] = ["billing", "config", "transient", "unreadable", "max_tokens"];
 
   it("hver fejltype har en dansk besked uden teknisk indhold", () => {
     for (const k of alle) {
@@ -139,5 +154,12 @@ describe("parseErrorMessage / parseErrorStatus", () => {
     expect(parseErrorStatus("config")).toBe(502);
     expect(parseErrorStatus("transient")).toBe(503);
     expect(parseErrorStatus("unreadable")).toBe(422);
+    expect(parseErrorStatus("max_tokens")).toBe(502);
+  });
+
+  it("max_tokens-beskeden peger på admin, ikke 'prøv igen' — et nyt forsøg fejler sandsynligvis ens", () => {
+    const m = parseErrorMessage("max_tokens");
+    expect(m).toMatch(/Kontakt Ricko\/admin/);
+    expect(m).not.toMatch(/[Pp]røv igen/);
   });
 });

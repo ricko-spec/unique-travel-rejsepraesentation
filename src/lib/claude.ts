@@ -98,6 +98,24 @@ export async function parsePdfWithClaude(pdfBase64: string): Promise<unknown> {
   }
 
   const raw = textBlock.text.trim();
+
+  // ERR-1: message.stop_reason === "max_tokens" betyder Anthropic afbrød
+  // svaret fordi det ramte max_tokens-grænsen (16000) — JSON'en er da med
+  // næsten sikkerhed ufuldstændig. Det er et fundamentalt andet problem end
+  // "Claude skrev prosa i stedet for JSON" (som JSON.parse-fallback'et
+  // nedenfor håndterer), og et nyt forsøg på samme PDF vil sandsynligvis
+  // ramme samme grænse igen — derfor et dedikeret signal FØR JSON.parse
+  // forsøges, i stedet for at lade det falde ned i den generiske
+  // "ugyldig JSON"-fejl.
+  if (message.stop_reason === "max_tokens") {
+    const err = new Error(
+      "Claude-svaret blev afbrudt af max_tokens-grænsen, før JSON'en var komplet.",
+    ) as Error & { rawResponse?: string; truncated?: boolean };
+    err.rawResponse = raw;
+    err.truncated = true;
+    throw err;
+  }
+
   // Strip accidental markdown fences if Claude wrapped the JSON.
   const stripped = raw
     .replace(/^```(?:json)?\s*/i, "")
