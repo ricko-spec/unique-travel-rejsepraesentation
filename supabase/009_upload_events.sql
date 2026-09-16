@@ -145,6 +145,16 @@ create index if not exists upload_events_trip_id_idx        on public.upload_eve
 -- Zero-upload-profiler håndteres IKKE her: den fulde profiles-liste er lille
 -- (antal sælgere) og hentes/merges separat i route.ts — ingen konsistens-
 -- risiko ved det, og det holder denne funktion fokuseret på upload_events.
+--
+-- Orphan-events (user_id IS NULL — auth-brugeren/profilen er slettet siden,
+-- ON DELETE SET NULL): actor_name er gemt netop for at bevare hvem der
+-- uploadede i det tilfælde, så disse events skal IKKE kun tælle med i
+-- historicalActorEvents-indikatoren — de skal også indgå i 'users' som egne
+-- rækker, grupperet efter actor_name (den eneste tilgængelige identitet),
+-- markeret 'isHistorical: true' og 'userId: null'. per_user (user_id IS NOT
+-- NULL) og per_orphan (user_id IS NULL) er disjunkte partitioner af
+-- in_period, så summen af deres uploads-tal altid matcher totalUploads
+-- uden dobbelttælling.
 -- ============================================================================
 
 create or replace function public.usage_period_summary(period_start timestamptz)
@@ -162,6 +172,7 @@ as $function$
   per_user as (
     select
       user_id,
+      false as is_historical,
       (array_agg(actor_name order by received_at desc))[1] as latest_actor_name,
       count(*) as uploads,
       count(*) filter (where status = 'published') as published,
@@ -173,12 +184,34 @@ as $function$
     from in_period
     where user_id is not null
     group by user_id
+  ),
+  per_orphan as (
+    select
+      null::uuid as user_id,
+      true as is_historical,
+      actor_name as latest_actor_name,
+      count(*) as uploads,
+      count(*) filter (where status = 'published') as published,
+      count(*) filter (where status = 'published' and save_kind = 'created') as new_trips,
+      count(*) filter (where status = 'published' and save_kind = 'updated') as reuploads,
+      count(*) filter (where status in ('validation_failed', 'parse_failed', 'save_failed')) as errors,
+      count(*) filter (where status = 'parsed') as parsed_not_saved,
+      max(received_at) as last_upload_at
+    from in_period
+    where user_id is null
+    group by actor_name
+  ),
+  combined as (
+    select * from per_user
+    union all
+    select * from per_orphan
   )
   select jsonb_build_object(
     'totalUploads', (select count(*) from in_period),
     'users', coalesce((
       select jsonb_agg(jsonb_build_object(
         'userId', user_id,
+        'isHistorical', is_historical,
         'latestActorName', latest_actor_name,
         'uploads', uploads,
         'published', published,
@@ -188,7 +221,7 @@ as $function$
         'parsedNotSaved', parsed_not_saved,
         'lastUploadAt', last_upload_at
       ) order by uploads desc)
-      from per_user
+      from combined
     ), '[]'::jsonb),
     'trackingSince', (select min(received_at) from public.upload_events),
     'stalledEvents', (
