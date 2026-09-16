@@ -40,7 +40,8 @@ Næste punkt efter #38 vælges af Ricko fra backloggen nedenfor eller GitHub Iss
 - **Supabase custom SMTP** — fjerner Supabase' delte mail-rate-limit på recovery-/system-mails
 - **`parse_failures`-oprydning** — pg_cron-job der sletter rækker > 30 dage
 - Småting: ERR-1 (max_tokens-detektion), ERR-3 (fejltilstand i trips-listen),
-  PERF-1 (trim dashboard-select), SEC-4 (rate-limit + magic bytes på parse),
+  PERF-1 (trim dashboard-select), SEC-4 (rate-limit på parse — magic-byte-delen
+  landet i Issue #38-PR'en: `isPdf()` i `src/lib/file-sniff.ts`),
   SEC-6 (envDiagnostics ud af fejlsvar), PAIN-1 (deploy-SHA i admin-footer),
   staging-oprydning som rigtig cron
 

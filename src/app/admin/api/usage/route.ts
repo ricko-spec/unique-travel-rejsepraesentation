@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/supabase/auth";
 import { describeFetchError, getSupabaseService } from "@/lib/supabase/server";
-import { summarizeUsage, type UsagePeriod } from "@/lib/usage";
+import { fetchAllUploadEvents, summarizeUsage, type UsagePeriod } from "@/lib/usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,12 +25,16 @@ export async function GET(req: Request) {
 
   try {
     const supabase = getSupabaseService();
-    const [profilesRes, eventsRes] = await Promise.all([
+
+    // ISSUE-38-reviewfund: et almindeligt .select() uden paginering kan blive
+    // stille trunkeret af PostgREST/Supabase' standard max-rows (typisk 1000)
+    // — så snart der er >1000 upload_events, ville uploadtal blive falsk lave
+    // uden nogen fejl. fetchAllUploadEvents henter ALLE rækker via
+    // keyset-paginering (se src/lib/usage.ts). profiles er derimod bundet af
+    // antal sælgere (i praksis under 10) og har ingen tilsvarende risiko.
+    const [profilesRes, events] = await Promise.all([
       supabase.from("profiles").select("id, full_name, email"),
-      supabase
-        .from("upload_events")
-        .select("id, user_id, actor_name, received_at, status, save_kind")
-        .order("received_at", { ascending: false }),
+      fetchAllUploadEvents(),
     ]);
 
     if (profilesRes.error) {
@@ -40,20 +44,8 @@ export async function GET(req: Request) {
         { status: 500 },
       );
     }
-    if (eventsRes.error) {
-      console.error("[GET /admin/api/usage] upload_events error", eventsRes.error);
-      return NextResponse.json(
-        { error: `Kunne ikke hente upload-data: ${eventsRes.error.message}` },
-        { status: 500 },
-      );
-    }
 
-    const summary = summarizeUsage(
-      profilesRes.data ?? [],
-      eventsRes.data ?? [],
-      period,
-      new Date(),
-    );
+    const summary = summarizeUsage(profilesRes.data ?? [], events, period, new Date());
     return NextResponse.json(summary);
   } catch (e) {
     console.error("[GET /admin/api/usage] Threw", e);

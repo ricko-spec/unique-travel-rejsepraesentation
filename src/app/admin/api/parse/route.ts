@@ -16,6 +16,7 @@ import {
   markUploadEventParsed,
   resolveActorName,
 } from "@/lib/upload-events";
+import { isPdf } from "@/lib/file-sniff";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,7 +86,21 @@ export async function POST(req: Request) {
   }
 
   const arrayBuffer = await file.arrayBuffer();
-  const base64 = Buffer.from(arrayBuffer).toString("base64");
+  const fileBuffer = Buffer.from(arrayBuffer);
+
+  // SEC-4: filnavn/MIME-type er klient-styret og kan forfalskes — kun de
+  // faktiske bytes afgør om det er en PDF. Uploadeventet beholdes (det er
+  // stadig en modtaget upload), markeres validation_failed, og Claude kaldes
+  // aldrig med indhold der ikke engang er en PDF.
+  if (!isPdf(fileBuffer)) {
+    await markUploadEventFailed(uploadEventId, "validation_failed", "invalid_file_type");
+    return NextResponse.json(
+      { error: "Filen er ikke en gyldig PDF. Upload en TravelWire-rejseplan som PDF." },
+      { status: 400 },
+    );
+  }
+
+  const base64 = fileBuffer.toString("base64");
 
   let raw: unknown;
   let rawPdfText = "";
