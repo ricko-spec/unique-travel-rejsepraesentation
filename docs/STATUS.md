@@ -52,5 +52,12 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 ## Næste handling
 
 **Afvent Rickos review af Issue #40-PR'en** (desktop progress-nav). Ved godkendelse: almindelig
-merge — ingen migration, ingen særlig release-rækkefølge. Herefter: intet automatisk næste
-kapitel. Afvent Rickos prioritering af næste backlogpunkt (`docs/ROADMAP.md`).
+merge — ingen migration, ingen særlig release-rækkefølge.
+
+**Herefter næste kapitel er allerede besluttet:** [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)
+— Vision 3.0: Customer Engagement & Sales Intelligence. Master-issue/produktkapitel, IKKE én
+stor PR — starter med **Fase 1: design af en sikker eventmodel** (privacy-first, ingen
+bookingnummer i klartekst som analytics-id, server autoritativ hvor muligt, kundesiden må
+aldrig blive langsommere/skrøbeligere pga. analytics), derefter fundament + åbninger
+(første/seneste åbning, besøgstæller, "ikke åbnet endnu"). Se issuen for fuld faseplan
+(fase 2 sektionsengagement, fase 3 kontakt-intent, fase 4 salgsoversigt).

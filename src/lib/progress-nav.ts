@@ -56,3 +56,24 @@ export function visibleNavSections(input: VisibleNavSectionsInput): NavSection[]
 export function filterGalleryImages(images: string[]): string[] {
   return images.filter((u) => typeof u === "string" && u.length > 0).slice(0, 3);
 }
+
+// Reviewfund: IntersectionObserver'ens trigger-bånd (se ProgressNav.tsx)
+// ligger midt i viewporten, så den sidste sektion (typisk KONTAKT) aldrig
+// kan nå at krydse båndet, hvis siden løber tør for scroll-plads før den
+// gør — kort indhold efter den sidste sektion (Footer) er nok til at gøre
+// det umuligt at scrolle sektionens top helt op i båndet. Løsningen er en
+// separat, ren "er brugeren ved bunden af siden"-kontrol, der tvinger den
+// sidste synlige sektion aktiv uafhængigt af observer-båndet. Udskilt som
+// ren funktion (kun tal ind, boolean ud) så grænsetilfældet kan
+// unit-testes uden en browser.
+export const BOTTOM_THRESHOLD_PX = 4;
+
+export function isScrolledToBottom(input: {
+  scrollY: number;
+  viewportHeight: number;
+  documentHeight: number;
+  thresholdPx?: number;
+}): boolean {
+  const threshold = input.thresholdPx ?? BOTTOM_THRESHOLD_PX;
+  return input.scrollY + input.viewportHeight >= input.documentHeight - threshold;
+}
