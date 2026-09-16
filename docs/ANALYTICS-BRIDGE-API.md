@@ -95,7 +95,7 @@ to systemer.
     }
   ],
   "pagination": {
-    "next_cursor": "eyJzaW5jZSI6bnVsbCwiaWQiOiIzZjljMmUxMC0uLi4ifQ",
+    "next_cursor": "eyJpZCI6IjNmOWMyZTEwLS4uLiJ9",
     "has_more": true
   }
 }
@@ -118,9 +118,9 @@ inkluderet i denne version: `trips.updated_at` opdateres af en generisk Postgres
 (`trips_set_updated_at`) ved **enhver** ændring af rækken — re-upload af en ny PDF, en
 sælgers intro-redigering, eller blot at slå `active` til/fra i admin-dashboardet. Feltet
 fortæller "rækken blev rørt", ikke "rejseplanen blev genudgivet til kunden", og ville
-derfor kunne mistolkes som et forretningssignal det ikke er. `updated_at` bruges stadig
-**internt** i API'et som del af sync-mekanikken (se nedenfor) — det er en fundamentalt
-svagere kontrakt ("noget ændrede sig, hent igen") end at udstille den som analysefelt.
+derfor kunne mistolkes som et forretningssignal det ikke er. `trips.updated_at` hentes
+slet ikke fra databasen i v1 — hverken til output eller internt: API'et bruger den ikke
+til sync-mekanik (se "Paginering" nedenfor for hvorfor).
 
 ### Bevidst udeladt (Issue #45's eksplicitte liste)
 
@@ -132,49 +132,41 @@ navngivne felter — den sprednes aldrig `...row`, så selv hvis en fremtidig æ
 kommer til at SELECT'e flere kolonner, kan de ikke lække med ud. Se test-casen "lækker
 IKKE ekstra/følsomme felter" i `src/lib/analytics-bridge.test.ts`.
 
-## Paginering og incremental sync
+## Paginering
 
-To adskilte spørgsmål, løst hver for sig:
+v1 har **bevidst ingen incremental sync** (intet `since`/watermark-query-parameter).
+Hvert kald til API'et er en **fuld eksport** af alle rejseplaner — pagineret med ren
+id-keyset, ikke filtreret på noget tidsvindue.
 
-### 1. Hvilket tidsvindue henter jeg?
+**Hvorfor ikke incremental sync i v1:** et tidligere udkast lod Marketing Dashboard sende
+sit eget ur-tidspunkt som `since`, filtreret mod `trips.updated_at >= since`. Det design
+blev forkastet, fordi det kan give **stille datatab ved clock skew** mellem Marketing
+Dashboard, Vercel og Supabase — en række der reelt burde være med, kan falde uden for
+filteret fordi de to systemers ure ikke er perfekt synkrone, uden at nogen fejl gør
+opmærksom på det.
 
-Query-param `since` (valgfri, ISO-8601, fx `2026-09-01T00:00:00.000Z`). Filtrerer på
-`trips.updated_at >= since`. Uden `since`: fuld eksport af alle rejseplaner nogensinde.
+Datamængden er aktuelt ca. 254 trips, så en fuld pagineret sync er billigere og mere
+korrekt end en unødigt kompleks incremental sync. Incremental sync kan tilføjes senere
+versionsstyret med et source-side watermark, hvis volumen gør det nødvendigt — ikke før.
 
-**Anbefalet mønster for Marketing Dashboard** (klassisk "checkpoint på eget ur, ikke på
-kildedata" for idempotent incremental sync):
-
-1. Læg `runStartedAt = new Date()` **før** første kald.
-2. Kald API'et med `since = <sidst gemte watermark>` (eller udelad for første, fulde
-   kørsel).
-3. Paginér til `has_more: false` (se nedenfor).
-4. **Kun hvis hele crawlet lykkedes**, gem `runStartedAt` som ny watermark.
-
-`since` filtreres med `>=` (ikke `>`) — en række der ligger præcis på grænsen leveres
-hellere én gang for meget (idempotent upsert på `trip_id` i Marketing Dashboard) end at
-risikere at den aldrig leveres.
-
-### 2. Hvordan bladrer jeg gennem ét vindues rækker?
+### Sådan bladrer du
 
 Ren keyset-paginering på `id` (aldrig `OFFSET`) — `cursor`-parameteren fra et svars
 `pagination.next_cursor` sendes uændret med i næste kald:
 
 ```
-GET /api/internal/analytics/travel-plans?since=2026-09-01T00:00:00.000Z
-GET /api/internal/analytics/travel-plans?cursor=eyJzaW5jZSI6...
+GET /api/internal/analytics/travel-plans
+GET /api/internal/analytics/travel-plans?cursor=eyJpZCI6IjNmOWMyZTEwLS4uLiJ9
 ```
 
-`cursor` er **selv-indeholdende** (bærer både `since`-vinduet og positionen) — når du
-paginerer, skal du kun sende `cursor`, ikke `since` igen (er begge sendt, vinder
-`cursor`). Bliv ved med at følge `next_cursor` indtil `has_more: false`.
+Bliv ved med at følge `next_cursor` indtil `has_more: false` — det er hele eksporten for
+dette sync-kald.
 
-**Hvorfor id og ikke `updated_at` som pagineringsnøgle:** `id` er en uuid-primærnøgle og
+**Hvorfor id og ikke et tidsstempel som pagineringsnøgle:** `id` er en uuid-primærnøgle og
 derfor 100% kollisionsfri. At bruge et tidsstempel som pagineringsnøgle (selv med
 mikrosekund-præcision) åbner i teorien for at to rækker deler præcis samme værdi ved en
 sidegrænse — samme klasse fejl som blev fundet og rettet i Issue #38/PR #39's
-upload-tracking (`docs/SYSTEM-ARKITEKTUR.md` § upload_events). Ved at lade `since` alene
-afgøre *hvilket* datasæt der høres til, og `id` alene afgøre *rækkefølgen* inden for det
-datasæt, undgås tuple-sammenligning helt, og problemet opstår aldrig.
+upload-tracking (`docs/SYSTEM-ARKITEKTUR.md` § upload_events).
 
 `limit` (valgfri): sidestørrelse, default 200, klampet til max 500. Ugyldig/manglende
 værdi falder stille tilbage til default (i modsætning til en ugyldig `cursor`, som giver
@@ -201,7 +193,7 @@ hvordan feltet skal indgå i en analyse.
 
 | Status | Betydning |
 |---|---|
-| `400` | Ugyldig `cursor` (korrupt/manipuleret) eller ugyldig `since` (ikke ISO-8601) |
+| `400` | Ugyldig `cursor` (korrupt/manipuleret) |
 | `401` | Manglende/forkert `Authorization`-header, eller `ANALYTICS_BRIDGE_API_KEY` ikke konfigureret server-side |
 | `500` | `BOOKING_MATCH_SECRET` ikke konfigureret, eller intern fejl (DB-fejl, uventet exception) |
 
@@ -226,15 +218,13 @@ skal teste mod preview — husk at preview deler production-DB'en, se
 
 1. Kald `GET /api/internal/analytics/travel-plans` med `Authorization: Bearer
    <ANALYTICS_BRIDGE_API_KEY>`.
-2. Første, fulde synkronisering: udelad `since`. Følg `next_cursor` indtil
-   `has_more: false`.
-3. Gem `runStartedAt` (jf. §"Paginering og incremental sync") som ny watermark.
-4. Fremtidige kørsler: send `since = <watermark>`, følg cursor igen.
-5. For hver returneret række: beregn `computeBookingMatchKey(hubspotBookingNo,
+2. Hvert sync-kald er en **fuld eksport**: udelad `cursor` ved første side, følg derefter
+   `next_cursor` indtil `has_more: false`.
+3. For hver returneret række: beregn `computeBookingMatchKey(hubspotBookingNo,
    BOOKING_MATCH_SECRET)` og match mod `booking_match_key`.
-6. Behandl re-levering af en allerede set `trip_id` som en idempotent upsert, ikke en
-   fejl — `since` bruger bevidst `>=`.
-7. Byg IKKE en standard-plan-konverteringsrate uden en denominator for ikke-solgte
+4. Upsert idempotent på `trip_id` — API'et leverer altid hele datasættet, så det samme
+   `trip_id` ses igen ved hver sync. Det er forventet, ikke en fejl.
+5. Byg IKKE en standard-plan-konverteringsrate uden en denominator for ikke-solgte
    tilbud — det kræver data Marketing Dashboard/HubSpot ejer, ikke dette API. Se Issue
    #45 § "Kritisk analyse-regel".
 

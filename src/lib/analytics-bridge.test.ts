@@ -7,7 +7,6 @@ import {
   decodeCursor,
   encodeCursor,
   isAuthorizedRequest,
-  isValidSinceParam,
   normalizeBookingNo,
   parseLimit,
   timingSafeEqualStrings,
@@ -124,26 +123,16 @@ describe("computeBookingMatchKey — HMAC-SHA256", () => {
   });
 });
 
-describe("cursor — encode/decode roundtrip", () => {
-  const VALID_CURSOR = {
-    since: "2026-09-16T10:00:00.000Z",
-    id: "11111111-1111-1111-1111-111111111111",
-  };
+describe("cursor — encode/decode roundtrip (v1: ren id-keyset, intet since)", () => {
+  const VALID_CURSOR = { id: "11111111-1111-1111-1111-111111111111" };
 
   it("roundtripper korrekt", () => {
     const encoded = encodeCursor(VALID_CURSOR);
     expect(decodeCursor(encoded)).toEqual(VALID_CURSOR);
   });
 
-  it("roundtripper korrekt med since = null (fuld eksport uden nedre grænse)", () => {
-    const cursor = { since: null, id: VALID_CURSOR.id };
-    const encoded = encodeCursor(cursor);
-    expect(decodeCursor(encoded)).toEqual(cursor);
-  });
-
   it("er opaque — ikke menneskeligt læsbar uden at afkode", () => {
     const encoded = encodeCursor(VALID_CURSOR);
-    expect(encoded).not.toContain("2026-09-16");
     expect(encoded).not.toContain("11111111");
   });
 
@@ -153,26 +142,24 @@ describe("cursor — encode/decode roundtrip", () => {
   });
 
   it("afviser gyldig JSON med manglende id-felt", () => {
-    const malformed = Buffer.from(JSON.stringify({ since: "2026-09-16T10:00:00.000Z" }), "utf8").toString(
-      "base64url",
-    );
+    const malformed = Buffer.from(JSON.stringify({ foo: "bar" }), "utf8").toString("base64url");
     expect(decodeCursor(malformed)).toBeNull();
   });
 
-  it("afviser en cursor med et ugyldigt (ikke-null) since-tidsstempel", () => {
-    const bad = Buffer.from(
-      JSON.stringify({ since: "ikke-en-dato", id: VALID_CURSOR.id }),
-      "utf8",
-    ).toString("base64url");
+  it("afviser en cursor med et ugyldigt uuid", () => {
+    const bad = Buffer.from(JSON.stringify({ id: "ikke-et-uuid" }), "utf8").toString("base64url");
     expect(decodeCursor(bad)).toBeNull();
   });
 
-  it("afviser en cursor med et ugyldigt uuid", () => {
-    const bad = Buffer.from(
-      JSON.stringify({ since: VALID_CURSOR.since, id: "ikke-et-uuid" }),
+  it("ignorerer/kasserer et evt. gammelt since-felt i en cursor fra en tidligere API-version i stedet for at fejle", () => {
+    // Bagudkompatibel afkodning: en cursor mintet af den forrige (siden
+    // fjernede) since-baserede v1-kladde skal stadig kunne læses — id'et er
+    // det eneste der tælles med, et evt. medsendt since ignoreres blot.
+    const legacyShaped = Buffer.from(
+      JSON.stringify({ since: "2026-09-16T10:00:00.000Z", id: VALID_CURSOR.id }),
       "utf8",
     ).toString("base64url");
-    expect(decodeCursor(bad)).toBeNull();
+    expect(decodeCursor(legacyShaped)).toEqual(VALID_CURSOR);
   });
 
   it("afviser en cursor der ikke er et objekt (fx en ren JSON-liste)", () => {
@@ -183,20 +170,6 @@ describe("cursor — encode/decode roundtrip", () => {
   it("afviser null-cursor", () => {
     const bad = Buffer.from("null", "utf8").toString("base64url");
     expect(decodeCursor(bad)).toBeNull();
-  });
-});
-
-describe("isValidSinceParam", () => {
-  it("accepterer et gyldigt ISO-tidsstempel", () => {
-    expect(isValidSinceParam("2026-01-01T00:00:00.000Z")).toBe(true);
-  });
-
-  it("afviser en tom streng", () => {
-    expect(isValidSinceParam("")).toBe(false);
-  });
-
-  it("afviser en ikke-dato-streng", () => {
-    expect(isValidSinceParam("i går")).toBe(false);
   });
 });
 
@@ -231,7 +204,6 @@ describe("toTravelPlanRecord — output-sanitisering", () => {
     destination: "Malaysia",
     active: true,
     created_at: "2026-08-01T12:00:00.000Z",
-    updated_at: "2026-09-01T09:30:00.000Z",
   };
 
   it("indeholder præcis de forventede felter — schema_version-kompatibel", () => {
@@ -255,16 +227,17 @@ describe("toTravelPlanRecord — output-sanitisering", () => {
     expect(record.booking_match_key).toBe(computeBookingMatchKey(CLEAN_ROW.booking_no, SECRET));
   });
 
-  it("udelader updated_at — ikke semantisk pålideligt som forretningssignal", () => {
+  it("udelader online_plan_updated_at — ikke semantisk pålideligt som forretningssignal, og trips.updated_at hentes slet ikke i v1", () => {
     const record = toTravelPlanRecord(CLEAN_ROW, SECRET);
     expect(record).not.toHaveProperty("online_plan_updated_at");
-    expect(JSON.stringify(record)).not.toContain(CLEAN_ROW.updated_at);
   });
 
   it("lækker IKKE ekstra/følsomme felter selvom input-objektet (fejlagtigt) har dem", () => {
-    // Simulerer at route-handleren en dag ved en fejl SELECT'er for meget.
+    // Simulerer at route-handleren en dag ved en fejl SELECT'er for meget —
+    // inkl. updated_at, som v1 bevidst ikke henter (se testen ovenfor).
     const dirtyRow = {
       ...CLEAN_ROW,
+      updated_at: "2026-09-01T09:30:00.000Z",
       slug: "a1b2c3d4e5f6",
       customer_name: "Anne Berg",
       hero_photo: "https://example.com/hero.jpg",
@@ -274,6 +247,7 @@ describe("toTravelPlanRecord — output-sanitisering", () => {
     };
     const record = toTravelPlanRecord(dirtyRow as unknown as TripRowForExport, SECRET);
     const serialized = JSON.stringify(record);
+    expect(serialized).not.toContain("2026-09-01T09:30:00.000Z");
     expect(serialized).not.toContain("a1b2c3d4e5f6");
     expect(serialized).not.toContain("Anne Berg");
     expect(serialized).not.toContain("hero.jpg");
