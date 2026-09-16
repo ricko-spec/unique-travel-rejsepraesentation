@@ -8,10 +8,16 @@ import type {
   FlightExpand,
 } from "@/lib/types";
 import { timelineToggleLabel } from "@/lib/format";
+import { hasSeaplaneSignal } from "@/lib/transfer-chips";
 import { SectionHeader } from "./SectionHeader";
 
 function TimelineItem({ item, defaultOpen }: { item: ItineraryItem; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(!!defaultOpen);
+  // Issue #48: konservativ, data-drevet markør — kun når title/details/chips
+  // faktisk nævner vandflyver/seaplane (se hasSeaplaneSignal). Ingen inferens
+  // fra destination/hotelnavn/ø. Type-uafhængig: både transfer-elementer og
+  // hotel-elementer (hvor vandflyver kun står som en chip) kan udløse den.
+  const isSeaplane = hasSeaplaneSignal(item);
 
   const activitiesCount =
     item.expandKind === "activities" && item.expand && "activities" in item.expand
@@ -31,6 +37,11 @@ function TimelineItem({ item, defaultOpen }: { item: ItineraryItem; defaultOpen?
           )}
         </div>
         <div className="tl-title">{item.title}</div>
+        {isSeaplane && (
+          <div className="tl-seaplane-badge">
+            <span>Vandflyver</span>
+          </div>
+        )}
         {item.details && <div className="tl-details">{item.details}</div>}
 
         {item.chips && item.chips.length > 0 && (

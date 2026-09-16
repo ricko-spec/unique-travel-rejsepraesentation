@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { transferChipMode, stripRedundantTransferChips } from "./transfer-chips";
+import { transferChipMode, stripRedundantTransferChips, hasSeaplaneSignal } from "./transfer-chips";
 
 // Alle strenge er faktiske chips fra production (sep. 2026).
 const seaplaneTransfer = {
@@ -111,5 +111,47 @@ describe("stripRedundantTransferChips", () => {
       { type: "hotel", chips: [] },
     ]);
     expect(out).toHaveLength(3);
+  });
+});
+
+describe("hasSeaplaneSignal (Issue #48)", () => {
+  it("genkender eksplicit vandflyver/seaplane-tekst i title eller details", () => {
+    // Eksemplerne er dem Ricko selv gav som skal matche.
+    expect(hasSeaplaneSignal({ type: "transfer", title: "Seaplane transfer" })).toBe(true);
+    expect(hasSeaplaneSignal({ type: "transfer", title: "Sea plane transfer" })).toBe(true);
+    expect(hasSeaplaneSignal({ type: "transfer", title: "Transfer by seaplane" })).toBe(true);
+    expect(hasSeaplaneSignal({ type: "transfer", title: "Vandflyver" })).toBe(true);
+    expect(hasSeaplaneSignal(seaplaneTransfer)).toBe(true);
+  });
+
+  it("genkender signalet via en chip alene (fx et hotel-element uden dækkende transfer)", () => {
+    expect(hasSeaplaneSignal({ type: "hotel", chips: ["7 nætter", "Vandflyver-adgang"] })).toBe(
+      true,
+    );
+  });
+
+  it("matcher IKKE andre transportformer — ingen false positives (Rickos eksempler)", () => {
+    expect(hasSeaplaneSignal({ type: "transfer", title: "Domestic flight" })).toBe(false);
+    expect(hasSeaplaneSignal({ type: "transfer", title: "Speedboat" })).toBe(false);
+    expect(hasSeaplaneSignal({ type: "transfer", title: "Boat transfer" })).toBe(false);
+    expect(hasSeaplaneSignal({ type: "transfer", title: "Flight transfer" })).toBe(false);
+    expect(hasSeaplaneSignal({ type: "transfer", title: "Airport transfer" })).toBe(false);
+    expect(hasSeaplaneSignal(speedboatTransfer)).toBe(false);
+  });
+
+  it("ingen inferens fra hotelnavn/destination/ø — kun eksplicit tekst tæller", () => {
+    expect(
+      hasSeaplaneSignal({
+        type: "hotel",
+        title: "Reethi Faru Resort",
+        details: "Maldiverne, Raa Atoll",
+      }),
+    ).toBe(false);
+  });
+
+  it("er case-insensitiv og tolererer manglende felter uden at kaste", () => {
+    expect(hasSeaplaneSignal({ type: "transfer", title: "SEAPLANE TRANSFER" })).toBe(true);
+    expect(hasSeaplaneSignal({})).toBe(false);
+    expect(hasSeaplaneSignal({ type: "transfer" })).toBe(false);
   });
 });

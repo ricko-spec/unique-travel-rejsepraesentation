@@ -52,6 +52,20 @@ function modesCoveredByTransfers(items: ChipItem[]): Set<string> {
   return covered;
 }
 
+// Issue #48: vandflyver-markøren i Timeline.tsx. Genbruger PRÆCIS samme
+// konservative "seaplane"-mønster som chip-oprydningen ovenfor — matcher kun
+// på faktisk parsed data (title/details/chips), aldrig på hotelnavn, ø,
+// destination eller anden Maldiverne-inferens. Type-uafhængig med vilje: et
+// transfer-element ("Vandflyver: Malé lufthavn → Resort") og et hotel-element
+// hvis eneste vandflyver-signal er en chip ("Vandflyver-adgang") skal begge
+// kunne vise markøren — Timeline.tsx afgør selv hvor den er relevant at vise.
+const SEAPLANE_RE = MODES.find((m) => m.key === "seaplane")!.re;
+
+export function hasSeaplaneSignal(item: ChipItem): boolean {
+  const haystack = [item.title ?? "", item.details ?? "", ...(item.chips ?? [])].join(" ");
+  return SEAPLANE_RE.test(haystack);
+}
+
 export function stripRedundantTransferChips<T extends ChipItem>(items: T[]): T[] {
   const covered = modesCoveredByTransfers(items);
   if (covered.size === 0) return items;
