@@ -111,16 +111,26 @@ export async function POST(req: Request) {
     ]);
   } catch (e) {
     const rawResp = (e as Error & { rawResponse?: string }).rawResponse;
+    // ERR-1: eksplicit signal fra parsePdfWithClaude (message.stop_reason ===
+    // "max_tokens"), sat FØR JSON.parse overhovedet forsøges — se claude.ts.
+    const truncated = (e as Error & { truncated?: boolean }).truncated === true;
     if (typeof rawResp === "string") {
       console.error("[parse] Claude returned invalid JSON", {
         totalLength: rawResp.length,
         first500: rawResp.slice(0, 500),
         last500: rawResp.slice(-500),
+        truncated,
       });
     }
     const msg = e instanceof Error ? e.message : "Ukendt fejl ved parsing";
     const claudeReplied = typeof rawResp === "string";
-    if (claudeReplied) {
+    if (truncated) {
+      // Afbrudt af max_tokens — et fundamentalt andet driftssignal end
+      // "ugyldig JSON": et nyt forsøg på samme PDF vil sandsynligvis fejle
+      // ens igen, så det skal ikke logges som invalid_json.
+      await logParseFailure({ actor, kind: "max_tokens", rawResponse: rawResp, pdfName });
+      await markUploadEventFailed(uploadEventId, "parse_failed", "max_tokens");
+    } else if (claudeReplied) {
       // Claude svarede, men svaret kunne ikke parses som JSON.
       await logParseFailure({ actor, kind: "invalid_json", rawResponse: rawResp, pdfName });
       await markUploadEventFailed(uploadEventId, "parse_failed", "invalid_json");
@@ -130,10 +140,10 @@ export async function POST(req: Request) {
       await markUploadEventFailed(uploadEventId, "parse_failed", "anthropic_error");
     }
     const status = (e as { status?: number }).status;
-    const kind = classifyParseFailure({ message: msg, status, claudeReplied });
+    const kind = classifyParseFailure({ message: msg, status, claudeReplied, truncated });
     // Den tekniske tekst bliver her på serveren — sælgeren får en besked de kan
     // handle på, og detaljerne ligger i logs + parse_failures til fejlsøgning.
-    console.error("[parse] fejl", { kind, status, msg });
+    console.error("[parse] fejl", { kind, status, msg, truncated });
     return NextResponse.json(
       { error: parseErrorMessage(kind) },
       { status: parseErrorStatus(kind) },

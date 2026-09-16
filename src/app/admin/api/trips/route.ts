@@ -69,11 +69,12 @@ export async function GET() {
   } catch (e) {
     const detail = describeFetchError(e);
     console.error("[GET /api/trips] Threw", e);
+    // SEC-6: envDiagnostics() bliver på serveren — env-var-navne/-tilstedeværelse,
+    // projekt-ref og nøgle-længder er driftssignaler, ikke noget klienten skal se
+    // i et fejlsvar. describeFetchError() er allerede sanitiseret (netværks-/
+    // driver-fejlkæde uden secrets).
     console.error("[GET /api/trips] Env diagnostics", envDiagnostics());
-    return NextResponse.json(
-      { error: `Kunne ikke hente: ${detail}`, env: envDiagnostics() },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: `Kunne ikke hente: ${detail}` }, { status: 500 });
   }
 }
 
@@ -233,15 +234,13 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     const detail = describeFetchError(e);
-    const diag = envDiagnostics();
+    // SEC-6: samme princip som GET ovenfor — diagnostics logges server-side,
+    // aldrig i responsen.
     console.error("[POST /api/trips] Network/runtime error", e);
-    console.error("[POST /api/trips] Env diagnostics", diag);
+    console.error("[POST /api/trips] Env diagnostics", envDiagnostics());
     await markUploadEventSaveFailed(uploadEventId, "save_error");
     return NextResponse.json(
-      {
-        error: `Forbindelse til Supabase fejlede: ${detail}`,
-        env: diag,
-      },
+      { error: `Forbindelse til Supabase fejlede: ${detail}` },
       { status: 500 },
     );
   }

@@ -29,6 +29,9 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
   const [showAllTrips, setShowAllTrips] = useState(false);
   const [tripSearch, setTripSearch] = useState("");
   const [loadingList, setLoadingList] = useState(true);
+  // ERR-3: skelner "fetch fejlede" fra "listen er reelt tom" — uden dette
+  // felt ligner en 500'er fra /admin/api/trips en legitim tom liste.
+  const [listError, setListError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   // Upload state
@@ -59,12 +62,22 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
 
   async function loadTrips() {
     setLoadingList(true);
-    const res = await fetch("/admin/api/trips");
-    if (res.ok) {
+    setListError(null);
+    try {
+      const res = await fetch("/admin/api/trips");
+      if (!res.ok) {
+        setListError("Rejseplanerne kunne ikke hentes lige nu.");
+        return;
+      }
       const j = await res.json();
       setTrips(j.trips ?? []);
+    } catch {
+      // Netværksfejl kaster fra fetch() selv (i modsætning til et 4xx/5xx-svar,
+      // som håndteres via !res.ok ovenfor) — samme rolige fejltilstand for begge.
+      setListError("Rejseplanerne kunne ikke hentes lige nu.");
+    } finally {
+      setLoadingList(false);
     }
-    setLoadingList(false);
   }
 
   function showToast(msg: string) {
@@ -443,6 +456,16 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
             <div style={{ color: "var(--grey-text)", fontSize: 13 }}>
               <span className="admin-spinner" />
               Henter...
+            </div>
+          ) : listError ? (
+            <div
+              className="admin-error"
+              style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}
+            >
+              <span>{listError}</span>
+              <button className="admin-btn admin-btn-secondary" onClick={loadTrips}>
+                Prøv igen
+              </button>
             </div>
           ) : trips.length === 0 ? (
             <div style={{ color: "var(--grey-text)", fontSize: 13 }}>Ingen præsentationer endnu.</div>

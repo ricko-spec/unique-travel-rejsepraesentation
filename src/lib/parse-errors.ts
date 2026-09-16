@@ -3,7 +3,7 @@
 // parse_failures — aldrig i admin-UI'et, hvor de hverken kan bruges til noget
 // eller forstås.
 
-export type ParseErrorKind = "billing" | "config" | "transient" | "unreadable";
+export type ParseErrorKind = "billing" | "config" | "transient" | "unreadable" | "max_tokens";
 
 // Anthropic sender billing-fejl som rå API-tekst ("Your credit balance is too low…").
 // Forbrugsgrænsen sat i Anthropic Console kommer som 400 invalid_request_error:
@@ -27,7 +27,13 @@ export function classifyParseFailure(input: {
   status?: number;
   /** Claude svarede, men svaret kunne ikke parses som JSON. */
   claudeReplied?: boolean;
+  /** message.stop_reason === "max_tokens" — svaret blev afbrudt, ikke bare ugyldigt. */
+  truncated?: boolean;
 }): ParseErrorKind {
+  // Stærkeste signal først: stop_reason er en eksplicit Anthropic-oplysning,
+  // ikke en heuristik på fejlteksten — den skal aldrig overstyres af de
+  // tekst-baserede mønstre nedenfor.
+  if (input.truncated) return "max_tokens";
   const msg = input.message ?? "";
   if (BILLING.test(msg)) return "billing";
   // 404 = modellen findes ikke (fx udgået model-id). Driftsfejl, ikke sælgerens PDF.
@@ -50,6 +56,11 @@ const MESSAGES: Record<ParseErrorKind, string> = {
   transient: "Rejseplanen kunne ikke læses lige nu. Prøv igen om lidt.",
   unreadable:
     "PDF'en kunne ikke læses. Tjek at det er en TravelWire-rejsebeskrivelse, og prøv igen.",
+  // Et nyt forsøg på samme PDF vil med stor sandsynlighed ramme samme
+  // max_tokens-grænse igen — derfor IKKE "prøv igen om lidt" (transient),
+  // men en besked der peger på admin til at vurdere token-budgettet.
+  max_tokens:
+    "Rejseplanen er for omfangsrig til at blive læst i ét hug lige nu. Kontakt Ricko/admin.",
 };
 
 const STATUS: Record<ParseErrorKind, number> = {
@@ -57,6 +68,7 @@ const STATUS: Record<ParseErrorKind, number> = {
   config: 502,
   transient: 503,
   unreadable: 422,
+  max_tokens: 502,
 };
 
 export function parseErrorMessage(kind: ParseErrorKind): string {
