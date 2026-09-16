@@ -1,0 +1,10 @@
+{
+  "buckets": [
+    {
+      "name": "destinations",
+      "public": true,
+      "file_size_limit": 52428800,
+      "allowed_mime_types": ["image/avif", "image/jpeg", "image/png", "image/webp"]
+    }
+  ]
+}

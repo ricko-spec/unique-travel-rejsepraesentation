@@ -15,9 +15,10 @@ Følg de fælles agent-regler i **@AGENTS.md** — de vinder ved konflikt.
    arbejd i et git worktree (scratchpad), push → Vercel-preview → afvent Rickos OK → fast-forward-merge.
 2. `npm ci` før lokal kørsel (sharp er dependency; Desktop-node_modules kan være bagud).
 3. Checks før push af kode: `npm run typecheck` && `npm run lint`; `npm run build` ved route/config-ændringer;
-   `node scripts/check-schema-drift.mjs` ved DB-arbejde. Kommandoer og testlister: `docs/TESTING.md`.
+   `node scripts/check-schema-drift.mjs` ved DB-arbejde, `node scripts/check-storage-drift.mjs` ved
+   Storage-bucket-config-ændringer. Kommandoer og testlister: `docs/TESTING.md`.
 4. Review din egen diff (`git diff main..HEAD --stat`) før push — kun de filer opgaven kræver.
-5. DB: ny nummereret migration + `--update-baseline` i samme ombæring. Bucket-config er drift-tjekkets blinde vinkel.
+5. DB: ny nummereret migration + `--update-baseline` i samme ombæring.
 
 ## Husk
 
