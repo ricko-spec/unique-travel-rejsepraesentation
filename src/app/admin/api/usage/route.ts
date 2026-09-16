@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/supabase/auth";
 import { describeFetchError, getSupabaseService } from "@/lib/supabase/server";
-import { fetchAllUploadEvents, summarizeUsage, type UsagePeriod } from "@/lib/usage";
+import {
+  fetchUsagePeriodSummary,
+  mergeUsageSummary,
+  periodStart,
+  type UsagePeriod,
+} from "@/lib/usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,16 +30,20 @@ export async function GET(req: Request) {
 
   try {
     const supabase = getSupabaseService();
+    const startIso = periodStart(period, new Date());
 
-    // ISSUE-38-reviewfund: et almindeligt .select() uden paginering kan blive
-    // stille trunkeret af PostgREST/Supabase' standard max-rows (typisk 1000)
-    // — så snart der er >1000 upload_events, ville uploadtal blive falsk lave
-    // uden nogen fejl. fetchAllUploadEvents henter ALLE rækker via
-    // keyset-paginering (se src/lib/usage.ts). profiles er derimod bundet af
-    // antal sælgere (i praksis under 10) og har ingen tilsvarende risiko.
-    const [profilesRes, events] = await Promise.all([
+    // ISSUE-38-reviewfund: en tidligere revision hentede ALLE upload_events
+    // til Node.js (først et enkelt .select(), så uuid-keyset-paginering) og
+    // aggregerede i TypeScript. Begge dele havde konsistensproblemer — se
+    // den fulde begrundelse i supabase/009_upload_events.sql ved
+    // usage_period_summary(). RPC'en kører som ét SQL-statement og
+    // returnerer et allerede-aggregeret, indbyrdes konsistent resultat
+    // (bundet af antal aktive sælgere, ikke antal events). profiles er
+    // adskilt bundet af antal sælgere (i praksis under 10) og har ingen
+    // tilsvarende risiko.
+    const [profilesRes, aggregate] = await Promise.all([
       supabase.from("profiles").select("id, full_name, email"),
-      fetchAllUploadEvents(),
+      fetchUsagePeriodSummary(startIso),
     ]);
 
     if (profilesRes.error) {
@@ -45,7 +54,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const summary = summarizeUsage(profilesRes.data ?? [], events, period, new Date());
+    const summary = mergeUsageSummary(profilesRes.data ?? [], aggregate, period, startIso);
     return NextResponse.json(summary);
   } catch (e) {
     console.error("[GET /admin/api/usage] Threw", e);

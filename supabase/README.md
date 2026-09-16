@@ -65,6 +65,16 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 - **Oprydning:** ingen defineret endnu (i modsætning til `parse_failures`) — usage-data er
   forretningsstatistik, ikke debug-dead-letter, så der er ikke samme 30-dages-begrundelse.
   Tag stilling til retention hvis tabellen vokser stort.
+- **Læsning til `/admin/brug`:** går udelukkende via RPC'en `usage_period_summary(period_start)`
+  (defineret i samme migration), IKKE via direkte `.select()` fra klienten. Begrundelse: et
+  almindeligt `.select()` kan trunkeres stille af PostgREST' standard max-rows-grænse, og en
+  tidligere (forkastet) løsning med keyset-paginering på `id` viste sig usikker, fordi `id` er
+  en tilfældig `gen_random_uuid()` — ikke en monoton nøgle — så et samtidigt event kunne blive
+  misset. RPC'en kører som ét SQL-statement og aggregerer i ét Postgres-snapshot, hvilket
+  garanterer et konsistent resultat uafhængigt af samtidige inserts. `EXECUTE` er låst til
+  `service_role` (revoke fra `public`/`anon`/`authenticated`, samme mønster som
+  `schema_snapshot()` i 008). Se den fulde begrundelse i kommentaren ved funktionen i
+  `009_upload_events.sql` og regressionstesten i `src/lib/usage.test.ts`.
 
 ## Drift-tjek
 

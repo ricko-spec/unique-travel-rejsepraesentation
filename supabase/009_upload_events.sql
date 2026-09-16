@@ -111,3 +111,97 @@ create index if not exists upload_events_received_at_idx on public.upload_events
 create index if not exists upload_events_user_id_idx      on public.upload_events (user_id);
 create index if not exists upload_events_status_idx        on public.upload_events (status);
 create index if not exists upload_events_trip_id_idx        on public.upload_events (trip_id);
+
+-- ============================================================================
+-- usage_period_summary(period_start) — konsistent snapshot-aggregering til
+-- GET /admin/api/usage (reviewfund på PR #39: se begrundelse nedenfor).
+-- ============================================================================
+-- Første revision af /admin/api/usage hentede ALLE upload_events-rækker til
+-- Node.js (enten som ét .select() eller keyset-pagineret på id) og
+-- aggregerede i TypeScript. To problemer med det:
+--   1) Et enkelt .select() kan blive stille trunkeret af PostgREST/Supabase'
+--      standard max-rows-grænse.
+--   2) `id` er en TILFÆLDIG uuid (gen_random_uuid()) — IKKE en monotont
+--      voksende nøgle. Keyset-paginering på en tilfældig uuid er derfor
+--      ikke et sikkert konsistens-værn: et nyt event kan indsættes MENS
+--      pagineringen kører med en id der sorterer FØR den cursor vi allerede
+--      har passeret, og bliver så aldrig hentet i det request — uden nogen
+--      fejl, bare et for lavt tal.
+--
+-- Løsningen er at lade Postgres selv lave hele aggregeringen i ÉT
+-- SQL-statement. Under Postgres' standard isolationsniveau (READ COMMITTED)
+-- ser alle under-forespørgsler i ét statement PRÆCIS det samme snapshot af
+-- databasen, taget ved statementets start. Et event der indsættes efter det
+-- tidspunkt er simpelthen ikke synligt for dette kald — uanset dets uuid —
+-- og alle tal i det returnerede objekt (totalUploads, pr.-bruger-tal,
+-- trackingSince, stalledEvents osv.) er derfor garanteret indbyrdes
+-- konsistente. Resultatet er desuden lille (én række pr. sælger med
+-- uploads > 0 i perioden) og kan derfor aldrig ramme en rækkegrænse.
+--
+-- `period_start = null` betyder "all" (ingen nedre grænse). Alle andre felter
+-- (trackingSince/stalledEvents/historicalActorEvents) er bevidst UAFHÆNGIGE
+-- af period_start — samme princip som i src/lib/usage.ts.
+--
+-- Zero-upload-profiler håndteres IKKE her: den fulde profiles-liste er lille
+-- (antal sælgere) og hentes/merges separat i route.ts — ingen konsistens-
+-- risiko ved det, og det holder denne funktion fokuseret på upload_events.
+-- ============================================================================
+
+create or replace function public.usage_period_summary(period_start timestamptz)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_catalog
+as $function$
+  with in_period as (
+    select *
+    from public.upload_events
+    where period_start is null or received_at >= period_start
+  ),
+  per_user as (
+    select
+      user_id,
+      (array_agg(actor_name order by received_at desc))[1] as latest_actor_name,
+      count(*) as uploads,
+      count(*) filter (where status = 'published') as published,
+      count(*) filter (where status = 'published' and save_kind = 'created') as new_trips,
+      count(*) filter (where status = 'published' and save_kind = 'updated') as reuploads,
+      count(*) filter (where status in ('validation_failed', 'parse_failed', 'save_failed')) as errors,
+      count(*) filter (where status = 'parsed') as parsed_not_saved,
+      max(received_at) as last_upload_at
+    from in_period
+    where user_id is not null
+    group by user_id
+  )
+  select jsonb_build_object(
+    'totalUploads', (select count(*) from in_period),
+    'users', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'userId', user_id,
+        'latestActorName', latest_actor_name,
+        'uploads', uploads,
+        'published', published,
+        'newTrips', new_trips,
+        'reuploads', reuploads,
+        'errors', errors,
+        'parsedNotSaved', parsed_not_saved,
+        'lastUploadAt', last_upload_at
+      ) order by uploads desc)
+      from per_user
+    ), '[]'::jsonb),
+    'trackingSince', (select min(received_at) from public.upload_events),
+    'stalledEvents', (
+      select count(*) from public.upload_events
+      where status in ('received', 'parsed') and received_at < now() - interval '24 hours'
+    ),
+    'historicalActorEvents', (
+      select count(*) from public.upload_events where user_id is null
+    )
+  );
+$function$;
+
+revoke execute on function public.usage_period_summary(timestamptz) from public;
+revoke execute on function public.usage_period_summary(timestamptz) from anon;
+revoke execute on function public.usage_period_summary(timestamptz) from authenticated;
+grant execute on function public.usage_period_summary(timestamptz) to service_role;
