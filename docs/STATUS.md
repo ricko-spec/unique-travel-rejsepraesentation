@@ -13,30 +13,30 @@
   [Vercel-deploys](https://vercel.com/unique-travel/unique-travel-rejsepraesentation/deployments).
 - **Landet siden sidst:** [Issue #40](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/40)
   — desktop progress navigation (≥1180px) er merget til main (PR #42, `94c561f` + review-fix
-  `8097be1`). `src/lib/progress-nav.ts` og `ProgressNav.tsx` er i main.
-- **Aktivt kapitel:** [Issue #43](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/43)
-  — Vision 3.0 **fase 1: eventmodel-design** (under [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
-  **Docs-only** — ingen migration, ingen kode, intet endpoint. Designet ligger i
-  `docs/VISION-3.0-EVENT-MODEL.md`; implementeringen er fase 1B (migration 010 +
-  middleware-matcher + ét kald i `page.tsx`).
+  `8097be1`). [Issue #43](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/43)
+  — Vision 3.0 fase 1-design er merget (PR #44, `391bf42`), docs-only:
+  `docs/VISION-3.0-EVENT-MODEL.md`. Fase 1B (selve session-opsamlingen) afventer stadig
+  Rickos afklaring af de fem KRÆVER RICKO-punkter i dokumentets §14.
+- **Aktivt kapitel:** [Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45)
+  — Vision 3.0: Analytics Bridge API til Marketing Dashboard. Read-only,
+  server-to-server-endpoint der eksporterer eksisterende online rejseplaner (uafhængigt af
+  fase 1B — bruger kun eksisterende `trips`-metadata). Se `docs/ANALYTICS-BRIDGE-API.md`.
 
 ## Seneste 3 relevante ændringer
 
-1. **[PR #39](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/39) —
+1. **[PR #44](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/44) —
+   Issue #43: Vision 3.0 fase 1-design (eventmodel/sessions/privacy), 2026-09-16.** Docs-only:
+   `docs/VISION-3.0-EVENT-MODEL.md` — sessiondefinition, `customer_sessions`-skitse,
+   `waitUntil()`-baseret fail-open skrivning, hard cookie-consent-release-gate. Ingen kode,
+   ingen migration.
+2. **[PR #42](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/42) —
+   Issue #40: desktop progress navigation, 2026-09-16.** Fixed nav ≥1180px efter
+   designkontrakten; `src/lib/progress-nav.ts` + `ProgressNav.tsx`. Rent frontend/CSS.
+3. **[PR #39](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/39) —
    Issue #38: Brugsoverblik / 100% upload-tracking pr. sælger, 2026-09-16.** Ny
    `upload_events`-tabel + `usage_period_summary`-RPC (migration 009, kørt og verificeret i
    production), fail-closed event-log på `/admin/api/parse` før Claude kaldes, ny
    `/admin/brug`-side. Migration kørt/verificeret **før** kode-deploy, som krævet.
-2. **[PR #37](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/37) —
-   Vision 2.0 fase 5 (pris/CTA/mobil-polish), 2026-09-15.** `.price`/`.cta`-radius 16px,
-   `.note`-radius 12px, CTA-guldglød, `.action-bar`-topradius. Ny tom-pris-tilstand ud fra
-   eksisterende `price.note`-data (21 af 237 aktive rejser har tom `price.total`). CTA skjules
-   fortsat korrekt uden `advisorEmail`. **Sidste Vision 2.0-fase.**
-3. **[PR #35](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/35) —
-   Vision 2.0 fase 4 (billeder), 2026-09-15.** `DestinationGallery` ind i designkontrakten
-   (1180px-bredde, 28/56/72px padding, 20/24px gap, 16px radius, 4:3-fliser, 1→3 kolonner
-   fra 760px); hero-foto (LCP/priority) og hero-logo på `next/image`. Kundevendte
-   `no-img-element`-warnings 0.
 
 Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pulls?q=is%3Apr+is%3Amerged).
 
@@ -56,16 +56,20 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Afvent Rickos review af Issue #43-design-PR'en** (`docs/VISION-3.0-EVENT-MODEL.md`).
-Docs-only — ingen migration, ingen kode, ingen særlig release-rækkefølge for denne PR.
-Dokumentets §14 lister de fem punkter der **KRÆVER RICKO** før fase 1B kan bygges:
-cookie-samtykke på `AccessGate`, kørsel af migration 010 i production, pg_cron-extension,
-udvidelse af middleware-matcheren til kundesider, og accept af de dokumenterede huller
-(udlogget sælger tæller som kunde; fail-open ⇒ tal er tæt på eksakte, ikke garanteret komplette).
+**Afvent Rickos review af Issue #45-PR'en** (Analytics Bridge API,
+`docs/ANALYTICS-BRIDGE-API.md`). Ny read-only route `GET
+/api/internal/analytics/travel-plans` — server-to-server auth
+(`ANALYTICS_BRIDGE_API_KEY`), HMAC-bookingmatch (`BOOKING_MATCH_SECRET`), ingen
+kundedata/bookingnummer i output. Ingen migration, ingen HubSpot-afhængighed i dette
+repo. To nye env-vars skal sættes i Vercel før første rigtige kald fra Marketing
+Dashboard (se docs — ikke gjort her, ingen production writes).
 
-**Herefter:** fase 1B — opsamlingen bygges (migration 010, ren gate-logik + tests,
-middleware-matcher, ét best-effort kald i `page.tsx`). Visning i admin er fase 1C/4.
+**Parallelt/herefter:** Fase 1B (session-opsamling) afventer fortsat Rickos afklaring af
+de fem KRÆVER RICKO-punkter i `docs/VISION-3.0-EVENT-MODEL.md` §14 — særligt
+cookie-samtykke/ePrivacy, som er en hard release gate. De to spor (#45 og fase 1B) er
+uafhængige af hinanden og kan godkendes i vilkårlig rækkefølge.
+
 Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)
 — Vision 3.0: Customer Engagement & Sales Intelligence. Master-issue/produktkapitel, IKKE én
 stor PR. Se issuen for fuld faseplan (fase 2 sektionsengagement, fase 3 kontakt-intent,
-fase 4 salgsoversigt).
+fase 4 salgsoversigt, fase 5 HubSpot-kobling — i Marketing Dashboard-projektet, ikke her).
