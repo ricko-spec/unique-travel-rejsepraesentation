@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   fetchAllUsageEvents,
+  mergeUsageSummary,
   periodStart,
   summarizeUsage,
   type FetchEventsPage,
+  type UsageAggregateResponse,
   type UsageEventRow,
   type UsageProfile,
 } from "./usage";
@@ -319,5 +321,155 @@ describe("fetchAllUsageEvents — keyset-paginering (Issue #38-reviewfund: ingen
     // bekræfter "færdig" (terminering sker KUN på en tom side, aldrig på
     // "færre end limit" — se kommentaren ved fetchAllUsageEvents).
     expect(seenLimits.length).toBe(5);
+  });
+});
+
+describe("fetchAllUsageEvents brugt med en TILFÆLDIG (ikke-monoton) id — reviewfund PR #39", () => {
+  // upload_events.id er gen_random_uuid() — IKKE en monoton nøgle. Denne
+  // test er en REGRESSIONSTEST der bevidst DOKUMENTERER svagheden: den
+  // beviser at fetchAllUsageEvents (den generiske keyset-paginator) misser
+  // et event hvis dets id sorterer FØR en cursor vi allerede har passeret —
+  // præcis det scenarie en tilfældig uuid kan give. Det er netop derfor
+  // GET /admin/api/usage IKKE bruger denne funktion til upload_events, men
+  // usage_period_summary-RPC'en (ét SQL-statement = ét Postgres-snapshot,
+  // se supabase/009_upload_events.sql) i stedet.
+  it("misser demonstrativt et event hvis dets id sorterer FØR en allerede passeret cursor", async () => {
+    function row(id: string, userId: string, name: string): UsageEventRow {
+      return {
+        id,
+        user_id: userId,
+        actor_name: name,
+        received_at: new Date().toISOString(),
+        status: "received",
+        save_kind: null,
+      };
+    }
+    const byId = (a: UsageEventRow, b: UsageEventRow) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+    let store: UsageEventRow[] = [
+      row("a-001", "user-1", "Anne Berg"),
+      row("a-002", "user-1", "Anne Berg"),
+      row("a-003", "user-1", "Anne Berg"),
+      row("a-004", "user-1", "Anne Berg"),
+      row("a-005", "user-1", "Anne Berg"),
+      row("a-006", "user-1", "Anne Berg"),
+    ];
+
+    let calls = 0;
+    const fetchPage: FetchEventsPage = async (cursor, limit) => {
+      calls += 1;
+      if (calls === 2) {
+        // En ny upload ankommer HER, mens pagineringen er i gang. Dens
+        // tilfældige uuid ("a-0025") sorterer efter "a-002" (allerede
+        // hentet i side 1) men FØR "a-003" (cursoren efter side 1) — fuldt
+        // muligt for en reel gen_random_uuid(), som ikke afspejler
+        // indsættelsestidspunkt.
+        store = [...store, row("a-0025", "user-2", "Bo Nielsen")].sort(byId);
+      }
+      const sorted = [...store].sort(byId);
+      const filtered = cursor ? sorted.filter((r) => r.id > cursor) : sorted;
+      return filtered.slice(0, limit);
+    };
+
+    const result = await fetchAllUsageEvents(fetchPage, 3);
+    const resultIds = result.map((r) => r.id);
+
+    // Selve reviewfundet: eventet findes reelt (bekræftet nedenfor), men
+    // pagineringen så det aldrig, fordi dens cursor allerede havde passeret
+    // det tidspunkt i id-rækkefølgen hvor det nye event endte.
+    expect(store.map((r) => r.id)).toContain("a-0025");
+    expect(resultIds).not.toContain("a-0025");
+  });
+});
+
+describe("mergeUsageSummary — fletter RPC-aggregat med profiles (produktions-aggregeringsvejen)", () => {
+  function aggregate(overrides: Partial<UsageAggregateResponse> = {}): UsageAggregateResponse {
+    return {
+      totalUploads: 0,
+      trackingSince: null,
+      stalledEvents: 0,
+      historicalActorEvents: 0,
+      users: [],
+      ...overrides,
+    };
+  }
+
+  it("inkluderer profiler med 0 uploads (Test-case 8)", () => {
+    const summary = mergeUsageSummary(PROFILES, aggregate(), "30d", iso(30));
+    expect(summary.users).toHaveLength(3);
+    expect(summary.zeroUploadUsers).toBe(3);
+    expect(summary.activeUsers).toBe(0);
+  });
+
+  it("bruger tallene direkte fra RPC-aggregatet uden at genberegne dem", () => {
+    const agg = aggregate({
+      totalUploads: 5,
+      trackingSince: iso(40),
+      stalledEvents: 2,
+      historicalActorEvents: 1,
+      users: [
+        {
+          userId: "user-1",
+          latestActorName: "Anne Berg",
+          uploads: 3,
+          published: 2,
+          newTrips: 1,
+          reuploads: 1,
+          errors: 1,
+          parsedNotSaved: 0,
+          lastUploadAt: iso(1),
+        },
+      ],
+    });
+    const summary = mergeUsageSummary(PROFILES, agg, "30d", iso(30));
+    expect(summary.totalUploads).toBe(5);
+    expect(summary.trackingSince).toBe(iso(40));
+    expect(summary.stalledEvents).toBe(2);
+    expect(summary.historicalActorEvents).toBe(1);
+    const anne = summary.users.find((u) => u.userId === "user-1")!;
+    expect(anne).toMatchObject({
+      uploads: 3,
+      published: 2,
+      newTrips: 1,
+      reuploads: 1,
+      errors: 1,
+      parsedNotSaved: 0,
+      lastUploadAt: iso(1),
+    });
+  });
+
+  it("sorterer flest uploads først, men beholder 0-brugere", () => {
+    const agg = aggregate({
+      users: [
+        { userId: "user-3", latestActorName: "Carl Dahl", uploads: 1, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
+        { userId: "user-1", latestActorName: "Anne Berg", uploads: 4, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
+      ],
+    });
+    const summary = mergeUsageSummary(PROFILES, agg, "30d", iso(30));
+    expect(summary.users.map((u) => u.userId)).toEqual(["user-1", "user-3", "user-2"]);
+  });
+
+  it("viser en aggregat-række for en user_id der ikke (længere) findes i profiles, med det snapshottede navn", () => {
+    const agg = aggregate({
+      users: [
+        { userId: "user-slettet", latestActorName: "Tidligere Sælger", uploads: 2, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
+      ],
+    });
+    const summary = mergeUsageSummary(PROFILES, agg, "30d", iso(30));
+    expect(summary.users).toHaveLength(4); // 3 profiler + 1 orphan
+    const orphan = summary.users.find((u) => u.userId === "user-slettet")!;
+    expect(orphan.name).toBe("Tidligere Sælger");
+    expect(orphan.uploads).toBe(2);
+  });
+
+  it("videregiver period og periodStart uændret til svaret", () => {
+    const summary = mergeUsageSummary(PROFILES, aggregate(), "7d", iso(7));
+    expect(summary.period).toBe("7d");
+    expect(summary.periodStart).toBe(iso(7));
+  });
+
+  it("giver periodStart = null for 'all'", () => {
+    const summary = mergeUsageSummary(PROFILES, aggregate(), "all", null);
+    expect(summary.periodStart).toBeNull();
   });
 });

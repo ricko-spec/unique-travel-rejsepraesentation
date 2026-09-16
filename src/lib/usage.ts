@@ -175,18 +175,23 @@ export function summarizeUsage(
 }
 
 // ----------------------------------------------------------------------------
-// Keyset-paginering af upload_events (fix for Issue #38-reviewfund: en almindelig
-// .select() uden paginering kan blive stille trunkeret af PostgREST/Supabase'
-// standard max-rows (typisk 1000) — uploadtal ville dermed kunne blive FALSKT
-// lave uden nogen fejl. Løsningen er IKKE offset/range-paginering (som kan give
-// dubletter/manglende rækker hvis nye events indsættes mens vi paginerer,
-// fordi OFFSET er en position, ikke en værdi) — i stedet bruges keyset-
-// paginering på den unikke, uforanderlige `id`-kolonne: "hent alle rækker med
-// id > sidste sete id". Det er stabilt uanset samtidige inserts, og
-// termineringsbetingelsen er UDELUKKENDE "fik vi en tom side" — aldrig
-// "fik vi færre rækker end vi bad om", fordi en skjult server-side
-// rækkegrænse kan capse en side under det ønskede limit selvom der er mere
-// data tilbage.
+// GENERISK keyset-paginerings-utility. IKKE brugt til upload_events/usage
+// (se begrundelse + regressionstest i usage.test.ts og RPC-kommentaren i
+// supabase/009_upload_events.sql).
+//
+// Keyset-paginering ("hent alt med id > sidste sete id", terminerer
+// udelukkende på en tom side — aldrig på "færre end limit", fordi en skjult
+// server-side rækkegrænse kan capse en side uden at det betyder "færdig")
+// er kun et sikkert konsistens-værn når cursor-kolonnen er MONOTONT
+// voksende i indsættelsesrækkefølge (fx en bigserial/identity-kolonne eller
+// en strengt stigende timestamp). `upload_events.id` er en TILFÆLDIG
+// `gen_random_uuid()` — ikke monoton — så et nyt event kan indsættes MENS
+// pagineringen kører, med en uuid der sorterer FØR den cursor vi allerede
+// har passeret, og forsvinder dermed stille fra resultatet. Denne funktion
+// er stadig korrekt for et cursor-felt der faktisk er monotont; den bruges
+// bare ikke til upload_events, hvor "alle rækker der eksisterede ved
+// request-start, ét konsistent snapshot" er kravet. Det krav løses i stedet
+// af `usage_period_summary`-RPC'en (ét SQL-statement, ét Postgres-snapshot).
 // ----------------------------------------------------------------------------
 
 export const USAGE_EVENTS_PAGE_SIZE = 500;
@@ -216,29 +221,105 @@ export async function fetchAllUsageEvents(
   return all;
 }
 
-// Ordnet på `id` (ikke received_at): id er den primære nøgle og ændres
-// aldrig, hvilket gør den til et sikkert keyset-cursor-felt. received_at
-// bruges stadig til selve periode-filtreringen i summarizeUsage.
-async function fetchUploadEventsPage(
-  cursor: string | null,
-  limit: number,
-): Promise<UsageEventRow[]> {
-  const supabase = getSupabaseService();
-  let query = supabase
-    .from("upload_events")
-    .select("id, user_id, actor_name, received_at, status, save_kind")
-    .order("id", { ascending: true })
-    .limit(limit);
-  if (cursor) query = query.gt("id", cursor);
+// ----------------------------------------------------------------------------
+// Konsistent DB-side aggregering via usage_period_summary-RPC'en (fix for
+// Issue #38-reviewfund: uuid-keyset-paginering af upload_events var ikke et
+// sikkert konsistens-værn — se kommentaren ovenfor og regressionstesten i
+// usage.test.ts). RPC'en kører som ÉT SQL-statement og ser derfor ét
+// Postgres-snapshot: et event indsat efter kaldets start er simpelthen ikke
+// med, uanset dets uuid, og alle tal i svaret er indbyrdes konsistente.
+// Resultatet er desuden bundet af antal sælgere med aktivitet i perioden —
+// aldrig antal events — og kan derfor ikke ramme en rækkegrænse.
+// ----------------------------------------------------------------------------
 
-  const { data, error } = await query;
+export type UsageAggregateUser = {
+  userId: string;
+  latestActorName: string;
+  uploads: number;
+  published: number;
+  newTrips: number;
+  reuploads: number;
+  errors: number;
+  parsedNotSaved: number;
+  lastUploadAt: string | null;
+};
+
+export type UsageAggregateResponse = {
+  totalUploads: number;
+  trackingSince: string | null;
+  stalledEvents: number;
+  historicalActorEvents: number;
+  users: UsageAggregateUser[];
+};
+
+export async function fetchUsagePeriodSummary(
+  periodStartIso: string | null,
+): Promise<UsageAggregateResponse> {
+  const supabase = getSupabaseService();
+  const { data, error } = await supabase.rpc("usage_period_summary", {
+    period_start: periodStartIso,
+  });
   if (error) throw error;
-  return (data ?? []) as UsageEventRow[];
+  return data as UsageAggregateResponse;
 }
 
-// Henter ALLE upload_events-rækker via keyset-paginering — bruges af
-// GET /admin/api/usage i stedet for et enkelt .select() som kunne blive
-// trunkeret af en skjult max-rows-grænse.
-export function fetchAllUploadEvents(): Promise<UsageEventRow[]> {
-  return fetchAllUsageEvents(fetchUploadEventsPage);
+// Fletter RPC-aggregatet (kun brugere med ≥1 event i perioden) med den fulde
+// profiles-liste, så 0-upload-sælgere altid vises. Ren funktion — testes
+// uden DB ved at give et fabrikeret UsageAggregateResponse-objekt.
+export function mergeUsageSummary(
+  profiles: UsageProfile[],
+  aggregate: UsageAggregateResponse,
+  period: UsagePeriod,
+  periodStartIso: string | null,
+): UsageSummary {
+  const aggregateByUser = new Map(aggregate.users.map((u) => [u.userId, u]));
+  const seenProfileIds = new Set<string>();
+
+  const rows: UserUsageRow[] = profiles.map((p) => {
+    seenProfileIds.add(p.id);
+    const a = aggregateByUser.get(p.id);
+    return {
+      userId: p.id,
+      name: p.full_name?.trim() || p.email,
+      uploads: a?.uploads ?? 0,
+      published: a?.published ?? 0,
+      newTrips: a?.newTrips ?? 0,
+      reuploads: a?.reuploads ?? 0,
+      errors: a?.errors ?? 0,
+      parsedNotSaved: a?.parsedNotSaved ?? 0,
+      lastUploadAt: a?.lastUploadAt ?? null,
+    };
+  });
+
+  // Et event kan i sjældne tilfælde pege på en user_id der ikke (længere)
+  // findes i profiles — vis den alligevel med det snapshottede navn frem
+  // for at tabe eventet fra oversigten.
+  for (const a of aggregate.users) {
+    if (seenProfileIds.has(a.userId)) continue;
+    rows.push({
+      userId: a.userId,
+      name: a.latestActorName,
+      uploads: a.uploads,
+      published: a.published,
+      newTrips: a.newTrips,
+      reuploads: a.reuploads,
+      errors: a.errors,
+      parsedNotSaved: a.parsedNotSaved,
+      lastUploadAt: a.lastUploadAt,
+    });
+  }
+
+  rows.sort((x, y) => y.uploads - x.uploads);
+
+  return {
+    period,
+    periodStart: periodStartIso,
+    totalUploads: aggregate.totalUploads,
+    activeUsers: rows.filter((r) => r.uploads > 0).length,
+    zeroUploadUsers: rows.filter((r) => r.uploads === 0).length,
+    trackingSince: aggregate.trackingSince,
+    stalledEvents: aggregate.stalledEvents,
+    historicalActorEvents: aggregate.historicalActorEvents,
+    users: rows,
+  };
 }
