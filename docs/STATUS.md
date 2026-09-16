@@ -2,7 +2,7 @@
 
 > Læs denne før hver arbejdsrunde. Kort og operationel — fuld PR-historik står i GitHub
 > (lukkede PR'er, commits, diffs), ikke her. Opdatér ved hvert milepæl.
-> Sidst opdateret: **2026-09-15**
+> Sidst opdateret: **2026-09-16**
 
 ## Nu
 
@@ -10,8 +10,10 @@
   (denne fil hardcoder bevidst ikke en SHA — den bliver stale ved næste merge):
   [commits på main](https://github.com/ricko-spec/unique-travel-rejsepraesentation/commits/main) ·
   [Vercel-deploys](https://vercel.com/unique-travel/unique-travel-rejsepraesentation/deployments).
-- **Aktivt kapitel:** ingen. **Vision 2.0 er afsluttet** — fase 1-5 er alle live
-  (PR #27, #29, #31, #35, #37). Faseplan/historik: `docs/VISION-2.0-PLAN.md`.
+- **Aktivt kapitel:** [Issue #38](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/38)
+  — Brugsoverblik / 100% upload-tracking. **PR åben, IKKE merget, migration IKKE kørt live** —
+  afventer Rickos godkendelse. Se release-rækkefølgen i PR-beskrivelsen: migration 009 SKAL
+  køres i production FØR kode-deploy (parse-routen fail-closed'er uden `upload_events`-tabellen).
 
 ## Seneste 3 relevante ændringer
 
@@ -49,6 +51,9 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Ingen automatisk næste feature.** Vision 2.0 var det planlagte produktkapitel — med fase 5
-landet er der intet forudbestemt næste skridt. Afvent Rickos prioritering af næste
-backlogpunkt (`docs/ROADMAP.md`).
+**Afvent Rickos review af Issue #38-PR'en.** Ved godkendelse, i denne rækkefølge: (1) kør
+migration `supabase/009_upload_events.sql` live + `node scripts/check-schema-drift.mjs
+--update-baseline`, (2) verificér migrationen i production, (3) merge/deploy koden,
+(4) kontrolleret test-upload gennem UI, (5) verificér at event + `/admin/brug` stemmer.
+Herefter: intet automatisk næste kapitel — Vision 2.0 var det planlagte produktkapitel.
+Afvent Rickos prioritering af næste backlogpunkt (`docs/ROADMAP.md`).

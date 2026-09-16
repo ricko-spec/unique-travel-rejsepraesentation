@@ -22,10 +22,13 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
 
 ## Næste
 
-Intet forudbestemt — Vision 2.0 var det planlagte produktkapitel og er nu afsluttet.
-Næste punkt vælges af Ricko fra backloggen nedenfor eller GitHub Issues.
+1. **[Issue #38](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/38) —
+   Brugsoverblik / 100% upload-tracking pr. sælger.** PR klar (migration, kode, tests, docs) —
+   afventer Rickos review og godkendelse af release-rækkefølgen (migration live før deploy).
+2. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
-1. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
+Herudover intet forudbestemt — Vision 2.0 var det planlagte produktkapitel og er nu afsluttet.
+Næste punkt efter #38 vælges af Ricko fra backloggen nedenfor eller GitHub Issues.
 
 ## Backlog (uprioriteret — se GitHub Issues for fuld liste)
 

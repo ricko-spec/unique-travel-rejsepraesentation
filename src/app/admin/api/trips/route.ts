@@ -7,6 +7,11 @@ import {
   envDiagnostics,
 } from "@/lib/supabase/server";
 import { tripSchema } from "@/lib/types";
+import {
+  markUploadEventPublished,
+  markUploadEventSaveFailed,
+  verifyUploadEventForPublish,
+} from "@/lib/upload-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +22,19 @@ const createSchema = z.object({
   customerName: z.string().optional().nullable(),
   slugOverride: z.string().optional().nullable(),
   rawPdfText: z.string().optional().nullable(),
+  uploadEventId: z.string().uuid(),
 });
+
+// ISSUE-38: sælgervendte fejlbeskeder for de tre måder verifikationen af et
+// upload-event kan afvises på. Samme "besked er sælgervendt, detaljen bliver
+// på serveren"-mønster som parse-errors.ts.
+const UPLOAD_EVENT_REJECT_MESSAGES: Record<string, string> = {
+  not_found: "Upload-registreringen blev ikke fundet. Upload PDF'en igen.",
+  forbidden: "Upload-registreringen tilhører ikke din session. Upload PDF'en igen.",
+  wrong_status: "Denne upload er allerede gemt eller udløbet. Upload PDF'en igen.",
+  hash_mismatch:
+    "Bookingnummeret matcher ikke den parsede upload. Upload PDF'en igen.",
+};
 
 function slugify(input: string): string {
   return input
@@ -75,10 +92,26 @@ export async function POST(req: Request) {
     );
   }
 
-  const { trip, heroPhoto, customerName, slugOverride, rawPdfText } = parsed.data;
+  const { trip, heroPhoto, customerName, slugOverride, rawPdfText, uploadEventId } = parsed.data;
   const slug = slugOverride?.trim() || slugify(trip.bookingNo) || slugify(trip.destination);
   if (!slug) {
     return NextResponse.json({ error: "Kunne ikke generere et gyldigt slug" }, { status: 400 });
+  }
+
+  // ISSUE-38: eventet skal findes, tilhøre den aktuelle bruger, stå i
+  // 'parsed'-status, og booking-hashen skal matche den trip vi forsøger at
+  // gemme — ellers kan et fremmed eller genbrugt event ikke bruges til at
+  // markere en upload som "published".
+  const verification = await verifyUploadEventForPublish(uploadEventId, user.id, trip.bookingNo);
+  if (!verification.ok) {
+    console.error("[POST /api/trips] upload-event verifikation afvist", {
+      uploadEventId,
+      reason: verification.reason,
+    });
+    return NextResponse.json(
+      { error: UPLOAD_EVENT_REJECT_MESSAGES[verification.reason] },
+      { status: verification.reason === "forbidden" ? 403 : 400 },
+    );
   }
 
   try {
@@ -94,6 +127,7 @@ export async function POST(req: Request) {
 
     if (existingByBooking.error) {
       console.error("[POST /api/trips] Pre-check failed", existingByBooking.error);
+      await markUploadEventSaveFailed(uploadEventId, "save_error");
       return NextResponse.json(
         { error: existingByBooking.error.message, code: existingByBooking.error.code },
         { status: 500 },
@@ -116,6 +150,7 @@ export async function POST(req: Request) {
       if (slugCollision.error) {
         console.error("[POST /api/trips] Slug collision check failed", slugCollision.error);
       } else if (slugCollision.data) {
+        await markUploadEventSaveFailed(uploadEventId, "save_conflict");
         return NextResponse.json(
           {
             error: `Link-slug "${slug}" er allerede i brug af booking #${slugCollision.data.booking_no}. Vælg et andet.`,
@@ -170,11 +205,13 @@ export async function POST(req: Request) {
         hint: error.hint,
       });
       if (error.code === "23505") {
+        await markUploadEventSaveFailed(uploadEventId, "save_conflict");
         return NextResponse.json(
           { error: "Et booking-nr eller link med samme værdi findes allerede." },
           { status: 409 },
         );
       }
+      await markUploadEventSaveFailed(uploadEventId, "save_error");
       return NextResponse.json(
         {
           error: error.message,
@@ -185,6 +222,8 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
+
+    await markUploadEventPublished(uploadEventId, data.id, wasUpdate ? "updated" : "created");
 
     return NextResponse.json({
       id: data.id,
@@ -197,6 +236,7 @@ export async function POST(req: Request) {
     const diag = envDiagnostics();
     console.error("[POST /api/trips] Network/runtime error", e);
     console.error("[POST /api/trips] Env diagnostics", diag);
+    await markUploadEventSaveFailed(uploadEventId, "save_error");
     return NextResponse.json(
       {
         error: `Forbindelse til Supabase fejlede: ${detail}`,

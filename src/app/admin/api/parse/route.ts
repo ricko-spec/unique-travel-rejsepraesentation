@@ -9,6 +9,13 @@ import {
   parseErrorMessage,
   parseErrorStatus,
 } from "@/lib/parse-errors";
+import {
+  createUploadEvent,
+  hashBookingNo,
+  markUploadEventFailed,
+  markUploadEventParsed,
+  resolveActorName,
+} from "@/lib/upload-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,12 +56,33 @@ export async function POST(req: Request) {
   if (!(file instanceof Blob)) {
     return NextResponse.json({ error: "Ingen fil modtaget" }, { status: 400 });
   }
-  if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ error: "PDF er for stor (max 10 MB)" }, { status: 400 });
-  }
 
   const actor = `admin:${user.email ?? user.id}`;
   const pdfName = file instanceof File ? file.name : null;
+
+  // ISSUE-38: fail-closed. Så snart vi har en autentificeret bruger og en
+  // reel fil-upload, oprettes upload-eventet FØR Claude kaldes. Fejler dette
+  // insert, må Claude ikke kaldes og uploaden må ikke fortsætte — ellers kan
+  // en behandlet PDF eksistere uden at være talt med i brugsoverblikket.
+  const actorName = await resolveActorName(getSupabaseService(), user);
+  const eventResult = await createUploadEvent({
+    userId: user.id,
+    actorName,
+    fileSizeBytes: file.size,
+  });
+  if (!eventResult.ok) {
+    console.error("[parse] upload_events insert fejlede — stopper før Claude", eventResult.error);
+    return NextResponse.json(
+      { error: "Uploaden kunne ikke registreres. Prøv igen om lidt." },
+      { status: 503 },
+    );
+  }
+  const uploadEventId = eventResult.id;
+
+  if (file.size > 10 * 1024 * 1024) {
+    await markUploadEventFailed(uploadEventId, "validation_failed", "file_too_large");
+    return NextResponse.json({ error: "PDF er for stor (max 10 MB)" }, { status: 400 });
+  }
 
   const arrayBuffer = await file.arrayBuffer();
   const base64 = Buffer.from(arrayBuffer).toString("base64");
@@ -80,9 +108,11 @@ export async function POST(req: Request) {
     if (claudeReplied) {
       // Claude svarede, men svaret kunne ikke parses som JSON.
       await logParseFailure({ actor, kind: "invalid_json", rawResponse: rawResp, pdfName });
+      await markUploadEventFailed(uploadEventId, "parse_failed", "invalid_json");
     } else {
       // Ingen rå response = fejlen kom fra Anthropic-kaldet selv (API/billing/config).
       await logParseFailure({ actor, kind: "anthropic_error", rawResponse: msg, pdfName });
+      await markUploadEventFailed(uploadEventId, "parse_failed", "anthropic_error");
     }
     const status = (e as { status?: number }).status;
     const kind = classifyParseFailure({ message: msg, status, claudeReplied });
@@ -108,6 +138,7 @@ export async function POST(req: Request) {
       issues: parsed.error.issues,
       pdfName,
     });
+    await markUploadEventFailed(uploadEventId, "parse_failed", "schema_mismatch");
     // issues og raw bliver på serveren: de er uforståelige for sælgeren, og raw
     // indeholder kundedata der ikke har noget at gøre i et browsersvar.
     return NextResponse.json(
@@ -117,5 +148,6 @@ export async function POST(req: Request) {
   }
 
   const trip = await enrichAdvisorContact(normalizeTrip(parsed.data));
-  return NextResponse.json({ trip, rawPdfText });
+  await markUploadEventParsed(uploadEventId, hashBookingNo(trip.bookingNo));
+  return NextResponse.json({ trip, rawPdfText, uploadEventId });
 }

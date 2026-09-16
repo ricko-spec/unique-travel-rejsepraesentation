@@ -42,6 +42,9 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
   const [customerName, setCustomerName] = useState("");
   const [slugOverride, setSlugOverride] = useState("");
   const [rawPdfText, setRawPdfText] = useState("");
+  // ISSUE-38: parse-svarets uploadEventId følger med til POST /admin/api/trips
+  // så uploaden kan tælles/markeres published i usage-loggen.
+  const [uploadEventId, setUploadEventId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
@@ -74,6 +77,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     setTrip(null);
     setCreatedSlug(null);
     setWasUpdate(false);
+    setUploadEventId(null);
     setParsing(true);
     const fd = new FormData();
     fd.append("file", f);
@@ -93,6 +97,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     const j = await res.json();
     setTrip(j.trip as Trip);
     setRawPdfText((j.rawPdfText as string | undefined) ?? "");
+    setUploadEventId((j.uploadEventId as string | undefined) ?? null);
     setCustomerName((j.trip as Trip).travellers ?? "");
     // SEC-1: foreslå ALDRIG booking-nr som slug — booking-nr er kundens
     // adgangskode, og slug = booking-nr ville lægge koden i selve URL'en.
@@ -111,6 +116,13 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
 
   async function handleCreate() {
     if (!trip) return;
+    if (!uploadEventId) {
+      // Skal ikke kunne ske i den normale flow (parse sætter altid
+      // uploadEventId) — men uden det kan uploaden ikke tælles, så vi
+      // stopper i stedet for at gemme "usynligt".
+      setCreateError("Upload-registreringen mangler. Upload PDF'en igen.");
+      return;
+    }
     setCreateError(null);
     setCreating(true);
     const res = await fetch("/admin/api/trips", {
@@ -122,6 +134,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
         customerName: customerName.trim() || null,
         slugOverride: slugOverride.trim() || null,
         rawPdfText,
+        uploadEventId,
       }),
     });
     setCreating(false);
@@ -185,6 +198,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     setCreateError(null);
     setCreatedSlug(null);
     setWasUpdate(false);
+    setUploadEventId(null);
     setHeroPhoto("");
     setCustomerName("");
     setSlugOverride("");
@@ -222,6 +236,9 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
             {userEmail && (
               <span style={{ fontSize: 12, color: "var(--grey-text)" }}>{userEmail}</span>
             )}
+            <a className="admin-btn admin-btn-secondary" href="/admin/brug">
+              Brugsoverblik
+            </a>
             <a className="admin-btn admin-btn-secondary" href="/admin/profil">
               Min profil
             </a>
