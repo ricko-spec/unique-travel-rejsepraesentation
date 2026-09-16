@@ -29,6 +29,7 @@ Eksempel struktur:
   * included: array af strenge fra 'Inkluderet i prisen:' liste (hvis findes).
   * notIncluded: array af strenge fra 'Ikke inkluderet i prisen:' liste (hvis findes).
   * notes: array af 'Bemærk:'-tekster eller 'hotel-specifikke noter' der hører til opholdet (fx tidevands-info, lokal turistskat, bagage-begrænsninger).
+  * website: hotellets officielle hjemmeside-URL, KUN hvis PDF'en eksplicit viser en (fx en linje med 'Website:', 'Hjemmeside:', eller en fritstående http(s)-URL ved hotellet). ALDRIG gæt, konstruér eller udled en URL ud fra hotelnavnet — ingen '{hotelnavn}.com'-heuristik, ingen søgning. Findes ingen eksplicit URL i PDF'en, sæt til tom streng ("").
 - price: { total, perPerson, note } — total er '##.### kr.', perPerson er '##.### kr. pr. person · # voksne', note kort forklaring. Hvis PDF er Faktura, skær 'Faktura: XXX' og 'Fakturadato' væk.
 - disclaimer: kort dansk standardforbehold fra PDF'ens forbeholds-side.
 - documentType: 'rejseforslag' eller 'faktura' (kig efter ordet 'Faktura:' øverst i PDF).
