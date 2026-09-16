@@ -15,7 +15,8 @@ export type AuditAction =
   | "password_change_failed"
   | "password_change_rate_limited"
   | "password_recovery_requested"
-  | "destination_image_uploaded";
+  | "destination_image_uploaded"
+  | "parse_rate_limited";
 
 export type AuditEntry = {
   // "admin:{email}" for sælgere, "customer:{slug}" for kunder

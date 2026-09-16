@@ -17,10 +17,24 @@ import {
   resolveActorName,
 } from "@/lib/upload-events";
 import { isPdf } from "@/lib/file-sniff";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { writeAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+
+// SEC-4: beskytter den dyre Claude-parse (ikke statiske/admin GETs) mod
+// misbrug/spam fra en autentificeret session, uden at genere normalt
+// sælgerarbejde. 20 forsøg / 10 minutter pr. bruger: en sælger der
+// arbejder sig igennem en bunke bookinger (inkl. et par re-forsøg ved en
+// dårlig PDF) rammer aldrig dette i praksis, men en løbsk klient/kapret
+// session kan højst udløse ~120 Claude-kald/time i stedet for ubegrænset.
+// Key er brugerens Supabase Auth-id (IKKE ip) — flere sælgere bag samme
+// kontor-IP må ikke dele hinandens kvote, og vi har allerede en sikker
+// identitet fra getSessionUser() på dette tidspunkt.
+const PARSE_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const PARSE_RATE_LIMIT_MAX_ATTEMPTS = 20;
 
 // ERR-2: best-effort dead-letter i parse_failures. Må ALDRIG kaste eller
 // blokere fejlresponsen til sælgeren (samme mønster som writeAudit).
@@ -60,6 +74,28 @@ export async function POST(req: Request) {
 
   const actor = `admin:${user.email ?? user.id}`;
   const pdfName = file instanceof File ? file.name : null;
+
+  // SEC-4: FØR upload_events-insert og Claude — se konstanterne øverst i
+  // filen for antal/vindue/begrundelse. Et rate-limitet forsøg tæller ikke
+  // som en registreret upload (ingen upload_events-række oprettes), da det
+  // aldrig når frem til et reelt parse-forsøg.
+  const rl = await checkRateLimit(`parse:${user.id}`, {
+    windowMs: PARSE_RATE_LIMIT_WINDOW_MS,
+    maxAttempts: PARSE_RATE_LIMIT_MAX_ATTEMPTS,
+  });
+  if (!rl.allowed) {
+    await writeAudit(getSupabaseService(), {
+      actor,
+      action: "parse_rate_limited",
+      resource: "parse",
+      metadata: { attempt_count: rl.attempts },
+    });
+    const minutes = Math.max(1, Math.ceil(rl.retryAfterSeconds / 60));
+    return NextResponse.json(
+      { error: `For mange PDF-uploads. Prøv igen om ${minutes} minutter.` },
+      { status: 429 },
+    );
+  }
 
   // ISSUE-38: fail-closed. Så snart vi har en autentificeret bruger og en
   // reel fil-upload, oprettes upload-eventet FØR Claude kaldes. Fejler dette
