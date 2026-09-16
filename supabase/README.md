@@ -18,6 +18,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `006_created_by_on_trips.sql` | trips.created_by (skrives af POST /admin/api/trips siden 2026-08-04, kun i insert-grenen) | 2026-07-04 |
 | `007_parse_failures.sql` | parse_failures dead-letter (koblet til parse-routen siden 2026-08-04) | 2026-07-04 |
 | `008_schema_snapshot.sql` | `schema_snapshot()` RPC — grundlag for drift-tjekket | 2026-07-20 |
+| `009_upload_events.sql` | upload_events — adoption/usage-log pr. sælger (Issue #38) | **IKKE kørt endnu** — afventer Rickos godkendelse |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.
@@ -44,6 +45,26 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
   `delete from public.parse_failures where occurred_at < now() - interval '30 days';`
 - **Data:** `raw_response` kan indeholde rå AI-output og kundedata fra PDF'en.
   Tabellen er intern/debug (service-role-only RLS) og må aldrig vises kundevendt.
+
+## Driftsnote: upload_events (Issue #38)
+
+- **Release-rækkefølge (KRÆVER RICKO):** migration 009 skal køres i production og verificeres
+  **FØR** kode-deploy. Parse-routen (`src/app/admin/api/parse/route.ts`) er fail-closed: uden
+  `upload_events`-tabellen fejler event-insertet, og uploads stopper med en fejlbesked i stedet
+  for at fortsætte "usynligt". Deploy koden først, og enhver PDF-upload afvises indtil
+  migrationen er kørt.
+- Efter migrationen er kørt live: `node scripts/check-schema-drift.mjs --update-baseline` og
+  commit den opdaterede `schema-baseline.json` i en opfølgende commit (kunne ikke gøres i
+  udviklings-PR'en, da migrationen bevidst ikke er kørt mod production herfra).
+- **Data:** ingen kundedata. Bookingnummeret gemmes kun som sha-256-hash
+  (`booking_no_hash`), aldrig i klartekst. Tabellen er service-role-only (samme RLS-mønster
+  som `parse_failures`/`audit_log`).
+- **Historik:** de 172+ trips oprettet før denne feature backfilles IKKE til `upload_events`.
+  Eksakt upload-tracking gælder fra tabellens første række — `trips.created_by` er fortsat det
+  eneste (upræcise) signal for perioden før.
+- **Oprydning:** ingen defineret endnu (i modsætning til `parse_failures`) — usage-data er
+  forretningsstatistik, ikke debug-dead-letter, så der er ikke samme 30-dages-begrundelse.
+  Tag stilling til retention hvis tabellen vokser stort.
 
 ## Drift-tjek
 
