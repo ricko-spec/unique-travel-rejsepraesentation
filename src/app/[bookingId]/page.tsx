@@ -16,6 +16,7 @@ import { Footer } from "@/components/trip/Footer";
 import { ActionBar } from "@/components/trip/ActionBar";
 import { ProgressNav } from "@/components/trip/ProgressNav";
 import { filterGalleryImages, visibleNavSections } from "@/lib/progress-nav";
+import { hasValidTripAccess, tripAccessCookieName, TRIP_PAGE_ROBOTS } from "@/lib/trip-access";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -45,7 +46,7 @@ export async function generateMetadata({
   const dest = row?.destination ?? "rejse";
   return {
     title: `Unique Travel — Jeres rejse til ${dest}`,
-    robots: { index: false, follow: false },
+    robots: TRIP_PAGE_ROBOTS,
   };
 }
 
@@ -63,8 +64,8 @@ export default async function TripPage({ params }: { params: { bookingId: string
   const row = await loadTrip(params.bookingId);
   if (!row) notFound();
 
-  const accessCookie = cookies().get(`trip_access_${params.bookingId}`);
-  if (accessCookie?.value !== row.booking_no) {
+  const accessCookie = cookies().get(tripAccessCookieName(params.bookingId));
+  if (!hasValidTripAccess(accessCookie?.value, row.booking_no)) {
     return <AccessGate slug={params.bookingId} destination={row.destination} />;
   }
 

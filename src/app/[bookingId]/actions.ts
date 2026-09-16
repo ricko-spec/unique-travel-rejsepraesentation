@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getSupabaseService } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { writeAudit, requestMeta } from "@/lib/audit";
+import { TRIP_ACCESS_COOKIE_OPTIONS, tripAccessCookieName, tripAccessCookiePath } from "@/lib/trip-access";
 
 export type UnlockResult = { error: string } | void;
 
@@ -70,12 +71,9 @@ export async function unlockTrip(
     metadata: { attempt_count: rl.attempts },
   });
 
-  cookies().set(`trip_access_${slug}`, data.booking_no, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    path: `/${slug}`,
-    maxAge: 60 * 60 * 24 * 30, // 30 dage
+  cookies().set(tripAccessCookieName(slug), data.booking_no, {
+    ...TRIP_ACCESS_COOKIE_OPTIONS,
+    path: tripAccessCookiePath(slug),
   });
 
   redirect(`/${slug}`);
