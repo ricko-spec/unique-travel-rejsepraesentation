@@ -116,3 +116,33 @@ describe("normalizeTrip — rundrejse-program dobbeltvisning", () => {
     ]);
   });
 });
+
+describe("normalizeTrip — hotel website (Issue #47)", () => {
+  it("bevarer en gyldig https-URL", () => {
+    const trip = makeTrip({
+      hotels: [{ name: "Beach Resort", website: "https://www.beach-resort.example" }],
+    });
+    const result = normalizeTrip(trip);
+    expect(result.hotels[0].website).toBe("https://www.beach-resort.example/");
+  });
+
+  it("gammel trip uden website-felt normaliserer til tom streng, ikke fejl", () => {
+    const trip = makeTrip({ hotels: [{ name: "Gammelt Hotel", nights: 3 }] });
+    const result = normalizeTrip(trip);
+    expect(result.hotels[0].website).toBe("");
+  });
+
+  it("saniterer en javascript:-URL til tom streng i stedet for at vise et link", () => {
+    const trip = makeTrip({
+      hotels: [{ name: "Ondsindet Hotel", website: "javascript:alert(1)" }],
+    });
+    const result = normalizeTrip(trip);
+    expect(result.hotels[0].website).toBe("");
+  });
+
+  it("saniterer en malformed URL (intet http(s)-præfiks) til tom streng", () => {
+    const trip = makeTrip({ hotels: [{ name: "Hotel", website: "beach-resort.example" }] });
+    const result = normalizeTrip(trip);
+    expect(result.hotels[0].website).toBe("");
+  });
+});

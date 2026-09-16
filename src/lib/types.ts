@@ -2,6 +2,7 @@ import { z } from "zod";
 import { collectAlternatives } from "./hotel-alternatives";
 import { normalizeLocationLabel } from "./location-label";
 import { stripRedundantTransferChips } from "./transfer-chips";
+import { sanitizeHotelWebsite } from "./hotel-website";
 
 // ----- helpers -----
 // Accept null/undefined/anything coercible to string; default to "".
@@ -139,6 +140,12 @@ export const hotelSchema = z
     meals: looseStr.optional().default(""),
     checkIn: looseStr.optional().default(""),
     checkOut: looseStr.optional().default(""),
+    // Issue #47: hotellets officielle website, KUN hvis kilde-PDF'en eksplicit
+    // angiver en. Optional, bagudkompatibelt — gamle trips uden feltet parser
+    // uændret til "". Selve http(s)-valideringen sker i normalizeTrip()
+    // (sanitizeHotelWebsite i hotel-website.ts), ikke her: schema'et er bevidst
+    // "loose" (samme mønster som resten af filen), sanitisering er ét sted.
+    website: looseStr.optional().default(""),
     roomAllocations: z.array(looseStr).optional().default([]),
     alternative: alternativeHotelSchema.nullable().optional(),
     // Flere alternativer — udfyldes af normalizeTrip ('alternative' + løftede noter).
@@ -594,6 +601,11 @@ export function normalizeTrip(trip: Trip): Trip {
       meals: pickStr(h.meals, anyH["m\u00e5ltider"]),
       checkIn: pickStr(h.checkIn, anyH.checkInd),
       checkOut: pickStr(h.checkOut, anyH.checkUd),
+      // Issue #47: streng http(s)-validering ved HVER visning (parse-tid OG
+      // kunde-sidevisning, se normalizeTrip()'s to callers) \u2014 aldrig kun ved
+      // gem. "" (samme tomme-streng-konvention som de andre valgfrie felter
+      // ovenfor) hvis feltet mangler eller ikke validerer.
+      website: sanitizeHotelWebsite(h.website) ?? "",
     };
     if (h.isPackage && hasProgramInItinerary) {
       return { ...normalized, included: [], notIncluded: [] };

@@ -172,6 +172,22 @@ export function Hotels({ hotels }: { hotels: Hotel[] }) {
                 )}
               </div>
             ))}
+            {/* Issue #47: diskret, ikke en CTA — h.website er allerede
+                http(s)-valideret af normalizeTrip() (sanitizeHotelWebsite),
+                så her checkes kun for tilstedeværelse. */}
+            {h.website && (
+              <div className="px-7 pb-6">
+                <a
+                  href={h.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs uppercase tracking-wider text-rainforest/80 border-b border-rainforest/25 pb-0.5 hover:text-gold hover:border-gold/60 transition-colors"
+                >
+                  Se hotellets hjemmeside
+                  <span aria-hidden="true">↗</span>
+                </a>
+              </div>
+            )}
           </div>
         ))}
       </div>
