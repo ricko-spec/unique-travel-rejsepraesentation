@@ -18,7 +18,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `006_created_by_on_trips.sql` | trips.created_by (skrives af POST /admin/api/trips siden 2026-08-04, kun i insert-grenen) | 2026-07-04 |
 | `007_parse_failures.sql` | parse_failures dead-letter (koblet til parse-routen siden 2026-08-04) | 2026-07-04 |
 | `008_schema_snapshot.sql` | `schema_snapshot()` RPC — grundlag for drift-tjekket | 2026-07-20 |
-| `009_upload_events.sql` | upload_events — adoption/usage-log pr. sælger (Issue #38) | **IKKE kørt endnu** — afventer Rickos godkendelse |
+| `009_upload_events.sql` | upload_events — adoption/usage-log pr. sælger (Issue #38) | 2026-09-16 |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.
@@ -26,7 +26,7 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 ## Regler
 
 1. **Ny DDL = ny nummereret fil.** Rediger aldrig en allerede-kørt migration (undtagen
-   kommentarer); næste fil hedder `009_*.sql`.
+   kommentarer); næste fil hedder `010_*.sql`.
 2. **Kør i Supabase-first, commit i samme ombæring.** Drift opstår når SQL køres i
    SQL Editor/MCP uden at filen lander i repoet — det var præcis hvad der skete med
    003-005 (oprettet maj-juni, først versioneret 2026-07-20).
@@ -48,14 +48,13 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 
 ## Driftsnote: upload_events (Issue #38)
 
-- **Release-rækkefølge (KRÆVER RICKO):** migration 009 skal køres i production og verificeres
-  **FØR** kode-deploy. Parse-routen (`src/app/admin/api/parse/route.ts`) er fail-closed: uden
-  `upload_events`-tabellen fejler event-insertet, og uploads stopper med en fejlbesked i stedet
-  for at fortsætte "usynligt". Deploy koden først, og enhver PDF-upload afvises indtil
-  migrationen er kørt.
-- Efter migrationen er kørt live: `node scripts/check-schema-drift.mjs --update-baseline` og
-  commit den opdaterede `schema-baseline.json` i en opfølgende commit (kunne ikke gøres i
-  udviklings-PR'en, da migrationen bevidst ikke er kørt mod production herfra).
+- **Release-rækkefølge (fulgt):** migration 009 blev kørt og verificeret i production
+  **FØR** kode-deploy, 2026-09-16. Parse-routen (`src/app/admin/api/parse/route.ts`) er
+  fail-closed: uden `upload_events`-tabellen ville event-insertet fejle, og uploads ville
+  stoppe med en fejlbesked i stedet for at fortsætte "usynligt" — derfor blev rækkefølgen
+  overholdt.
+- `schema-baseline.json` er opdateret til at matche (`node scripts/check-schema-drift.mjs`
+  viser ingen drift).
 - **Data:** ingen kundedata. Bookingnummeret gemmes kun som sha-256-hash
   (`booking_no_hash`), aldrig i klartekst. Tabellen er service-role-only (samme RLS-mønster
   som `parse_failures`/`audit_log`).

@@ -11,9 +11,14 @@
   den bliver stale ved næste merge):
   [commits på main](https://github.com/ricko-spec/unique-travel-rejsepraesentation/commits/main) ·
   [Vercel-deploys](https://vercel.com/unique-travel/unique-travel-rejsepraesentation/deployments).
-- **Aktivt kapitel:** [Issue #40](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/40)
-  — Vision 2.0 finishing touch: desktop progress navigation (≥1180px). **PR åben, IKKE merget.**
-  Rent frontend/CSS — ingen DB/parser/admin-ændringer.
+- **Landet siden sidst:** [Issue #40](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/40)
+  — desktop progress navigation (≥1180px) er merget til main (PR #42, `94c561f` + review-fix
+  `8097be1`). `src/lib/progress-nav.ts` og `ProgressNav.tsx` er i main.
+- **Aktivt kapitel:** [Issue #43](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/43)
+  — Vision 3.0 **fase 1: eventmodel-design** (under [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
+  **Docs-only** — ingen migration, ingen kode, intet endpoint. Designet ligger i
+  `docs/VISION-3.0-EVENT-MODEL.md`; implementeringen er fase 1B (migration 010 +
+  middleware-matcher + ét kald i `page.tsx`).
 
 ## Seneste 3 relevante ændringer
 
@@ -51,13 +56,16 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Afvent Rickos review af Issue #40-PR'en** (desktop progress-nav). Ved godkendelse: almindelig
-merge — ingen migration, ingen særlig release-rækkefølge.
+**Afvent Rickos review af Issue #43-design-PR'en** (`docs/VISION-3.0-EVENT-MODEL.md`).
+Docs-only — ingen migration, ingen kode, ingen særlig release-rækkefølge for denne PR.
+Dokumentets §14 lister de fem punkter der **KRÆVER RICKO** før fase 1B kan bygges:
+cookie-samtykke på `AccessGate`, kørsel af migration 010 i production, pg_cron-extension,
+udvidelse af middleware-matcheren til kundesider, og accept af de dokumenterede huller
+(udlogget sælger tæller som kunde; fail-open ⇒ tal er tæt på eksakte, ikke garanteret komplette).
 
-**Herefter næste kapitel er allerede besluttet:** [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)
+**Herefter:** fase 1B — opsamlingen bygges (migration 010, ren gate-logik + tests,
+middleware-matcher, ét best-effort kald i `page.tsx`). Visning i admin er fase 1C/4.
+Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)
 — Vision 3.0: Customer Engagement & Sales Intelligence. Master-issue/produktkapitel, IKKE én
-stor PR — starter med **Fase 1: design af en sikker eventmodel** (privacy-first, ingen
-bookingnummer i klartekst som analytics-id, server autoritativ hvor muligt, kundesiden må
-aldrig blive langsommere/skrøbeligere pga. analytics), derefter fundament + åbninger
-(første/seneste åbning, besøgstæller, "ikke åbnet endnu"). Se issuen for fuld faseplan
-(fase 2 sektionsengagement, fase 3 kontakt-intent, fase 4 salgsoversigt).
+stor PR. Se issuen for fuld faseplan (fase 2 sektionsengagement, fase 3 kontakt-intent,
+fase 4 salgsoversigt).
