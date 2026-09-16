@@ -10,7 +10,7 @@ export function PriceAndNote({ trip }: { trip: Trip }) {
   const hasPrice = trip.price.total.trim().length > 0;
 
   return (
-    <section>
+    <section id="pris">
       <SectionHeader label="Pris" />
       <div className="price-wrap">
         {hasPrice ? (
