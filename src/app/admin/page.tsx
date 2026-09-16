@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getSessionUser } from "@/lib/supabase/auth";
 import { AdminLogin } from "./AdminLogin";
 import { AdminDashboard } from "./AdminDashboard";
+import { VersionBadge } from "./VersionBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -27,5 +28,10 @@ export default async function AdminPage({
       />
     );
   }
-  return <AdminDashboard userEmail={user.email ?? ""} />;
+  return (
+    <>
+      <AdminDashboard userEmail={user.email ?? ""} />
+      <VersionBadge />
+    </>
+  );
 }
