@@ -72,7 +72,10 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning
+- **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning. Design med 2-3 modeller,
+  trusselsmodel og anbefaling klar til beslutning i `docs/UNLOCK-CODE-DESIGN.md`
+  ([Issue #55](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/55),
+  docs-only, PR klar til review — ingen implementation endnu)
 - **Slug-override-feltet i admin** — har aldrig virket (serveren ignorerer det); fjern eller
   gør funktionelt
 - **`stash@{0}` image-library WIP** — genoptag, flyt til branch, eller drop
