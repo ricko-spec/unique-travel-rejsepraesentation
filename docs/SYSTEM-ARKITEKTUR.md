@@ -90,7 +90,9 @@ uniquetravel-rejsepraesentation/
 │
 ├── scripts/
 │   ├── backfill-advisor-contacts.mjs   # Engangs-script: sætter advisorEmail/Phone på eksisterende trips fra profiles (dry-run default, --apply for at skrive)
-│   └── check-schema-drift.mjs    # Drift-tjek: diffner live-DB (via schema_snapshot RPC) mod supabase/schema-baseline.json — exit 1 ved drift
+│   ├── check-schema-drift.mjs    # Drift-tjek: diffner live-DB (via schema_snapshot RPC) mod supabase/schema-baseline.json — exit 1 ved drift
+│   ├── check-storage-drift.mjs   # Drift-tjek: diffner Storage-bucket-config (public/file_size_limit/allowed_mime_types, via Storage Admin API) mod supabase/storage-baseline.json — exit 1 ved drift
+│   └── lib/storage-drift.mjs     # Ren sammenligningslogik for storage-drift-tjekket (testet i storage-drift.test.mjs)
 │
 ├── src/
 │   ├── middleware.ts             # Holder Supabase-session-cookien frisk — matcher KUN /admin og /admin/*
@@ -839,7 +841,7 @@ Bevidst simple valg og halvfærdige kanter, i prioriteret rækkefølge:
 4. **`parse_failures` er død infrastruktur.** Designet (kategorier, PII-RLS, oprydningspolitik i kommentaren) men aldrig koblet til koden — fejlede parses efterlader kun Vercel-console-logs der roterer væk. Enten kobles den på i `parse/route.ts`'s catch-stier, eller droppes.
 5. **`trips.created_by` skrives ikke.** Kolonne + FK + index er klar i DB'en (kommentaren hævder "Fylder fra auth session ved POST /admin/api/trips" — det gør main-koden ikke). Formentlig forberedt til feature-branchen; indtil merge er kolonnen NULL og kommentaren misvisende.
 6. **Ingen tests og ingen CI.** Ingen testfiler i repoet, ingen GitHub Actions. `normalizeTrip`'s legacy-mapping og `computeWarnings` er oplagte unit-test-kandidater med høj regression-risiko ved prompt-ændringer.
-7. **Audit-dækningen er bredere men ikke fuld (delvist løst 2026-07-20).** Nu dækkes unlock, login, password-skift, intro-redigering og destination-uploads via den centrale `src/lib/audit.ts` (dubletterne er væk). `trip_created/updated`, `pdf_parsed` og `trip_viewed` logges fortsat ikke (DATA-2-backlog). **Ny kendt blind vinkel:** Storage-bucket-config (`destinations` har `file_size_limit = 50 MB`, hævet fra 10 MB 2026-07-20, + MIME-allowlist) ligger i `storage`-skemaet og fanges IKKE af `check-schema-drift.mjs`, som kun dækker `public`.
+7. **Audit-dækningen er bredere men ikke fuld (delvist løst 2026-07-20).** Nu dækkes unlock, login, password-skift, intro-redigering og destination-uploads via den centrale `src/lib/audit.ts` (dubletterne er væk). `trip_created/updated`, `pdf_parsed` og `trip_viewed` logges fortsat ikke (DATA-2-backlog). **Storage-bucket-config** (`destinations` har `file_size_limit = 50 MB`, hævet fra 10 MB 2026-07-20, + MIME-allowlist) ligger i Storage-API'et, ikke i `public`-skemaet, og fanges derfor IKKE af `check-schema-drift.mjs`. Dækket separat af `check-storage-drift.mjs` (Issue #53) mod `supabase/storage-baseline.json`.
 8. **README og DB-kommentarer lyver lidt.** Model-navn (README siger `claude-sonnet-4-20250514`, koden `claude-sonnet-4-6`), struktur-afsnittet mangler alle sider/routes fra juni, `profiles.sql` kalder produktions-DB'en "dev" og nævner projektet `sujimigwcjkzpekkdpzf` som "production" — ukendt om det findes/bruges — kræver Ricko-bekæftelse.
 9. **Småting/død kode:** `ADVISOR_PHONE`-eksporten i `Hero.tsx:55` bruges ingen steder; `ActionBar`/fejlsider hardkoder hovednummeret `+45 59 49 86 30` (mens CTA'en viser sælgerens — bevidst?); `.admin-textarea` er defineret to gange i `globals.css` (`:1092` monospace/80px og `:1258` Open Sans/150px — sidste vinder); redundant index `trips_slug_idx` ved siden af unique-constraintens eget; `qa/_placeholder.md`; DB-defaulten på `trips.slug` (tilfældig hex) er reelt død; `disclaimer`/`documentType`/`isOptional` efterspørges i prompten men bruges aldrig; `DestinationManager`-hjælpeteksten påstår destinationer auto-oprettes ved parse (de oprettes ved billede-upload); ingen oprydning af `rate_limits`-rækker.
 10. **Ingen retry på Claude-kald.** Én transient API-fejl = manuel re-upload. Fint ved nuværende volumen; irriterende ved vækst.
@@ -1052,7 +1054,7 @@ create policy "service_role full access parse_failures" on public.parse_failures
   for all to service_role using (true) with check (true);
 ```
 
-**Storage:** derudover findes bucket `destinations` (offentlige URLs via `getPublicUrl`). Bucket-konfigurationen (public/privat-flag, size-limits) er ikke verificeret her — kræver opslag i Supabase Dashboard.
+**Storage:** derudover findes bucket `destinations` (offentlige URLs via `getPublicUrl`). Bucket-konfigurationen (public-flag, file_size_limit, allowed_mime_types) er verificeret mod `supabase/storage-baseline.json` via `node scripts/check-storage-drift.mjs` (Issue #53) i stedet for manuelt Dashboard-opslag.
 
 ---
 

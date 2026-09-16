@@ -87,6 +87,19 @@ kolonner, policies, indexes, constraints, funktioner, triggers og kommentarer.
 Fandt allerede ved første kørsel en manglende trigger (`destinations_set_updated_at`)
 som blev føjet til 003.
 
+Dækker IKKE Supabase Storage bucket-config (lever i Storage-API'et, ikke i
+`public`-skemaet) — det tjekkes separat:
+
+```bash
+node scripts/check-storage-drift.mjs                    # exit 0 = ok, 1 = drift, 2 = fejl
+node scripts/check-storage-drift.mjs --update-baseline  # efter bevidst bucket-ændring
+```
+
+Sammenligner kun de bucket-egenskaber appen faktisk afhænger af (public-status,
+file_size_limit, allowed_mime_types for bucket `destinations`) mod
+`storage-baseline.json`. Read-only — kalder kun `GET /storage/v1/bucket/{name}`,
+opretter/ændrer/sletter aldrig en bucket.
+
 Manuelt alternativ — sammenlign live-DDL direkte i SQL Editor:
 
 ```sql
