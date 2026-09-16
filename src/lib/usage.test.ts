@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { periodStart, summarizeUsage, type UsageEventRow, type UsageProfile } from "./usage";
+import {
+  fetchAllUsageEvents,
+  periodStart,
+  summarizeUsage,
+  type FetchEventsPage,
+  type UsageEventRow,
+  type UsageProfile,
+} from "./usage";
 
 const NOW = new Date("2026-09-16T12:00:00.000Z");
 
@@ -159,5 +166,158 @@ describe("summarizeUsage — integritetsindikatorer", () => {
 
   it("giver trackingSince = null når der slet ingen events er", () => {
     expect(summarizeUsage(PROFILES, [], "all", NOW).trackingSince).toBeNull();
+  });
+});
+
+describe("summarizeUsage — timestamp-sammenligning må ikke være lexikografisk (reviewfund)", () => {
+  // Postgres/PostgREST kan returnere timestamptz i forskellige, lige gyldige
+  // string-formater (mikrosekund-præcision + "+00:00" i stedet for "Z"), som
+  // IKKE nødvendigvis sorterer korrekt mod hinanden som rene strenge — kun
+  // som reelle tidspunkter (Date/epoch ms). Disse tests bruger bevidst
+  // blandede formater for at bevise at filtrering/min/max regner rigtigt.
+  it("filtrerer korrekt på periode selvom eventets timestamp har '+00:00'-suffiks og mikrosekunder", () => {
+    // NOW = 2026-09-16T12:00:00.000Z. Dette event er ca. 2 dage gammel —
+    // skal medtages i 7d — men strengen sorterer FØR en simpel
+    // "YYYY-MM-DDT...Z"-cutoff-streng ville man fejlagtigt kunne tro,
+    // fordi "+00:00" (starter med '+', 0x2B) < "Z" (0x5A) tegn-for-tegn.
+    const events: UsageEventRow[] = [
+      {
+        id: "e1",
+        user_id: "user-1",
+        actor_name: "Anne Berg",
+        received_at: "2026-09-14T12:00:00.123456+00:00",
+        status: "received",
+        save_kind: null,
+      },
+    ];
+    const summary = summarizeUsage(PROFILES, events, "7d", NOW);
+    expect(summary.totalUploads).toBe(1);
+  });
+
+  it("ekskluderer korrekt et event der reelt er ældre end cutoff, selvom dets streng har flere fraktions-cifre", () => {
+    // Eventet er ca. 10 dage gammelt (uden for 7d), men har en længere,
+    // "senere-udseende" streng end en naiv 7d-cutoff — kun numerisk
+    // sammenligning afgør det korrekt.
+    const events: UsageEventRow[] = [
+      {
+        id: "e1",
+        user_id: "user-1",
+        actor_name: "Anne Berg",
+        received_at: "2026-09-06T12:00:00.999999+00:00",
+        status: "received",
+        save_kind: null,
+      },
+    ];
+    const summary = summarizeUsage(PROFILES, events, "7d", NOW);
+    expect(summary.totalUploads).toBe(0);
+  });
+
+  it("finder trackingSince (min) korrekt på tværs af blandede timestamp-formater", () => {
+    const events: UsageEventRow[] = [
+      { id: "e1", user_id: "user-1", actor_name: "Anne Berg", received_at: "2026-09-10T00:00:00.000Z", status: "received", save_kind: null },
+      { id: "e2", user_id: "user-1", actor_name: "Anne Berg", received_at: "2026-09-01T00:00:00.500000+00:00", status: "received", save_kind: null },
+    ];
+    const summary = summarizeUsage(PROFILES, events, "all", NOW);
+    expect(summary.trackingSince).toBe("2026-09-01T00:00:00.500000+00:00");
+  });
+});
+
+describe("fetchAllUsageEvents — keyset-paginering (Issue #38-reviewfund: ingen skjult max-rækkegrænse)", () => {
+  function makeStore(count: number): UsageEventRow[] {
+    return Array.from({ length: count }, (_, i) => {
+      const n = String(i + 1).padStart(6, "0");
+      return {
+        id: `evt-${n}`,
+        user_id: "user-1",
+        actor_name: "Anne Berg",
+        received_at: new Date(2026, 0, 1, 0, 0, i).toISOString(),
+        status: "received",
+        save_kind: null,
+      };
+    });
+  }
+
+  function pageFrom(store: UsageEventRow[]): FetchEventsPage {
+    return async (cursor, limit) => {
+      const startIdx = cursor ? store.findIndex((r) => r.id === cursor) + 1 : 0;
+      return store.slice(startIdx, startIdx + limit);
+    };
+  }
+
+  it("henter alle rækker uden truncation når datamængden overstiger én side (>1000 events)", async () => {
+    const store = makeStore(2500);
+    const result = await fetchAllUsageEvents(pageFrom(store), 500);
+    expect(result).toHaveLength(2500);
+    expect(new Set(result.map((r) => r.id)).size).toBe(2500);
+    expect(result[0].id).toBe("evt-000001");
+    expect(result[2499].id).toBe("evt-002500");
+  });
+
+  it("stopper IKKE for tidligt selvom en side rammer en skjult server-max under det ønskede limit", async () => {
+    // Simulerer at PostgREST/Supabase capser en side til færre rækker end
+    // klienten bad om (fx projekt-config lavere end vores pageSize) —
+    // pagineringsløkken må ikke tolke "færre end limit" som "færdig".
+    const store = makeStore(1200);
+    const SERVER_MAX = 300; // lavere end det ønskede limit (500)
+    const fetchPage: FetchEventsPage = async (cursor, limit) => {
+      const startIdx = cursor ? store.findIndex((r) => r.id === cursor) + 1 : 0;
+      const capped = Math.min(limit, SERVER_MAX);
+      return store.slice(startIdx, startIdx + capped);
+    };
+    const result = await fetchAllUsageEvents(fetchPage, 500);
+    expect(result).toHaveLength(1200);
+    expect(new Set(result.map((r) => r.id)).size).toBe(1200);
+  });
+
+  it("medtager et event indsat samtidigt med pagineringen, uden at duplikere allerede hentede rækker", async () => {
+    const store = makeStore(600);
+    let calls = 0;
+    const fetchPage: FetchEventsPage = async (cursor, limit) => {
+      calls += 1;
+      if (calls === 1) {
+        // En ny upload ankommer midt i pagineringen. Keyset (id > cursor)
+        // fanger den uden at rykke rundt på allerede hentede rækker — i
+        // modsætning til OFFSET-paginering, hvor et nyt insert kan skubbe
+        // rækker og give dubletter/huller.
+        store.push({
+          id: "evt-000601",
+          user_id: "user-2",
+          actor_name: "Bo Nielsen",
+          received_at: new Date().toISOString(),
+          status: "received",
+          save_kind: null,
+        });
+      }
+      const startIdx = cursor ? store.findIndex((r) => r.id === cursor) + 1 : 0;
+      return store.slice(startIdx, startIdx + limit);
+    };
+    const result = await fetchAllUsageEvents(fetchPage, 500);
+    const ids = result.map((r) => r.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain("evt-000601");
+    expect(result).toHaveLength(601);
+  });
+
+  it("returnerer en tom liste uden fejl når der ingen events er", async () => {
+    const fetchPage: FetchEventsPage = async () => [];
+    const result = await fetchAllUsageEvents(fetchPage, 500);
+    expect(result).toEqual([]);
+  });
+
+  it("respekterer en tilpasset sidestørrelse", async () => {
+    const store = makeStore(37);
+    const seenLimits: number[] = [];
+    const fetchPage: FetchEventsPage = async (cursor, limit) => {
+      seenLimits.push(limit);
+      const startIdx = cursor ? store.findIndex((r) => r.id === cursor) + 1 : 0;
+      return store.slice(startIdx, startIdx + limit);
+    };
+    const result = await fetchAllUsageEvents(fetchPage, 10);
+    expect(result).toHaveLength(37);
+    expect(seenLimits.every((l) => l === 10)).toBe(true);
+    // 10+10+10+7 rækker over fire sider, plus én afsluttende tom side der
+    // bekræfter "færdig" (terminering sker KUN på en tom side, aldrig på
+    // "færre end limit" — se kommentaren ved fetchAllUsageEvents).
+    expect(seenLimits.length).toBe(5);
   });
 });
