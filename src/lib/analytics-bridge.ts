@@ -59,42 +59,31 @@ export function computeBookingMatchKey(bookingNo: string, secret: string): strin
 }
 
 // ============================================================================
-// Pagination — id-keyset inden for et fast `since`-vindue pr. kald
+// Pagination — ren id-keyset. Fuld eksport ved hvert kald (v1: intet `since`)
 // ============================================================================
-// To adskilte bekymringer, løst hver for sig i stedet for sammenfiltret i én
-// tuple-cursor:
+// v1 har BEVIDST ingen incremental sync ("since"/watermark). Et tidligere
+// udkast lod forbrugeren sende sit eget ur-tidspunkt som `since`, filtreret
+// mod trips.updated_at — men det kan give STILLE datatab ved clock skew
+// mellem Marketing Dashboard, Vercel og Supabase (en række der reelt burde
+// være med, falder uden for filteret fordi de to systemers ure ikke er
+// perfekt synkrone, og ingen fejl gør opmærksom på det). Ved kun ca. 250
+// rejseplaner er en fuld pagineret eksport ved hvert sync-kald billigere
+// OG mere korrekt end den kompleksitet det ville kræve at bygge en
+// watermark-arkitektur der er robust mod skew (fx et server-side
+// synced_at-felt med egen retention, eller en kilde-side sekvensnøgle).
+// Det tilføjes senere, versionsstyret (ny schema_version), HVIS volumen
+// nogensinde gør en fuld eksport pr. kald for dyr — ikke før.
 //
-// 1. "Hvilke rækker hører til dette sync-kald?" — afgøres af `since`, som
-//    FORBRUGEREN sætter til sit eget ur-tidspunkt (`now()`) FØR forrige
-//    vellykkede kald blev sendt, og først opdaterer sit gemte high-water-mark
-//    til EFTER et kald er lykkedes fuldt ud. Det er standardmønstret for
-//    idempotent, ikke-tabende incremental sync ("checkpoint på egen tid, ikke
-//    på kildedata") — en række der ændres midt i et crawl har enten en
-//    updated_at ældre end forbrugerens NÆSTE `since` (fanges automatisk næste
-//    gang) eller nyere (var reelt ikke en del af dette vindue). Serveren
-//    behøver ALDRIG selv udlede det næste `since` af de returnerede rækker.
-// 2. "Hvordan bladres der gennem ét vindues rækker uden huller/dubletter?" —
-//    ren id-keyset (`id > cursor.id`, aldrig OFFSET). `id` er UUID-primærnøgle
-//    og derfor 100% kollisionsfri — i modsætning til updated_at (mikrosekund-
-//    præcision, men to rækker der IKKE er identiske i virkeligheden kan i
-//    teorien dele værdi). At bruge id kun til side-vandring inden for et
-//    allerede fastlagt, tidsmæssigt vindue eliminerer alle rækkefølge-
-//    problemer helt — ingen tuple-sammenligning, intet reviewfund at gentage
-//    fra Issue #38/PR #39.
-//
-// Cursoren er selv-indeholdende: den bærer det `since` sekvensen blev startet
-// med, så en side 2-forespørgsel ikke er afhængig af at forbrugeren husker at
-// gensende samme `since` — kun `cursor` er nødvendig for at fortsætte.
+// Det eneste pagineringen skal løse i v1 er derfor: "bladr gennem ALLE
+// rækker uden huller/dubletter". Ren id-keyset (`id > cursor.id`, aldrig
+// OFFSET) er nok til det: `id` er en UUID-primærnøgle og derfor 100%
+// kollisionsfri — i modsætning til at paginere på et tidsstempel (samme
+// fejlklasse som blev fundet og rettet i `upload_events`-pagineringen i
+// Issue #38/PR #39).
 
-export type Cursor = { since: string | null; id: string };
+export type Cursor = { id: string };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isValidIsoTimestamp(value: unknown): value is string {
-  if (typeof value !== "string" || value.length === 0) return false;
-  const ms = Date.parse(value);
-  return Number.isFinite(ms);
-}
 
 function isValidUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_RE.test(value);
@@ -107,8 +96,9 @@ export function encodeCursor(cursor: Cursor): string {
 }
 
 // Streng validering: en ugyldig/manipuleret cursor må ALDRIG stille skifte
-// forespørgslens betydning (fx til "ingen filter" = fuld eksport). Ugyldigt
-// input giver null, og route-handleren svarer 400 — ikke et tavst fallback.
+// forespørgslens betydning (fx til "ingen filter" = fuld eksport forfra).
+// Ugyldigt input giver null, og route-handleren svarer 400 — ikke et tavst
+// fallback.
 export function decodeCursor(raw: string): Cursor | null {
   let parsed: unknown;
   try {
@@ -117,14 +107,9 @@ export function decodeCursor(raw: string): Cursor | null {
     return null;
   }
   if (typeof parsed !== "object" || parsed === null) return null;
-  const { since, id } = parsed as Record<string, unknown>;
-  if (since !== null && !isValidIsoTimestamp(since)) return null;
+  const { id } = parsed as Record<string, unknown>;
   if (!isValidUuid(id)) return null;
-  return { since: since as string | null, id };
-}
-
-export function isValidSinceParam(value: string): boolean {
-  return isValidIsoTimestamp(value);
+  return { id };
 }
 
 // ============================================================================
@@ -148,19 +133,18 @@ export function parseLimit(raw: string | null): number {
 // Output-sanitisering
 // ============================================================================
 // Denne type er BEVIDST snæver — kun de felter der reelt bruges. Selv hvis
-// route-handleren en dag ved en fejl SELECT'er flere kolonner (booking_no
-// ud over det nødvendige til HMAC'en, customer_name, data, slug osv.),
-// læser toTravelPlanRecord kun de seks felter herunder og bygger et helt
-// NYT objekt — der spredes aldrig `...row`. Et ekstra felt på input kan
-// derfor aldrig lække med ud. Se analytics-bridge.test.ts for et test der
-// beviser præcis det ved at sende et "beskidt" input-objekt ind.
+// route-handleren en dag ved en fejl SELECT'er flere kolonner (customer_name,
+// data, slug, updated_at osv.), læser toTravelPlanRecord kun de fem felter
+// herunder og bygger et helt NYT objekt — der spredes aldrig `...row`. Et
+// ekstra felt på input kan derfor aldrig lække med ud. Se
+// analytics-bridge.test.ts for et test der beviser præcis det ved at sende
+// et "beskidt" input-objekt ind.
 export type TripRowForExport = {
   id: string;
   booking_no: string;
   destination: string;
   active: boolean;
   created_at: string;
-  updated_at: string;
 };
 
 export const ANALYTICS_BRIDGE_SCHEMA_VERSION = 1;
@@ -173,15 +157,15 @@ export type TravelPlanRecord = {
   destination: string;
 };
 
-// online_plan_updated_at er BEVIDST udeladt: trips.updated_at opdateres af
-// en generisk trigger ved ENHVER ændring af rækken — re-upload, en sælgers
-// intro-redigering, eller blot at slå `active` til/fra. Feltet fortæller
-// "rækken blev rørt", ikke "rejseplanen blev genudgivet", og er derfor ikke
-// semantisk pålideligt som et forretningssignal (jf. Issue #45's eget
-// forbehold: "hvis feltet findes OG er semantisk pålideligt"). updated_at
-// bruges stadig INTERNT som pagineringsnøgle (se Cursor ovenfor) — det er en
-// helt anden, langt svagere kontrakt ("rækken ændrede sig, hent den igen")
-// end at udstille den som et analysefelt.
+// online_plan_updated_at er BEVIDST udeladt — og trips.updated_at hentes
+// slet ikke fra DB'en i v1 (se TripRowForExport ovenfor). Feltet opdateres
+// af en generisk trigger ved ENHVER ændring af rækken — re-upload, en
+// sælgers intro-redigering, eller blot at slå `active` til/fra. Det
+// fortæller "rækken blev rørt", ikke "rejseplanen blev genudgivet", og er
+// derfor ikke semantisk pålideligt som et forretningssignal (jf. Issue #45's
+// eget forbehold: "hvis feltet findes OG er semantisk pålideligt"). Da v1
+// heller ikke bruger det til incremental sync (se Pagination-kommentaren
+// ovenfor), er der ingen grund til overhovedet at SELECT'e det.
 export function toTravelPlanRecord(
   row: TripRowForExport,
   bookingMatchSecret: string,
