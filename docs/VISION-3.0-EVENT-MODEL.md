@@ -83,6 +83,11 @@ ikke engang en session-cookie.
 | 4 | User-Agent er ikke bot-klassificeret | middleware | Link-previewers, scannere |
 | 5 | `VERCEL_ENV === "production"` **og** host er det kanoniske domæne | middleware | Lokal dev, Vercel preview, branch-alias |
 
+**Mulig 6. betingelse — `consent_given`.** Hvis Ricko beslutter at opt-in-samtykke er
+nødvendigt (§7 er en hard release gate), tilføjes samtykke som endnu en AND-betingelse i
+den samme gate. Designet er forberedt til det; se §8 for den konkrete variant og dens
+konsekvenser.
+
 ### Betingelse 1+2 — unlock-cookien
 
 Bot- og støjfiltrering får uforholdsmæssigt meget opmærksomhed i analytics-projekter.
@@ -179,15 +184,20 @@ Fase 1B skal udvide matcheren. Se §8 for det præcise mønster og risikoen.
 |---|---|
 | Læser cookies + UA + env + host | Har allerede `row.id` og den verificerede adgangskontrol |
 | Kører filter 1, 3, 4, 5 (rene funktioner) | Kører filter 2 (eksisterende kode-gren) |
-| Minter/genopfrisker session-cookien | Laver det ene DB-kald |
+| Minter/genopfrisker session-cookien | **Planlægger** det ene DB-kald via `waitUntil()` — uden `await` |
 | **Ingen DB, ingen secrets, intet netværk** | Service-role som resten af systemet |
 
 Middleware holdes fri for service-role-nøglen med vilje: den kører på alle matchede
 requests, inkl. RSC-prefetches, og nøglen skal ikke udvides til edge-runtimen for
-analytics' skyld.
+analytics' skyld. **Det er uændret af `waitUntil`-designet:** kun `page.tsx` (Node
+runtime) rører service-role-klienten og planlægger baggrundsskrivningen. Middleware
+læser cookies og headere og sætter én cookie — intet andet.
 
-**Invariant:** ingen session-cookie ⇒ intet DB-skriv. `page.tsx` skriver kun når der
-ligger en gyldig UUID i `trip_session_<slug>`.
+**Invariant:** ingen session-cookie ⇒ intet DB-skriv. `page.tsx` planlægger kun en
+skrivning når der ligger en gyldig UUID i `trip_session_<slug>`.
+
+**Performance-kontrakten:** DB-skrivningen ligger uden for responsens kritiske vej.
+Se §10 — kundens HTML sendes uden at vente på analytics, hverken ved succes eller fejl.
 
 ## 5. Flow — unlock → visning → session
 
@@ -208,14 +218,17 @@ A. Første besøg, ukendt kunde
                   -> request.cookies.set(...)   <-- så page.tsx ser den NU
                   -> response.cookies.set(..., maxAge 1800)
      page.tsx   : accessCookie == booking_no
-                  -> record_customer_session(id, row.id)   [best-effort, 1 s loft]
+                  -> waitUntil(recordCustomerSession(row.id, slug))   [INGEN await]
+                  -> render rejseplanen og SEND responsen                <-- kunden venter ikke
+                  ~~ baggrund, efter responsen ~~
+                  -> record_customer_session(id, row.id)  [best-effort, internt tidsloft]
                   -> INSERT: ny række, started_at = last_seen_at = now(), view_count = 1
-                  -> render rejseplanen
    Resultat: 1 række. "Første åbning" = nu.
 
 B. Refresh x20 inden for 30 min.
      middleware : trip_session findes og er gyldig uuid -> GENBRUG id, forny maxAge
-     page.tsx   : samme id -> ON CONFLICT -> last_seen_at = now(), view_count += 1
+     page.tsx   : samme id, samme waitUntil-mønster
+                  -> baggrund: ON CONFLICT -> last_seen_at = now(), view_count += 1
    Resultat: stadig 1 række. Besøgstallet rører sig ikke.
 
 C. Ny fane / nyt vindue, samme browser, inden for vinduet
@@ -478,20 +491,51 @@ create policy "service_role full access customer_sessions"
 - `Set-Cookie` på hvert kundesidesvar gør svaret ucachebart på CDN-niveau. Uden betydning:
   siden er allerede `force-dynamic` + `revalidate = 0`.
 
-### Åbent juridisk spørgsmål — KRÆVER RICKO
+### Uafklaret: lovligt grundlag for cookien — HARD RELEASE GATE, KRÆVER RICKO
 
-Er en måle-cookie omfattet af samtykkekravet i ePrivacy art. 5(3)? Undtagelsen gælder
-"strengt nødvendige" cookies, og en besøgstæller er det ikke i snæver forstand.
+**Udgangspunktet i dette design er at `trip_session_<slug>` er en ikke-nødvendig
+analytics-cookie under ePrivacy art. 5(3), indtil andet er afklaret.** Undtagelsen i
+bestemmelsen gælder cookies der er strengt nødvendige for at levere den tjeneste brugeren
+har bedt om; en besøgstæller er det ikke — rejseplanen renderer fuldstændig uden den.
+Dokumentet træffer ingen juridisk konklusion, og ingen af argumenterne nedenfor skal læses
+som en vurdering af lovligheden.
 
-Argumenterne for lav risiko: siden er privat og adgangsbeskyttet, målingen er
-førstepartsrent, deles med ingen, profilerer ikke og kan ikke følge personen på tværs af
-rejseplaner eller websites. Det er ikke marketing-tracking.
+Argumenter der er blevet fremført **for** at grundlaget kan være i orden uden samtykke:
 
-Muligheder: (a) fortsætte uden banner på det grundlag, (b) tilføje én linje på
-`AccessGate` om at åbninger registreres, (c) droppe cookien og i stedet tælle grovere
-server-side. **Anbefaling: (b)** — den koster næsten intet, er ærlig, og passer til
-brandets tone. Men det er Rickos beslutning, ikke en teknisk detalje, og den skal tages
-før Fase 1B deployes.
+- Siden er privat og adgangsbeskyttet; den besøgende har selv låst op med en kode.
+- Målingen er førsteparts, deles med ingen tredjepart og forlader ikke vores egen database.
+- Cookien er path-scopet til én rejseplan og kan hverken følge personen på tværs af
+  rejseplaner eller på tværs af websites.
+- Der gemmes hverken IP, user-agent eller andre identifikatorer (§7).
+
+Argumenter **imod**:
+
+- Ordlyden i art. 5(3) knytter sig til om cookien er nødvendig for tjenesten — ikke til
+  hvor lidt data den indeholder, hvem der ejer den, eller om formålet er marketing.
+  "Det er ikke marketing-tracking" er ikke i sig selv en undtagelse.
+- Datatilsynets og EDPB's praksis har historisk lagt en snæver fortolkning af
+  nødvendighedskriteriet, og ren publikumsmåling har i flere tilfælde krævet samtykke.
+- Kunden har ikke bedt om at blive målt; unlock-koden er givet for at se sin rejseplan.
+- Vi er databehandler/dataansvarlig for kundedata i forvejen, og fejlvurderingen rammer
+  rigtige kunder, ikke interne brugere.
+
+**Konsekvens for release: Fase 1B må ikke deploye tracking-cookien før Ricko har truffet
+og dokumenteret en beslutning om lovligt grundlag.** Det er ikke et punkt der kan
+udskydes til efter deploy — cookien sættes ved første kundebesøg. Se §12's
+release-rækkefølge, trin 0, og §8's beskrivelse af samtykke-varianten af gaten.
+
+Mulighederne, uden at der vælges mellem dem her:
+
+| | Variant | Konsekvens |
+|---|---|---|
+| (a) | Deploy som designet, uden samtykke | Kræver en dokumenteret vurdering af at grundlaget holder |
+| (b) | Deploy som designet + kort infolinje på `AccessGate` | Gennemsigtighed, men ikke samtykke — løser ikke art. 5(3) hvis samtykke kræves |
+| (c) | Opt-in-samtykke som 6. betingelse i gaten | Klar compliance; åbninger før samtykke tælles ikke (§8) |
+| (d) | Drop cookien helt | Ingen sessionpræcision; kræver en helt anden, grovere model |
+
+Hvis Ricko — eventuelt efter juridisk rådgivning — vurderer at samtykke ikke er påkrævet,
+er en kort infolinje på `AccessGate` (b) den billigste og mest gennemsigtige tilføjelse
+oveni. Det er en sekundær bemærkning om udførelsen, ikke en anbefaling af grundlaget.
 
 ## 8. Admin, preview og bots — mekanikken
 
@@ -516,6 +560,33 @@ export function isProductionHost(host: string | null): boolean;
 export const SESSION_COOKIE_MAX_AGE_SECONDS = 1800;
 export function sessionCookieName(slug: string): string;
 ```
+
+### Samtykke-varianten af gaten (klar til brug, ikke valgt)
+
+Kræver §7's afklaring opt-in-samtykke, udvides gaten med en sjette betingelse. Ændringen
+er lille netop fordi alle betingelser allerede er samlet ét sted:
+
+```ts
+export type TrackDecisionInput = {
+  // ... de fem eksisterende felter
+  hasConsentCookie: boolean;       // NY: sat af kundens eget aktive valg
+};
+// shouldTrackCustomerView() returnerer false hvis hasConsentCookie er false.
+```
+
+Samtykket lever i sin egen cookie (fx `trip_consent_<slug>`, samme path-scoping og
+levetid som access-cookien), sat af et eksplicit valg på `AccessGate` eller i en lille
+banner på rejseplanen. Middleware minter ingen session-cookie før samtykket findes.
+
+**Konsekvensen skal accepteres eksplicit, ikke omgås:** åbninger der sker før kunden har
+givet samtykke — eller hvis hun aldrig giver det — **tælles simpelthen ikke**. Der
+opsamles ikke "anonymt" i mellemtiden, der gemmes ingen pladsholder-række, og der tælles
+ikke server-side bagom cookien. En rejseplan hvor kunden har sagt nej vil for altid stå
+som "ikke åbnet endnu", og sælgeren kan ikke skelne det fra en kunde der aldrig klikkede.
+Det er prisen ved denne variant, og den skal være kendt før den vælges.
+
+Denne variant er beskrevet for at vise at designet kan bære kravet uden omskrivning.
+**Om den skal bruges er Rickos beslutning, ikke dokumentets.**
 
 ### Middleware-matcheren
 
@@ -585,11 +656,22 @@ og derfor intet vindue at tabe en opdatering i.
   Et besøg der lander midt i kaldet er enten helt med eller helt ude; de fire tal kan
   ikke modsige hinanden.
 
-## 10. Fail-open — hvor skrivningen sker, og hvorfor den ikke kan gøre skade
+## 10. Fail-open og nul-latens — hvor skrivningen sker, og hvorfor den ikke kan gøre skade
 
-### Placering i `page.tsx`
+To krav skal holdes samtidig, og de er ikke det samme:
+
+1. **Analytics må ikke kunne ødelægge kundesiden** (fail-open) — §10.3 nedenfor.
+2. **Analytics må ikke kunne gøre kundesiden langsommere** (Issue #41) — §10.2.
+
+En `try/catch` løser kun det første. Et `await` på en DB-skrivning før responsen sendes
+bryder det andet, uanset hvor kort timeout man sætter: ventetiden lander stadig på
+kundens Time To First Byte. Derfor bruger designet `waitUntil()`.
+
+### 10.1 Placering i `page.tsx`
 
 ```tsx
+import { waitUntil } from "@vercel/functions";
+
 const row = await loadTrip(params.bookingId);
 if (!row) notFound();                                  // 1. intet skriv
 
@@ -598,7 +680,8 @@ if (accessCookie?.value !== row.booking_no) {
   return <AccessGate .../>;                            // 2. intet skriv
 }
 
-await recordCustomerSession(row.id, params.bookingId); // 3. HER
+// 3. HER — planlægges, afventes IKKE. Responsen venter ikke på DB'en.
+waitUntil(recordCustomerSession(row.id, params.bookingId));
 
 const parsed = tripSchema.safeParse(row.data);         // 4. fejlsiden tæller som åbning
 ...
@@ -609,30 +692,101 @@ aldrig tælles) og **før** skema-parsingen. En kunde der åbner en rejseplan me
 data *har* åbnet linket — sælgerens spørgsmål er "har kunden klikket?", og svaret er ja,
 også selvom vores rendering fejlede. Én placering, ét kald, ingen grene at holde styr på.
 
-### Fejlkontrakten
+### 10.2 Hvorfor `waitUntil` — og hvorfor ikke `after()`
+
+`waitUntil(promise)` er Vercels platform-primitiv: den sender HTTP-responsen til kunden
+med det samme og beder runtime'en (Fluid Compute) holde funktions-instansen i live indtil
+den medsendte promise er afgjort. Uden den ville et ikke-afventet promise i en almindelig
+serverless-funktion blive afbrudt i det øjeblik responsen er sendt — instansen fryses
+eller termineres, og skrivningen ville forsvinde tilfældigt. `waitUntil` er præcis
+forskellen mellem "fire and forget" og "fire and actually finish".
+
+- **Ikke Next.js' `after()`.** Den API kræver Next.js 15; repoet kører Next 14.
+  `waitUntil` fra `@vercel/functions` er en platform-primitiv der virker uafhængigt af
+  Next-versionen.
+- **Kaldet skal ske synkront inde i requesthåndteringen** — altså i selve
+  komponentkroppen, før eller omkring JSX-returneringen, som i §10.1. Det virker i en
+  async Server Component, fordi Vercels Next.js-integration eksponerer request-konteksten
+  via `AsyncLocalStorage`; `waitUntil` finder den kontekst selv. Kaldes det først efter at
+  requesten er afsluttet (fx fra en detached timer), er der ingen kontekst at knytte sig
+  til.
+- **Uden for Vercel** (lokal `next dev`) er der ingen request-kontekst at hægte sig på.
+  Det er uden praktisk betydning her, fordi miljø-gaten (§3, betingelse 5) allerede sikrer
+  at der aldrig mintes en session-cookie lokalt — og uden cookie sker der ingen skrivning.
+- **Service-role-nøglen forbliver ude af middleware.** Kun `page.tsx` på Node-runtime
+  kalder `waitUntil` og rører `getSupabaseService()`. Uændret fra §4.
+
+Nettoresultatet: analytics-skrivningen ligger strukturelt uden for responsens kritiske
+vej. Kundens TTFB påvirkes ikke — hverken når DB'en svarer hurtigt, når den svarer
+langsomt, eller når den slet ikke svarer.
+
+### 10.3 Fejlkontrakten
 
 ```ts
 // src/lib/customer-session-write.ts (FASE 1B — skitse)
+const WRITE_TIMEOUT_MS = 2000;
+
 export async function recordCustomerSession(tripId: string, slug: string): Promise<void> {
   try {
     const sessionId = cookies().get(sessionCookieName(slug))?.value;
     if (!isValidSessionId(sessionId)) return;          // ingen cookie = ingen skrivning
+
     const supabase = getSupabaseService();
-    await Promise.race([
-      supabase.rpc("record_customer_session", { p_session_id: sessionId, p_trip_id: tripId }),
-      new Promise((resolve) => setTimeout(resolve, 1000)),
-    ]);
+    const write = supabase.rpc("record_customer_session", {
+      p_session_id: sessionId,
+      p_trip_id: tripId,
+    });
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), WRITE_TIMEOUT_MS));
+
+    const result = await Promise.race([write, timeout]);
+
+    if (result === null) {
+      console.error("[customer-session] timeout", { tripId, sessionId });
+      return;
+    }
+    // Fejlen er et OBJEKT, ikke en exception — den skal tjekkes eksplicit.
+    const { error } = result;
+    if (error) {
+      // Sanitiseret: kun Postgres/PostgREST-metadata + de to uuid'er. Se grænsen nedenfor.
+      console.error("[customer-session] rpc-fejl", {
+        tripId,
+        sessionId,
+        code: error.code,
+        message: error.message,
+      });
+    }
   } catch (e) {
-    console.error("[customer-session] skrivning fejlede", e);
+    console.error("[customer-session] uventet fejl", e);
   }
   // Kaster ALDRIG.
 }
 ```
 
+**Hvad der må logges — og grænsen.** `error.code`/`error.message` fra Postgres/PostgREST
+er generisk teknisk metadata (constraint-navn, `relation does not exist`,
+forbindelsesfejl) og indeholder ikke kundedata. `tripId` og `sessionId` er begge uuid'er
+— interne, opaque nøgler, ikke persondata — og de er det eneste der gør en fejllinje
+brugbar til fejlsøgning. **Præcis dér går grænsen:** `booking_no`, slug, kundenavn,
+rejsedata eller rå request-headere må aldrig logges, heller ikke delvist, heller ikke
+"til debug".
+
+**Tidsloftet beskytter ikke længere kunden — det beskytter platformen.** Kunde-latens er
+allerede løst strukturelt af `waitUntil` (§10.2). `WRITE_TIMEOUT_MS` er der for at en
+hængende DB-forbindelse ikke holder funktions-instansen kunstigt i live og brænder
+eksekveringstid på et kald der aldrig bliver til noget. Det er en ressourcegrænse, ikke en
+brugeroplevelsesgrænse — og derfor kan den sættes rundhåndet (2 s), hvor et blokerende
+loft ville skulle være aggressivt kort.
+
+**Try/catch-kontrakten gælder uændret, selvom fejlen nu sker efter responsen.** Det er
+ikke overflødigt: en promise der rejecter inde i `waitUntil` giver en unhandled rejection
+i funktions-instansen, hvilket støjer i runtime-loggen og i værste fald påvirker
+instansens oprydning. Funktionen skal derfor stadig *aldrig* kunne rejecte — den logger og
+returnerer.
+
 Samme filosofi som `writeAudit` i `src/lib/audit.ts` — men bevidst **modsat**
 `upload_events`.
 
-### Hvorfor modsat Issue #38
+### 10.4 Hvorfor modsat Issue #38
 
 `upload_events` er **fail-closed**: fejler event-insertet, afvises sælgerens upload. Det
 var rigtigt dér, fordi kravet var 100% dækning i et internt værktøj — en usynlig upload
@@ -647,24 +801,35 @@ analytics. **Derfor fail-open, uden forbehold** — og derfor er tallene "næste
 eksakte" frem for garanteret komplette. Det er den rigtige byttehandel, og sælgerne skal
 kende den.
 
-### Beviset
+### 10.5 Beviset
 
-1. Funktionen returnerer `Promise<void>` og har hele kroppen i `try/catch`. Den har intet
-   `throw` og ingen `finally` der kan kaste. Den kan derfor ikke *rejecte*.
-2. Fordi den ikke kan rejecte, kan `await` ikke kaste. Ingen fejl kan nå
+**At det ikke kan forsinke kunden:**
+
+1. `waitUntil(...)` modtager et promise og returnerer synkront `void`. Der er intet `await`
+   på skrivestien, så komponentkroppen fortsætter til JSX-returneringen uden at vente.
+2. Responsen streames til kunden uafhængigt af den planlagte promise. Om DB'en svarer på
+   5 ms, 2 s eller aldrig, er TTFB den samme.
+3. Der er ingen analytics-JavaScript i browseren (§4), så der er heller ingen
+   klientside-omkostning.
+
+**At det ikke kan ødelægge siden:**
+
+4. Funktionen returnerer `Promise<void>` og har hele kroppen i `try/catch`. Den har intet
+   `throw` og ingen `finally` der kan kaste. Den kan derfor ikke *rejecte* — hverken mod
+   `waitUntil` eller mod noget andet.
+5. Fordi kaldet ikke afventes, kan en fejl derinde per definition ikke nå
    error-boundary'en, `notFound()`, `AccessGate`, fejlsiden eller JSX-returneringen.
-3. En PostgREST-fejl (tabel mangler, RLS afviser, FK-violation fordi trippen blev slettet
-   midt i requesten) kommer tilbage som et **fejl-objekt**, ikke en exception — logges,
-   ignoreres.
-4. `Promise.race` mod en 1-sekunds timer: en hængende DB kan ikke holde kundesiden. Timeren
-   *resolver* (rejecter ikke), så racet kan heller ikke kaste.
-5. Mangler cookien, returneres der før noget netværkskald overhovedet sker.
-6. Ingen anden kode læser returværdien; der er ingen tilstand at komme ud af trit med.
+   Renderingen er allerede sket.
+6. En PostgREST-fejl (tabel mangler, RLS afviser, FK-violation fordi trippen blev slettet
+   midt i requesten) kommer tilbage som et **fejl-objekt**, ikke en exception. Den
+   destruktureres og logges eksplicit (§10.3) — ikke stiltiende kasseret.
+7. `Promise.race` mod timeren: timeren *resolver* (rejecter ikke), så racet kan ikke kaste.
+   Et `null`-resultat betyder timeout og logges som sådan.
+8. Mangler cookien, returneres der før noget netværkskald overhovedet sker.
+9. Ingen anden kode læser returværdien; der er ingen tilstand at komme ud af trit med.
 
 Forventet omkostning ved succes: ét RPC-kald i samme region (Vercel + Supabase, begge
-eu-west-1) — tiere af millisekunder, i praksis parallelt med resten af sidens arbejde.
-Måler vi senere at det betyder noget, er `waitUntil()` fra `@vercel/functions` det
-oplagte næste skridt; det vurderes ikke nødvendigt nu og koster en ny afhængighed.
+eu-west-1) — tiere af millisekunder, afviklet efter at kunden har fået sin side.
 
 ## 11. Retention
 
@@ -728,9 +893,10 @@ tråd med Issue #41's "én fase ≈ én PR".
 | `supabase/schema-baseline.json` | ÆNDRES | Efter `--update-baseline` |
 | `src/lib/customer-session.ts` | **NY** | Rene funktioner, jf. §8. Ingen imports fra `next/*` eller Supabase |
 | `src/lib/customer-session.test.ts` | **NY** | Vitest, ingen DB, ingen browser |
-| `src/lib/customer-session-write.ts` | **NY** | `recordCustomerSession()`, best-effort, jf. §10 |
+| `src/lib/customer-session-write.ts` | **NY** | `recordCustomerSession()`, best-effort med eksplicit `{ error }`-tjek og sanitiseret logging, jf. §10.3 |
 | `src/middleware.ts` | ÆNDRES | Matcher udvides med `/:bookingId([0-9a-f]{12})`; krop forgrenes på path. `/admin`-flowet røres ikke |
-| `src/app/[bookingId]/page.tsx` | ÆNDRES | Ét `await recordCustomerSession(...)` efter access-gaten |
+| `src/app/[bookingId]/page.tsx` | ÆNDRES | Ét `waitUntil(recordCustomerSession(...))` efter access-gaten — **ikke** `await` (§10.1) |
+| `package.json` + `package-lock.json` | ÆNDRES | **Ny dependency: `@vercel/functions`** (leverer `waitUntil`). Eneste nye afhængighed i Fase 1B |
 | `docs/SYSTEM-ARKITEKTUR.md` | ÆNDRES | §8 datamodel + middleware-afsnittet |
 | `docs/DECISIONS.md` | ÆNDRES | Fail-open vs. #38's fail-closed · retention · cookie-samtykke (Rickos svar) |
 | `docs/TESTING.md` | ÆNDRES | Testniveau for middleware-ændringer |
@@ -769,12 +935,18 @@ fejl der logges, og kundesiden renderer som altid.
 
 Den frihed er en sikkerhedsegenskab, ikke en anbefaling. Anbefalet rækkefølge:
 
+0. **HARD GATE (KRÆVER RICKO) — lovligt grundlag for session-cookien er afklaret og
+   dokumenteret** (§7). Trin 1-5 må ikke påbegyndes før dette foreligger. Falder
+   beslutningen ud som opt-in-samtykke, skal samtykke-varianten af gaten (§8) bygges med
+   i samme PR — ikke eftermonteres. Dette er den eneste blokerende forudsætning i
+   rækkefølgen; alt andet nedenfor er praktisk optimering.
 1. **(KRÆVER RICKO)** Kør `010_customer_sessions.sql` i SQL Editor på production.
    Verificér: tabel, RLS-policy, 3 indexes, 2 funktioner, cron-jobbet i `cron.job`.
 2. `node scripts/check-schema-drift.mjs --update-baseline` → commit baseline.
 3. Verificér slug-formatet (§8) før matcheren låses.
-4. Merge og deploy koden.
-5. Produktionsverifikation (se nedenfor).
+4. `npm i @vercel/functions` — commit `package.json` + `package-lock.json`.
+5. Merge og deploy koden.
+6. Produktionsverifikation (se nedenfor).
 
 Begrundelse for rækkefølgen: den giver nul fejllogs og dataopsamling fra første request
 efter deploy. Men skulle rækkefølgen af en eller anden grund blive byttet om, er
@@ -789,6 +961,10 @@ production, med en rigtig (test)rejseplan:
 
 1. Åbn kundelinket i en browser **uden** admin-login, unlock normalt.
    → `select count(*) from customer_sessions where trip_id = '<id>'` skal give **1**.
+   Bemærk: skrivningen sker i baggrunden efter responsen (`waitUntil`), så rækken kan
+   lande et øjeblik efter at siden er vist. Giv det et par sekunder før du konkluderer
+   at intet blev skrevet — og tjek runtime-loggen for `[customer-session]` hvis den
+   udebliver.
 2. Refresh 5 gange. → stadig **1** række, `view_count = 6`, `last_seen_at` rykker.
 3. Vent 35+ min., genåbn. → **2** rækker.
 4. Åbn samme link i en browser hvor du er logget ind i `/admin`. → **ingen** ny række.
@@ -829,24 +1005,34 @@ Det er tilsigtet.
    Postgres serialiserer på primærnøglen; samtidige requests med samme id giver præcis én
    række. `view_count + 1` evalueres på den låste række. Læsningen aggregeres i ét
    statement = ét snapshot.
-8. **Hvad sker der hvis analytics fejler?** Ingenting, for kunden. Skrivefunktionen kan
-   ikke rejecte (hele kroppen i try/catch, intet throw), har et 1-sekunds timeout-loft, og
-   PostgREST-fejl returneres som objekter frem for exceptions. Manglende tabel, RLS-afvisning
-   eller hængende DB koster ét tabt datapunkt og en linje i loggen. Bevidst modsat Issue
-   #38's fail-closed — begrundet i §10.
+8. **Hvad sker der hvis analytics fejler?** Ingenting, for kunden — og den er allerede
+   væk med sin side inden fejlen sker. Skrivningen planlægges med `waitUntil()` fra
+   `@vercel/functions` og afventes aldrig, så den ligger uden for responsens kritiske vej
+   (§10.2). Funktionen kan ikke rejecte (hele kroppen i try/catch, intet throw),
+   PostgREST-fejl destruktureres og logges eksplicit og sanitiseret (§10.3), og et internt
+   2-sekunders loft hindrer at en hængende DB holder funktions-instansen i live —
+   et ressourceværn, ikke et latensværn. Manglende tabel, RLS-afvisning eller død DB
+   koster ét tabt datapunkt og en linje i runtime-loggen. Bevidst modsat Issue #38's
+   fail-closed — begrundet i §10.4.
 9. **Hvor længe gemmes data?** 12 måneder på `last_seen_at`, slettet af et pg_cron-job der
    oprettes i selve migration 010 (ikke som en senere driftsopgave — se `parse_failures`).
    Ingen aggregater gemmes. UI'et skal skelne "ikke åbnet endnu" fra "ingen åbninger inden
    for opbevaringsperioden" (§11).
 10. **Hvad skal bygges i Fase 1B?** Migration `supabase/010_customer_sessions.sql`
     (tabel + RLS + 3 indexes + 2 RPC'er + cron), `src/lib/customer-session.ts` (ren logik)
-    + tests, `src/lib/customer-session-write.ts`, udvidet matcher i `src/middleware.ts`, og
-    ét kald i `src/app/[bookingId]/page.tsx`. Ingen admin-UI, intet endpoint, ingen
-    `customer_events`. Fuld liste og release-rækkefølge i §12.
+    + tests, `src/lib/customer-session-write.ts`, udvidet matcher i `src/middleware.ts`,
+    ét `waitUntil(...)`-kald i `src/app/[bookingId]/page.tsx`, og én ny dependency
+    (`@vercel/functions`). Ingen admin-UI, intet endpoint, ingen `customer_events`.
+    Forudsætningen i trin 0 — Rickos afklaring af cookiens lovlige grundlag — blokerer
+    hele fase 1B. Fuld liste og release-rækkefølge i §12.
 
 ## 14. Beslutninger der kræver Ricko før Fase 1B
 
-1. **Cookie-samtykke** (§7) — skal `AccessGate` nævne at åbninger registreres?
+1. **Lovligt grundlag for session-cookien** (§7) — **HARD RELEASE GATE.** Designet
+   behandler cookien som ikke-nødvendig analytics under ePrivacy art. 5(3) indtil andet er
+   afklaret og dokumenteret. Fase 1B må ikke deployes før beslutningen foreligger. Kræves
+   opt-in-samtykke, bygges samtykke-varianten af gaten (§8) med fra start — med den
+   accepterede konsekvens at åbninger uden samtykke slet ikke tælles.
 2. **Kør migration 010 i production** — DDL på produktionsdatabasen.
 3. **Aktivér pg_cron-extension** i Supabase, hvis den ikke allerede er slået til.
 4. **Middleware-matcheren udvides til kundesider** — ændrer request-håndteringen for al
