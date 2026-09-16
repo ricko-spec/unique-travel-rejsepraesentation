@@ -293,6 +293,90 @@
       "nullable": "YES",
       "table": "trips",
       "type": "uuid"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "upload_events",
+      "type": "uuid"
+    },
+    {
+      "column": "user_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "upload_events",
+      "type": "uuid"
+    },
+    {
+      "column": "actor_name",
+      "default": null,
+      "nullable": "NO",
+      "table": "upload_events",
+      "type": "text"
+    },
+    {
+      "column": "received_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "upload_events",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "upload_events",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "completed_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "upload_events",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "status",
+      "default": "'received'::text",
+      "nullable": "NO",
+      "table": "upload_events",
+      "type": "text"
+    },
+    {
+      "column": "file_size_bytes",
+      "default": null,
+      "nullable": "YES",
+      "table": "upload_events",
+      "type": "bigint"
+    },
+    {
+      "column": "booking_no_hash",
+      "default": null,
+      "nullable": "YES",
+      "table": "upload_events",
+      "type": "text"
+    },
+    {
+      "column": "trip_id",
+      "default": null,
+      "nullable": "YES",
+      "table": "upload_events",
+      "type": "uuid"
+    },
+    {
+      "column": "save_kind",
+      "default": null,
+      "nullable": "YES",
+      "table": "upload_events",
+      "type": "text"
+    },
+    {
+      "column": "failure_kind",
+      "default": null,
+      "nullable": "YES",
+      "table": "upload_events",
+      "type": "text"
     }
   ],
   "comments": [
@@ -360,6 +444,46 @@
       "column": "raw_pdf_text",
       "comment": "Raw text extracted from uploaded PDF before Claude parsing. Used for admin QA comparison.",
       "table": "trips"
+    },
+    {
+      "column": null,
+      "comment": "Adoption/usage-log: ét event pr. accepteret PDF-upload til /admin/api/parse. Autoritativ upload-tælling — adskilt fra trips.created_by, som kun sporer den oprindelige opretter. Service-role-only. Ingen kundedata (booking-nummer kun som hash).",
+      "table": "upload_events"
+    },
+    {
+      "column": "actor_name",
+      "comment": "Snapshot af profiles.full_name på upload-tidspunktet (fallback: email/user id hvis profilopslag fejler). Bevares uafhængigt af senere ændringer/sletning af profilen.",
+      "table": "upload_events"
+    },
+    {
+      "column": "booking_no_hash",
+      "comment": "sha-256(bookingNo) hex, sat når parse lykkes. ALDRIG bookingnummeret i klartekst — det er kundens adgangskode til præsentationen.",
+      "table": "upload_events"
+    },
+    {
+      "column": "failure_kind",
+      "comment": "Sanitiseret fejlkategori til statistik. ALDRIG rå API-fejltekst eller kundedata.",
+      "table": "upload_events"
+    },
+    {
+      "column": "save_kind",
+      "comment": "created (ny booking_no) eller updated (re-upload af eksisterende booking) — sat sammen med published.",
+      "table": "upload_events"
+    },
+    {
+      "column": "status",
+      "comment": "received | validation_failed | parse_failed | parsed | published | save_failed.",
+      "table": "upload_events"
+    },
+    {
+      "column": "trip_id",
+      "comment": "Sat når eventet fører til en gemt trip (status=published). ON DELETE SET NULL — eventet overlever en evt. sletning af trippen.",
+      "table": "upload_events"
+    },
+    {
+      "column": "user_id",
+      "comment": "Sælgeren der uploadede. ON DELETE SET NULL hvis en auth-bruger slettes — actor_name-snapshottet bevarer stadig hvem det var.",
+      "table": "upload_events"
     }
   ],
   "constraints": [
@@ -412,6 +536,36 @@
       "def": "UNIQUE (slug)",
       "name": "trips_slug_key",
       "table": "trips"
+    },
+    {
+      "def": "CHECK (((failure_kind IS NULL) OR (failure_kind = ANY (ARRAY['file_too_large'::text, 'invalid_file_type'::text, 'invalid_json'::text, 'schema_mismatch'::text, 'max_tokens'::text, 'anthropic_error'::text, 'event_mismatch'::text, 'save_conflict'::text, 'save_error'::text]))))",
+      "name": "upload_events_failure_kind_check",
+      "table": "upload_events"
+    },
+    {
+      "def": "PRIMARY KEY (id)",
+      "name": "upload_events_pkey",
+      "table": "upload_events"
+    },
+    {
+      "def": "CHECK (((save_kind IS NULL) OR (save_kind = ANY (ARRAY['created'::text, 'updated'::text]))))",
+      "name": "upload_events_save_kind_check",
+      "table": "upload_events"
+    },
+    {
+      "def": "CHECK ((status = ANY (ARRAY['received'::text, 'validation_failed'::text, 'parse_failed'::text, 'parsed'::text, 'published'::text, 'save_failed'::text])))",
+      "name": "upload_events_status_check",
+      "table": "upload_events"
+    },
+    {
+      "def": "FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE SET NULL",
+      "name": "upload_events_trip_id_fkey",
+      "table": "upload_events"
+    },
+    {
+      "def": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL",
+      "name": "upload_events_user_id_fkey",
+      "table": "upload_events"
     }
   ],
   "functions": [
@@ -430,6 +584,10 @@
     {
       "def": "CREATE OR REPLACE FUNCTION public.set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin new.updated_at = now(); return new; end;\n$function$\n",
       "name": "set_updated_at"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.usage_period_summary(period_start timestamp with time zone)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\n  with in_period as (\n    select *\n    from public.upload_events\n    where period_start is null or received_at >= period_start\n  ),\n  per_user as (\n    select\n      user_id,\n      false as is_historical,\n      (array_agg(actor_name order by received_at desc))[1] as latest_actor_name,\n      count(*) as uploads,\n      count(*) filter (where status = 'published') as published,\n      count(*) filter (where status = 'published' and save_kind = 'created') as new_trips,\n      count(*) filter (where status = 'published' and save_kind = 'updated') as reuploads,\n      count(*) filter (where status in ('validation_failed', 'parse_failed', 'save_failed')) as errors,\n      count(*) filter (where status = 'parsed') as parsed_not_saved,\n      max(received_at) as last_upload_at\n    from in_period\n    where user_id is not null\n    group by user_id\n  ),\n  per_orphan as (\n    select\n      null::uuid as user_id,\n      true as is_historical,\n      actor_name as latest_actor_name,\n      count(*) as uploads,\n      count(*) filter (where status = 'published') as published,\n      count(*) filter (where status = 'published' and save_kind = 'created') as new_trips,\n      count(*) filter (where status = 'published' and save_kind = 'updated') as reuploads,\n      count(*) filter (where status in ('validation_failed', 'parse_failed', 'save_failed')) as errors,\n      count(*) filter (where status = 'parsed') as parsed_not_saved,\n      max(received_at) as last_upload_at\n    from in_period\n    where user_id is null\n    group by actor_name\n  ),\n  combined as (\n    select * from per_user\n    union all\n    select * from per_orphan\n  )\n  select jsonb_build_object(\n    'totalUploads', (select count(*) from in_period),\n    'users', coalesce((\n      select jsonb_agg(jsonb_build_object(\n        'userId', user_id,\n        'isHistorical', is_historical,\n        'latestActorName', latest_actor_name,\n        'uploads', uploads,\n        'published', published,\n        'newTrips', new_trips,\n        'reuploads', reuploads,\n        'errors', errors,\n        'parsedNotSaved', parsed_not_saved,\n        'lastUploadAt', last_upload_at\n      ) order by uploads desc)\n      from combined\n    ), '[]'::jsonb),\n    'trackingSince', (select min(received_at) from public.upload_events),\n    'stalledEvents', (\n      select count(*) from public.upload_events\n      where status in ('received', 'parsed') and received_at < now() - interval '24 hours'\n    ),\n    'historicalActorEvents', (\n      select count(*) from public.upload_events where user_id is null\n    )\n  );\n$function$\n",
+      "name": "usage_period_summary"
     }
   ],
   "indexes": [
@@ -504,6 +662,26 @@
     {
       "def": "CREATE UNIQUE INDEX trips_slug_key ON public.trips USING btree (slug)",
       "name": "trips_slug_key"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX upload_events_pkey ON public.upload_events USING btree (id)",
+      "name": "upload_events_pkey"
+    },
+    {
+      "def": "CREATE INDEX upload_events_received_at_idx ON public.upload_events USING btree (received_at DESC)",
+      "name": "upload_events_received_at_idx"
+    },
+    {
+      "def": "CREATE INDEX upload_events_status_idx ON public.upload_events USING btree (status)",
+      "name": "upload_events_status_idx"
+    },
+    {
+      "def": "CREATE INDEX upload_events_trip_id_idx ON public.upload_events USING btree (trip_id)",
+      "name": "upload_events_trip_id_idx"
+    },
+    {
+      "def": "CREATE INDEX upload_events_user_id_idx ON public.upload_events USING btree (user_id)",
+      "name": "upload_events_user_id_idx"
     }
   ],
   "policies": [
@@ -570,6 +748,14 @@
       "table": "trips",
       "using": "true",
       "with_check": "true"
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access upload_events",
+      "roles": "{service_role}",
+      "table": "upload_events",
+      "using": "true",
+      "with_check": "true"
     }
   ],
   "triggers": [
@@ -587,6 +773,11 @@
       "def": "CREATE TRIGGER trips_set_updated_at BEFORE UPDATE ON public.trips FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
       "name": "trips_set_updated_at",
       "table": "trips"
+    },
+    {
+      "def": "CREATE TRIGGER upload_events_set_updated_at BEFORE UPDATE ON public.upload_events FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
+      "name": "upload_events_set_updated_at",
+      "table": "upload_events"
     }
   ]
 }
