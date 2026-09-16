@@ -22,20 +22,27 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
 - **[Issue #38](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/38) —
   Brugsoverblik / 100% upload-tracking pr. sælger.** Migration 009 kørt og verificeret i
   production, kode merget/deployet (PR #39).
+- **[Issue #40](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/40) —
+  Vision 2.0 finishing touch: desktop progress navigation (≥1180px).** Merget til main
+  (PR #42). Rent frontend/CSS, ingen DB/migration involveret.
 
 ## Næste
 
-1. **[Issue #40](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/40) —
-   Vision 2.0 finishing touch: desktop progress navigation (≥1180px).** PR klar — afventer
-   Rickos review. Rent frontend/CSS, ingen DB/migration involveret.
-2. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
-   Vision 3.0: Customer Engagement & Sales Intelligence.** Allerede valgt som næste store
-   kapitel efter #40. Master-issue — IKKE én stor PR. Starter med **Fase 1: design af en sikker
-   eventmodel** (privacy-first, intet bookingnummer i klartekst som analytics-id, server
-   autoritativ hvor muligt) + fundament/åbninger (første/seneste åbning, besøgstæller,
-   "ikke åbnet endnu"). Fase 2-4 (sektionsengagement, kontakt-intent, salgsoversigt) først
-   derefter, ét PR ad gangen. Ingen implementation af Vision 3.0 sker i #40-PR'en.
-3. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
+1. **[Issue #43](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/43) —
+   Vision 3.0 fase 1: design af eventmodellen.** **Docs-only PR** — designet ligger i
+   `docs/VISION-3.0-EVENT-MODEL.md` (sessiondefinition, datamodel-skitse, privacy-grænser,
+   admin/preview/bot-gate, concurrency, retention, fase 1B-plan). Ingen migration, ingen kode.
+   Afventer Rickos review + de fem KRÆVER RICKO-punkter i dokumentets §14.
+2. **Fase 1B — opsamlingen bygges.** `supabase/010_customer_sessions.sql` (tabel + RLS +
+   indexes + `record_customer_session`/`trip_session_summary` + pg_cron-retention),
+   `src/lib/customer-session.ts` + tests, udvidet middleware-matcher til kundesider, ét
+   best-effort kald i `src/app/[bookingId]/page.tsx`. Fail-open: kode og migration kan
+   deployes i vilkårlig rækkefølge (modsat #38). Visning i admin er fase 1C/4.
+3. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
+   Vision 3.0: Customer Engagement & Sales Intelligence.** Master-issue — IKKE én stor PR.
+   Fase 2-4 (sektionsengagement, kontakt-intent, salgsoversigt) tages ét PR ad gangen efter
+   fase 1B.
+4. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
 Herudover intet forudbestemt. Punkter efter #41-fase 1 vælges af Ricko fra backloggen nedenfor
 eller GitHub Issues.
