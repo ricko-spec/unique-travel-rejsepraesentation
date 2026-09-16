@@ -28,9 +28,16 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
 1. **[Issue #40](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/40) —
    Vision 2.0 finishing touch: desktop progress navigation (≥1180px).** PR klar — afventer
    Rickos review. Rent frontend/CSS, ingen DB/migration involveret.
-2. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
+2. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
+   Vision 3.0: Customer Engagement & Sales Intelligence.** Allerede valgt som næste store
+   kapitel efter #40. Master-issue — IKKE én stor PR. Starter med **Fase 1: design af en sikker
+   eventmodel** (privacy-first, intet bookingnummer i klartekst som analytics-id, server
+   autoritativ hvor muligt) + fundament/åbninger (første/seneste åbning, besøgstæller,
+   "ikke åbnet endnu"). Fase 2-4 (sektionsengagement, kontakt-intent, salgsoversigt) først
+   derefter, ét PR ad gangen. Ingen implementation af Vision 3.0 sker i #40-PR'en.
+3. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
-Herudover intet forudbestemt. Næste punkt efter #40 vælges af Ricko fra backloggen nedenfor
+Herudover intet forudbestemt. Punkter efter #41-fase 1 vælges af Ricko fra backloggen nedenfor
 eller GitHub Issues.
 
 ## Backlog (uprioriteret — se GitHub Issues for fuld liste)
