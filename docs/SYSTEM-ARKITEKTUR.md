@@ -258,9 +258,9 @@ Verificeret ved gennemlæsning af samtlige 11 `route.ts`-filer under `src/app/` 
 | `/admin/api/auth` | POST | Nej (er selve login) | Log ind via Supabase Auth. Rate-limitet `login:{ip}` (10/15 min) + audit `login_success`/`login_failed`/`login_rate_limited` (SEC-2) | JSON `{ email, password }` | `{ ok: true }` / 400 / 401 / 429 `{ error }` — session sættes som cookies |
 | `/admin/api/auth` | DELETE | Nej (no-op uden session) | Log ud (signOut + cookie-rydning) | — | `{ ok: true }` |
 | `/admin/api/password` | PATCH | Ja | Skift egen adgangskode. Kræver nuværende kode (verificeret via session-løs anon-klient), rate-limitet `pwchange:{ip}`, audit `password_changed`/`password_change_failed`/`password_change_rate_limited` | JSON `{ currentPassword, password (min 6) }` | `{ ok: true }` / 400 / 401 / 429 |
-| `/admin/api/parse` | POST | Ja | PDF → Claude → valideret, normaliseret, advisor-beriget Trip. **PR åben (Issue #38, IKKE live):** fail-closed `upload_events`-insert før Claude kaldes (se §8 `upload_events`); derefter magic-byte-tjek (`isPdf()`, `src/lib/file-sniff.ts` — SEC-4) inden Claude kaldes, uafhængigt af filnavn/MIME-type | FormData `file` (PDF, max 10 MB) | `{ trip, rawPdfText, uploadEventId }` (uploadEventId tilføjes af #38) / 400 (inkl. ugyldig filtype) / 422 `{ error, issues, raw }` / 500 / 503 (event-log utilgængelig, #38) |
+| `/admin/api/parse` | POST | Ja | PDF → Claude → valideret, normaliseret, advisor-beriget Trip. Fail-closed `upload_events`-insert før Claude kaldes (Issue #38, live — se §8 `upload_events`); derefter magic-byte-tjek (`isPdf()`, `src/lib/file-sniff.ts` — SEC-4) inden Claude kaldes, uafhængigt af filnavn/MIME-type | FormData `file` (PDF, max 10 MB) | `{ trip, rawPdfText, uploadEventId }` / 400 (inkl. ugyldig filtype) / 422 `{ error, issues, raw }` / 500 / 503 (event-log utilgængelig) |
 | `/admin/api/trips` | GET | Ja | Liste over alle rejser (inkl. `data` + `raw_pdf_text` til QA) | — | `{ trips: [...] }` nyeste først |
-| `/admin/api/trips` | POST | Ja | Opret/opdater præsentation (upsert på `booking_no`). **PR åben (Issue #38, IKKE live):** kræver + verificerer `uploadEventId` før gem | JSON `{ trip, heroPhoto?, customerName?, slugOverride?, rawPdfText?, uploadEventId }` (uploadEventId tilføjes af #38) | `{ id, slug, created, updated }` / 400 / 403 / 409 (slug-kollision) / 500 |
+| `/admin/api/trips` | POST | Ja | Opret/opdater præsentation (upsert på `booking_no`). Kræver + verificerer `uploadEventId` før gem (Issue #38, live) | JSON `{ trip, heroPhoto?, customerName?, slugOverride?, rawPdfText?, uploadEventId }` | `{ id, slug, created, updated }` / 400 / 403 / 409 (slug-kollision) / 500 |
 | `/admin/api/trips/[id]` | PATCH | Ja | Aktivér/deaktivér (soft delete) og/eller skift hero-foto | JSON `{ active?, heroPhoto? }` | `{ ok: true }` / 400 / 500 |
 | `/admin/api/trips/[id]/intro` | POST | Ja | Gem sælger-redigeret intro (max 500 tegn; tom tilladt) + audit med fingerprints. **Optimistisk lås (DATA-1):** UPDATE betinget på læst `updated_at` — konflikt giver 409 | JSON `{ intro }` | `{ ok: true, trip }` / 400 / 404 / **409** / 500 |
 | `/admin/api/destinations` | GET | Ja | Hent destinationsbibliotek | — | `{ destinations: [{ name, hero_url, gallery, updated_at }] }` |
@@ -270,7 +270,7 @@ Verificeret ved gennemlæsning af samtlige 11 `route.ts`-filer under `src/app/` 
 | `/admin/api/profile` | GET | Ja (implicit via RLS) | Hent egen profil | — | `{ profile }` / 401 |
 | `/admin/api/profile` | PATCH | Ja (implicit via RLS) | Opdater egne felter | JSON `{ full_name?, phone?, advisor_match_name? }` | `{ profile }` / 400 / 401 / 500 |
 | `/admin/api/health` | GET | Ja | Driftsdiagnostik: env-sanity + Supabase-probe | — | `{ env, supabaseReachable, supabaseError, nodeVersion }` |
-| `/admin/api/usage` | GET | Ja | **IKKE live endnu** (Issue #38, PR åben) — brugsoverblik: uploads/publiceret/fejl pr. sælger, inkl. 0-brugere | Query `?period=7d\|30d\|all` | `{ period, totalUploads, activeUsers, zeroUploadUsers, trackingSince, stalledEvents, historicalActorEvents, users: [...] }` / 500 (aldrig falske nul-tal) |
+| `/admin/api/usage` | GET | Ja | Brugsoverblik (Issue #38, live): uploads/publiceret/fejl pr. sælger, inkl. 0-brugere | Query `?period=7d\|30d\|all` | `{ period, totalUploads, activeUsers, zeroUploadUsers, trackingSince, stalledEvents, historicalActorEvents, users: [...] }` / 500 (aldrig falske nul-tal) |
 
 **Særlige noter:**
 - `POST /admin/api/parse` har `maxDuration = 300` (`parse/route.ts:9`) — Claude-kaldet kan tage op mod et minut ved store PDF'er.
@@ -315,6 +315,10 @@ Verificeret ved gennemlæsning af samtlige 11 `route.ts`-filer under `src/app/` 
 
 **`ActionBar.tsx`** (server) — Mobil-only sticky bund-bar (< 760px, skjult ved print) med "Ring" (hardkodet `tel:+4559498630` — hovednummeret, ikke sælgerens) og "Kontakt os" (`#kontakt`).
 
+**`ProgressNav.tsx`** (client, tilføjet Issue #40) — Desktop-only fixed nav i højre side (≥1180px, skjult ved print), vertikalt centreret. Én knap pr. synlig sektion: skjult label + 14px streg, aktiv sektion i `--gold-soft` med 30px streg og synlig label; hele nav'en folder alle labels ud ved hover/`:focus-within`.
+*Data:* `sections: NavSection[]` — beregnet server-side i `page.tsx` via `visibleNavSections()` (`src/lib/progress-nav.ts`), som spejler de samme betingelser de faktiske sektions-komponenter bruger til selv at (ikke-)rendere (itinerary/hoteller/galleri-billeder/`advisorEmail`) — nav'en kan derfor aldrig pege på et anker der ikke findes i DOM'en.
+*States:* Aktiv sektion sat af en `IntersectionObserver` med `rootMargin: "-25% 0px -55% 0px"` (smalt trigger-bånd midt i viewporten — forhindrer flakken ved sektionsgrænser); klik beregner offset og bruger `window.scrollTo` (ikke `scrollIntoView`, jf. `docs/design/DO-NOT-CHANGE.md` §8), med `behavior: "auto"` i stedet for `"smooth"` når `prefers-reduced-motion: reduce`. Section-id'er (`intro`/`rejseplan`/`billeder`/`hoteller`/`pris`/`kontakt`) sidder direkte på Hero/Timeline/DestinationGallery/Hotels/PriceAndNote/ContactCTA's egne `<section>`-elementer — `kontakt` er uændret genbrug af det eksisterende anker som `ActionBar` og Hero's CTA'er allerede linker til.
+
 **`SectionHeader.tsx`** (server) — Genbrugt overskrift: guld-versal-label + hairline. Bruges af Timeline ("Rejseplan"), Hotels ("Jeres hoteller") og PriceAndNote ("Pris").
 
 ### Admin-komponenter (ligger under `src/app/admin/`, ikke `src/components/`)
@@ -325,9 +329,9 @@ Verificeret ved gennemlæsning af samtlige 11 `route.ts`-filer under `src/app/` 
 
 ## 7. Admin-sider
 
-Der findes **4 admin-sider** i produktion: `/admin`, `/admin/trips/[id]`, `/admin/qa/[slug]`, `/admin/profil`. **Bemærk:** en separat `/admin/upload`-side findes ikke — PDF-upload er en sektion på selve `/admin`-dashboardet. Alle sider er `force-dynamic`, `noindex`, og gater på `getSessionUser()`.
+Der findes **5 admin-sider** i produktion: `/admin`, `/admin/trips/[id]`, `/admin/qa/[slug]`, `/admin/profil`, `/admin/brug`. **Bemærk:** en separat `/admin/upload`-side findes ikke — PDF-upload er en sektion på selve `/admin`-dashboardet. Alle sider er `force-dynamic`, `noindex`, og gater på `getSessionUser()`.
 
-**PR åben (Issue #38, IKKE live endnu):** en 5. side, `/admin/brug` (`brug/page.tsx` + `UsageOverview.tsx`), tilføjes — periodevælger (7/30 dage/alt), stat-tiles (uploads/aktive/0-brugere), tracking-health-tekst (stalled events, historiske actor-events, "tracking gælder fra ..."), og en tabel pr. sælger (inkl. 0-uploads-sælgere). Linkes fra `/admin`-headeren ("Brugsoverblik"). Samme auth-gate som de øvrige sider — ingen ny rollemodel. *API:* `GET /admin/api/usage`.
+**`/admin/brug`** (`brug/page.tsx` + `UsageOverview.tsx`, Issue #38, live): periodevælger (7/30 dage/alt), stat-tiles (uploads/aktive/0-brugere), tracking-health-tekst (stalled events, historiske actor-events, "tracking gælder fra ..."), og en tabel pr. sælger (inkl. 0-uploads-sælgere). Linkes fra `/admin`-headeren ("Brugsoverblik"). Samme auth-gate som de øvrige sider — ingen ny rollemodel. *API:* `GET /admin/api/usage`.
 
 ### `/admin` — Dashboard (`page.tsx` + `AdminDashboard.tsx` + `DestinationManager.tsx`)
 
@@ -362,7 +366,7 @@ Sælgeren kan redigere **fulde navn**, **telefon** og **rådgivernavn i rejsepla
 
 ## 8. Database-model
 
-Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`). **6 tabeller**, alle med RLS aktiveret. (En 7. tabel, `upload_events`, er beskrevet nedenfor men afventer Rickos godkendelse — se Issue #38.)
+Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38). **7 tabeller**, alle med RLS aktiveret.
 
 > **Vigtigt om projekt-referencer:** `.env.example:2` og README peger på `iunixfpthdftmkgpugex` — det er dér de 35 rejser, 7 profiler og al audit-data ligger, altså **den faktiske produktionsdatabase**. To andre refs optræder i repoet og er **misvisende**: `supabase/schema.sql:2` nævner `ocxrvkrggzppyhgyambj` (det er Allotment-værktøjets projekt — copy-paste-fejl), og `supabase/profiles.sql:2-3` kalder `iunixfpthdftmkgpugex` for "dev" og nævner `sujimigwcjkzpekkdpzf` som "production" — om dét projekt overhovedet findes/bruges er ukendt — kræver Ricko-bekræftelse.
 
@@ -451,7 +455,7 @@ Index: `rate_limits_reset_at_idx` (til evt. oprydning — der findes dog **ingen
 
 Indexes: `occurred_at DESC`, `kind`. RLS: kun service_role. **Vigtigt: tabellen er designet men aldrig taget i brug** — `parse/route.ts` logger fejl til `console.error` (`:38-42, :54-57`) og skriver **ikke** til `parse_failures`. 0 rækker bekræfter det. Se §17.
 
-### `upload_events` — adoption/usage-log pr. sælger (Issue #38) — **PR åben, IKKE i produktion endnu**
+### `upload_events` — adoption/usage-log pr. sælger (Issue #38, live siden 2026-09-16)
 
 Ny 7. tabel, adskilt fra `trips.created_by` (som kun sporer den oprindelige opretter og ikke rører sig ved re-upload). Ét event pr. accepteret PDF-upload til `/admin/api/parse`, statusflow `received → validation_failed/parse_failed → parsed → published/save_failed`. Se `supabase/009_upload_events.sql` for fuld DDL/kommentarer.
 

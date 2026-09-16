@@ -14,6 +14,8 @@ import { PriceAndNote } from "@/components/trip/PriceAndNote";
 import { ContactCTA } from "@/components/trip/ContactCTA";
 import { Footer } from "@/components/trip/Footer";
 import { ActionBar } from "@/components/trip/ActionBar";
+import { ProgressNav } from "@/components/trip/ProgressNav";
+import { filterGalleryImages, visibleNavSections } from "@/lib/progress-nav";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -88,21 +90,31 @@ export default async function TripPage({ params }: { params: { bookingId: string
   }
 
   const trip = normalizeTrip(parsed.data);
+  const galleryImages = destination?.gallery ?? [];
+  const hasContact = !!trip.advisorEmail;
+
+  // Issue #40: samme betingelser som de faktiske sektionskomponenter bruger
+  // til at (ikke-)rendere sig selv, så desktop progress-nav aldrig peger på
+  // et anker der ikke findes i DOM'en.
+  const navSections = visibleNavSections({
+    hasItinerary: trip.itinerary.length > 0,
+    galleryImageCount: filterGalleryImages(galleryImages).length,
+    hasHotels: trip.hotels.length > 0,
+    hasContact,
+  });
 
   return (
     <div className="page">
       <Hero trip={trip} heroPhoto={row.hero_photo ?? destination?.heroUrl ?? null} />
       <TripDetails trip={trip} />
       <Timeline itinerary={trip.itinerary} />
-      <DestinationGallery
-        images={destination?.gallery ?? []}
-        destination={trip.destination}
-      />
+      <DestinationGallery images={galleryImages} destination={trip.destination} />
       <Hotels hotels={trip.hotels} />
       <PriceAndNote trip={trip} />
       <ContactCTA trip={trip} />
       <Footer />
-      <ActionBar hasContact={!!trip.advisorEmail} />
+      <ProgressNav sections={navSections} />
+      <ActionBar hasContact={hasContact} />
     </div>
   );
 }

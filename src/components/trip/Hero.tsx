@@ -17,7 +17,7 @@ export function Hero({ trip, heroPhoto }: { trip: Trip; heroPhoto: string | null
     .join(" – ");
 
   return (
-    <section className="hero">
+    <section className="hero" id="intro">
       <div className="hero-fallback" />
       {heroPhoto && photoOk && (
         // Above-the-fold/LCP-billede: priority + fetchPriority slår lazy-load fra.

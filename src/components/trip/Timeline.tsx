@@ -151,7 +151,7 @@ function FlightContent({ expand }: { expand: FlightExpand }) {
 
 export function Timeline({ itinerary }: { itinerary: ItineraryItem[] }) {
   return (
-    <section>
+    <section id="rejseplan">
       <SectionHeader label="Rejseplan" />
       <div className="timeline">
         <div className="tl-track">

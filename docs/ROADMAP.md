@@ -19,16 +19,19 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
 - **Vision 2.0 fase 5 — pris, praktisk info, CTA og mobil-polish. Vision 2.0 afsluttet
   (fase 1-5 alle live)**
   ([Issue #36](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/36), PR #37)
+- **[Issue #38](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/38) —
+  Brugsoverblik / 100% upload-tracking pr. sælger.** Migration 009 kørt og verificeret i
+  production, kode merget/deployet (PR #39).
 
 ## Næste
 
-1. **[Issue #38](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/38) —
-   Brugsoverblik / 100% upload-tracking pr. sælger.** PR klar (migration, kode, tests, docs) —
-   afventer Rickos review og godkendelse af release-rækkefølgen (migration live før deploy).
+1. **[Issue #40](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/40) —
+   Vision 2.0 finishing touch: desktop progress navigation (≥1180px).** PR klar — afventer
+   Rickos review. Rent frontend/CSS, ingen DB/migration involveret.
 2. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
-Herudover intet forudbestemt — Vision 2.0 var det planlagte produktkapitel og er nu afsluttet.
-Næste punkt efter #38 vælges af Ricko fra backloggen nedenfor eller GitHub Issues.
+Herudover intet forudbestemt. Næste punkt efter #40 vælges af Ricko fra backloggen nedenfor
+eller GitHub Issues.
 
 ## Backlog (uprioriteret — se GitHub Issues for fuld liste)
 

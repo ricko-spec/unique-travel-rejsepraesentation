@@ -8,7 +8,7 @@ import { SectionHeader } from "./SectionHeader";
 
 export function Hotels({ hotels }: { hotels: Hotel[] }) {
   return (
-    <section>
+    <section id="hoteller">
       <SectionHeader label="Jeres hoteller" />
       {/* Headeren ligger uden for griddet, som i designet — ellers optager den
           første celle i 2-kolonne-layoutet og skubber første kort til højre. */}

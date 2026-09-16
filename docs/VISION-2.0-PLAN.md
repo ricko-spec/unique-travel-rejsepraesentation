@@ -17,6 +17,10 @@
 `docs/design/VISUAL-DETAILS.md` + `docs/design/DO-NOT-CHANGE.md` er den varige designkontrakt
 for fase 4-5 (se `docs/DECISIONS.md`) — ikke fase 1-afsnittet nedenfor, som er historisk.
 
+**Finishing touch (efter fase 5):** [Issue #40](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/40)
+— desktop progress-nav (≥1180px), sidste udvalgte Claude Design-detalje der ikke var med i
+fase 1-5. Ikke en ny fase; ét lille, afgrænset PR.
+
 ## Kilder
 
 | Kilde | Hvad den bidrager med |

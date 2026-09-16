@@ -378,6 +378,71 @@ section { width: 100%; }
   body { padding-bottom: 80px; }
 }
 
+/* ===== Desktop progress-nav (Issue #40, synlig kun >=1180px) ===== */
+.progress-nav {
+  display: none;
+  position: fixed;
+  right: 26px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  flex-direction: column;
+  gap: 2px;
+}
+@media (min-width: 1180px) {
+  .progress-nav { display: flex; }
+}
+.pn-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 7px 0;
+  font-family: var(--font-open-sans), sans-serif;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(0, 78, 80, 0.42);
+  transition: color 0.3s var(--ease-lux);
+}
+.pn-item:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+.pn-label {
+  opacity: 0;
+  transform: translateX(6px);
+  transition: opacity 0.35s var(--ease-lux), transform 0.35s var(--ease-lux);
+  white-space: nowrap;
+}
+.pn-dash {
+  width: 14px;
+  height: 1px;
+  background: currentColor;
+  flex-shrink: 0;
+  transition: width 0.35s var(--ease-lux), background 0.3s var(--ease-lux);
+}
+/* Hover ELLER keyboard-fokus på nav'en folder alle labels ud (DO-NOT-CHANGE
+   §8: tastaturbrug skal virke lige så godt som museklik). */
+.progress-nav:hover .pn-label,
+.progress-nav:focus-within .pn-label {
+  opacity: 1;
+  transform: none;
+}
+.pn-item:hover { color: var(--rainforest); }
+.pn-item.active { color: var(--gold-soft); }
+.pn-item.active .pn-dash { width: 30px; }
+.pn-item.active .pn-label { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .pn-label,
+  .pn-dash {
+    transition: none;
+  }
+}
+
 .hero-ornament {
   position: absolute;
   right: -90px;
@@ -1240,6 +1305,7 @@ section { width: 100%; }
 @media print {
   .hero { min-height: auto; }
   .action-bar { display: none !important; }
+  .progress-nav { display: none !important; }
 }
 
 /* ===== Admin ===== */
