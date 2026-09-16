@@ -25,6 +25,11 @@ export type UsageEventRow = {
 export type UserUsageRow = {
   userId: string;
   name: string;
+  // Sat af mergeUsageSummary for rækker der stammer fra events uden
+  // user_id (bruger/profil slettet siden) — grupperet efter det
+  // snapshottede actor_name. Ikke sat (undefined ~ false) af summarizeUsage,
+  // som ikke kender til orphan-grupperingen. Se mergeUsageSummary.
+  isHistorical?: boolean;
   uploads: number;
   published: number;
   newTrips: number;
@@ -233,7 +238,11 @@ export async function fetchAllUsageEvents(
 // ----------------------------------------------------------------------------
 
 export type UsageAggregateUser = {
-  userId: string;
+  // null for en historisk/orphan-gruppe (user_id var NULL på eventet —
+  // bruger/profil slettet siden). isHistorical skelner entydigt fremfor at
+  // gætte ud fra userId === null.
+  userId: string | null;
+  isHistorical: boolean;
   latestActorName: string;
   uploads: number;
   published: number;
@@ -263,16 +272,34 @@ export async function fetchUsagePeriodSummary(
   return data as UsageAggregateResponse;
 }
 
-// Fletter RPC-aggregatet (kun brugere med ≥1 event i perioden) med den fulde
-// profiles-liste, så 0-upload-sælgere altid vises. Ren funktion — testes
-// uden DB ved at give et fabrikeret UsageAggregateResponse-objekt.
+// Præfiks for det syntetiske userId der bruges til historiske/orphan-rækker
+// i UI-tabellen. ALDRIG en rigtig auth.users.id — kun en stabil React-/
+// Map-nøgle afledt af det snapshottede actor_name.
+const HISTORICAL_USER_ID_PREFIX = "historical:";
+
+// Fletter RPC-aggregatet (kun brugere/grupper med ≥1 event i perioden) med
+// den fulde profiles-liste, så 0-upload-sælgere altid vises. Ren funktion —
+// testes uden DB ved at give et fabrikeret UsageAggregateResponse-objekt.
+//
+// aggregate.users indeholder to slags rækker:
+//   - almindelige (isHistorical: false, userId sat) — matches mod profiles
+//   - historiske/orphan-grupper (isHistorical: true, userId: null) — events
+//     hvor user_id er NULL (bruger/profil slettet siden), grupperet efter
+//     actor_name af RPC'en. Disse må ALDRIG blandes sammen med en aktiv
+//     0-upload-profil — de vises som deres egen, tydeligt markerede række
+//     ("Tidligere bruger: {navn}") og tæller IKKE med i activeUsers/
+//     zeroUploadUsers, som beskriver den nuværende sælger-roster.
 export function mergeUsageSummary(
   profiles: UsageProfile[],
   aggregate: UsageAggregateResponse,
   period: UsagePeriod,
   periodStartIso: string | null,
 ): UsageSummary {
-  const aggregateByUser = new Map(aggregate.users.map((u) => [u.userId, u]));
+  const aggregateByUser = new Map(
+    aggregate.users
+      .filter((u): u is UsageAggregateUser & { userId: string } => !u.isHistorical && u.userId !== null)
+      .map((u) => [u.userId, u]),
+  );
   const seenProfileIds = new Set<string>();
 
   const rows: UserUsageRow[] = profiles.map((p) => {
@@ -281,6 +308,7 @@ export function mergeUsageSummary(
     return {
       userId: p.id,
       name: p.full_name?.trim() || p.email,
+      isHistorical: false,
       uploads: a?.uploads ?? 0,
       published: a?.published ?? 0,
       newTrips: a?.newTrips ?? 0,
@@ -291,32 +319,55 @@ export function mergeUsageSummary(
     };
   });
 
-  // Et event kan i sjældne tilfælde pege på en user_id der ikke (længere)
-  // findes i profiles — vis den alligevel med det snapshottede navn frem
-  // for at tabe eventet fra oversigten.
   for (const a of aggregate.users) {
-    if (seenProfileIds.has(a.userId)) continue;
-    rows.push({
-      userId: a.userId,
-      name: a.latestActorName,
-      uploads: a.uploads,
-      published: a.published,
-      newTrips: a.newTrips,
-      reuploads: a.reuploads,
-      errors: a.errors,
-      parsedNotSaved: a.parsedNotSaved,
-      lastUploadAt: a.lastUploadAt,
-    });
+    if (a.isHistorical) {
+      // user_id var NULL på eventet — auth-brugeren/profilen er slettet
+      // siden. actor_name-snapshottet er netop gemt for at bevare hvem det
+      // var, så gruppen vises som sin egen række i stedet for kun at indgå
+      // i historicalActorEvents-tallet.
+      rows.push({
+        userId: `${HISTORICAL_USER_ID_PREFIX}${a.latestActorName}`,
+        name: `Tidligere bruger: ${a.latestActorName}`,
+        isHistorical: true,
+        uploads: a.uploads,
+        published: a.published,
+        newTrips: a.newTrips,
+        reuploads: a.reuploads,
+        errors: a.errors,
+        parsedNotSaved: a.parsedNotSaved,
+        lastUploadAt: a.lastUploadAt,
+      });
+      continue;
+    }
+    // Et event kan i sjældne tilfælde pege på en user_id der (endnu) findes
+    // på eventet men ikke (længere) i profiles — vis den alligevel med det
+    // snapshottede navn frem for at tabe eventet fra oversigten.
+    if (a.userId && !seenProfileIds.has(a.userId)) {
+      rows.push({
+        userId: a.userId,
+        name: a.latestActorName,
+        isHistorical: false,
+        uploads: a.uploads,
+        published: a.published,
+        newTrips: a.newTrips,
+        reuploads: a.reuploads,
+        errors: a.errors,
+        parsedNotSaved: a.parsedNotSaved,
+        lastUploadAt: a.lastUploadAt,
+      });
+    }
   }
 
   rows.sort((x, y) => y.uploads - x.uploads);
+
+  const currentRows = rows.filter((r) => !r.isHistorical);
 
   return {
     period,
     periodStart: periodStartIso,
     totalUploads: aggregate.totalUploads,
-    activeUsers: rows.filter((r) => r.uploads > 0).length,
-    zeroUploadUsers: rows.filter((r) => r.uploads === 0).length,
+    activeUsers: currentRows.filter((r) => r.uploads > 0).length,
+    zeroUploadUsers: currentRows.filter((r) => r.uploads === 0).length,
     trackingSince: aggregate.trackingSince,
     stalledEvents: aggregate.stalledEvents,
     historicalActorEvents: aggregate.historicalActorEvents,

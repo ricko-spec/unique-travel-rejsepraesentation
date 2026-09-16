@@ -410,6 +410,7 @@ describe("mergeUsageSummary — fletter RPC-aggregat med profiles (produktions-a
       users: [
         {
           userId: "user-1",
+          isHistorical: false,
           latestActorName: "Anne Berg",
           uploads: 3,
           published: 2,
@@ -441,25 +442,109 @@ describe("mergeUsageSummary — fletter RPC-aggregat med profiles (produktions-a
   it("sorterer flest uploads først, men beholder 0-brugere", () => {
     const agg = aggregate({
       users: [
-        { userId: "user-3", latestActorName: "Carl Dahl", uploads: 1, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
-        { userId: "user-1", latestActorName: "Anne Berg", uploads: 4, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
+        { userId: "user-3", isHistorical: false, latestActorName: "Carl Dahl", uploads: 1, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
+        { userId: "user-1", isHistorical: false, latestActorName: "Anne Berg", uploads: 4, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
       ],
     });
     const summary = mergeUsageSummary(PROFILES, agg, "30d", iso(30));
     expect(summary.users.map((u) => u.userId)).toEqual(["user-1", "user-3", "user-2"]);
   });
 
-  it("viser en aggregat-række for en user_id der ikke (længere) findes i profiles, med det snapshottede navn", () => {
+  it("viser en aggregat-række for en user_id der (stadig) er sat på eventet, men ikke (længere) findes i profiles", () => {
     const agg = aggregate({
       users: [
-        { userId: "user-slettet", latestActorName: "Tidligere Sælger", uploads: 2, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
+        { userId: "user-fjernet-fra-profiles", isHistorical: false, latestActorName: "Tidligere Sælger", uploads: 2, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
       ],
     });
     const summary = mergeUsageSummary(PROFILES, agg, "30d", iso(30));
     expect(summary.users).toHaveLength(4); // 3 profiler + 1 orphan
-    const orphan = summary.users.find((u) => u.userId === "user-slettet")!;
+    const orphan = summary.users.find((u) => u.userId === "user-fjernet-fra-profiles")!;
     expect(orphan.name).toBe("Tidligere Sælger");
     expect(orphan.uploads).toBe(2);
+    expect(orphan.isHistorical).toBe(false);
+  });
+
+  // Reviewfund: upload_events med user_id = NULL (auth-brugeren/profilen er
+  // slettet siden, ON DELETE SET NULL) må IKKE kun tælles i
+  // historicalActorEvents — actor_name er netop gemt for at bevare hvem der
+  // uploadede. RPC'en grupperer disse under isHistorical: true, userId: null.
+  describe("historiske/orphan-uploads (user_id IS NULL, gemt via actor_name)", () => {
+    it("beviser at uploaden BÅDE ligger i totalUploads OG vises som en tydeligt markeret historisk bruger-række", () => {
+      const agg = aggregate({
+        totalUploads: 2, // de to eneste events i perioden — begge fra den slettede bruger
+        users: [
+          {
+            userId: null,
+            isHistorical: true,
+            latestActorName: "Dorte Hansen",
+            uploads: 2,
+            published: 1,
+            newTrips: 1,
+            reuploads: 0,
+            errors: 1,
+            parsedNotSaved: 0,
+            lastUploadAt: iso(1),
+          },
+        ],
+      });
+      const summary = mergeUsageSummary(PROFILES, agg, "30d", iso(30));
+
+      // 1) I totalen:
+      expect(summary.totalUploads).toBe(2);
+
+      // 2) Som sin egen, tydeligt markerede række i tabellen:
+      const historical = summary.users.find((u) => u.isHistorical)!;
+      expect(historical).toBeDefined();
+      expect(historical.name).toBe("Tidligere bruger: Dorte Hansen");
+      expect(historical.uploads).toBe(2);
+      expect(historical.published).toBe(1);
+      expect(historical.newTrips).toBe(1);
+      expect(historical.errors).toBe(1);
+      expect(historical.lastUploadAt).toBe(iso(1));
+    });
+
+    it("tælles IKKE som en nuværende 0-upload-profil, og påvirker ikke activeUsers/zeroUploadUsers", () => {
+      const agg = aggregate({
+        totalUploads: 1,
+        users: [
+          {
+            userId: null,
+            isHistorical: true,
+            latestActorName: "Dorte Hansen",
+            uploads: 1,
+            published: 0,
+            newTrips: 0,
+            reuploads: 0,
+            errors: 0,
+            parsedNotSaved: 1,
+            lastUploadAt: iso(1),
+          },
+        ],
+      });
+      const summary = mergeUsageSummary(PROFILES, agg, "30d", iso(30));
+
+      // Stadig kun de 3 rigtige profiler tæller som aktive/0-upload —
+      // uanset at der nu er 4 rækker i tabellen.
+      expect(summary.users).toHaveLength(4);
+      expect(summary.zeroUploadUsers).toBe(3);
+      expect(summary.activeUsers).toBe(0);
+    });
+
+    it("bruger en stabil, ikke-forvekslelig nøgle (aldrig en rigtig profil-id) til den historiske række", () => {
+      const agg = aggregate({
+        users: [
+          { userId: null, isHistorical: true, latestActorName: "Anne Berg", uploads: 1, published: 0, newTrips: 0, reuploads: 0, errors: 0, parsedNotSaved: 0, lastUploadAt: iso(1) },
+        ],
+      });
+      const summary = mergeUsageSummary(PROFILES, agg, "30d", iso(30));
+      const activeAnne = summary.users.find((u) => u.userId === "user-1")!;
+      const historicalAnne = summary.users.find((u) => u.isHistorical)!;
+      // Selvom navnet ligner (samme person kan i princippet både have en
+      // aktiv profil OG en historisk orphan-gruppe fra før profilen fandtes),
+      // må de to rækkers userId aldrig kollidere.
+      expect(activeAnne.userId).not.toBe(historicalAnne.userId);
+      expect(historicalAnne.userId).not.toBe("user-1");
+    });
   });
 
   it("videregiver period og periodStart uændret til svaret", () => {
