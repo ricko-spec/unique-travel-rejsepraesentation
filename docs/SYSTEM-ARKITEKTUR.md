@@ -251,7 +251,7 @@ sequenceDiagram
 
 ## 5. Route-katalog
 
-Verificeret ved gennemlæsning af samtlige 11 `route.ts`-filer under `src/app/` (der findes ingen andre). Alle routes kører `runtime = "nodejs"` og `dynamic = "force-dynamic"`. "Auth" betyder `getSessionUser()`-tjek der returnerer 401 uden gyldig Supabase-session-cookie.
+Verificeret ved gennemlæsning af samtlige 12 `route.ts`-filer under `src/app/` (der findes ingen andre). Alle routes kører `runtime = "nodejs"` og `dynamic = "force-dynamic"`. "Auth" betyder `getSessionUser()`-tjek der returnerer 401 uden gyldig Supabase-session-cookie — **undtagen** `/api/internal/*`, som ligger uden for `/admin` og bruger en helt anden, uafhængig auth-mekanisme (se note nedenfor).
 
 | Sti | Metode | Auth | Formål | Input | Output |
 |---|---|---|---|---|---|
@@ -271,12 +271,14 @@ Verificeret ved gennemlæsning af samtlige 11 `route.ts`-filer under `src/app/` 
 | `/admin/api/profile` | PATCH | Ja (implicit via RLS) | Opdater egne felter | JSON `{ full_name?, phone?, advisor_match_name? }` | `{ profile }` / 400 / 401 / 500 |
 | `/admin/api/health` | GET | Ja | Driftsdiagnostik: env-sanity + Supabase-probe | — | `{ env, supabaseReachable, supabaseError, nodeVersion }` |
 | `/admin/api/usage` | GET | Ja | Brugsoverblik (Issue #38, live): uploads/publiceret/fejl pr. sælger, inkl. 0-brugere | Query `?period=7d\|30d\|all` | `{ period, totalUploads, activeUsers, zeroUploadUsers, trackingSince, stalledEvents, historicalActorEvents, users: [...] }` / 500 (aldrig falske nul-tal) |
+| `/api/internal/analytics/travel-plans` | GET | **Bearer-token** (`ANALYTICS_BRIDGE_API_KEY`, ikke Supabase-session) | Analytics Bridge (Issue #45, se `docs/ANALYTICS-BRIDGE-API.md`) — read-only server-to-server-eksport af online rejseplaner til Marketing Dashboard. Ingen kundedata; bookingnummer aldrig i klartekst (kun HMAC-SHA256 med separat `BOOKING_MATCH_SECRET`) | Query `?since?&cursor?&limit?` | `{ schema_version, data: [{ trip_id, booking_match_key, online_plan_created_at, active, destination }], pagination: { next_cursor, has_more } }` / 400 / 401 / 500 |
 
 **Særlige noter:**
 - `POST /admin/api/parse` har `maxDuration = 300` (`parse/route.ts:9`) — Claude-kaldet kan tage op mod et minut ved store PDF'er.
 - Den gamle `POST /admin/api/destinations/upload` (FormData-baseret) blev **slettet 2026-07-20**: Vercel serverless afviser request-bodies > 4,5 MB ved platform-kanten, så originalfotos kan aldrig gå gennem en API-route. Billeder uploades nu direkte til Supabase Storage via det signerede 3-trins-flow (upload-url → PUT → finalize-upload). Bemærk at parse-routen stadig modtager PDF'er via FormData — TravelWire-PDF'er er små nok, men grænsen på 4,5 MB (ikke de kodede 10 MB) er den reelle.
 - Ud over API-routes findes **én server action**: `unlockTrip(slug, code)` i `src/app/[bookingId]/actions.ts` — kundens kode-unlock. Den er ikke en HTTP-route men kaldes via Next.js' server-action-mekanisme fra `AccessGate`. Auth: ingen (kunden er anonym); beskyttet af rate-limit + audit i stedet.
 - Fejl-responser fra `trips`-routes inkluderer `envDiagnostics()` ved forbindelsesfejl (`trips/route.ts:57`) — bevidst valg for at kunne fejlsøge Vercel-env-problemer direkte fra klienten. Diagnostikken indeholder ikke selve nøglerne, kun præsens/rolle/længde.
+- `/api/internal/analytics/travel-plans` (Issue #45) er den første route uden for `/admin/api/` — et bevidst nyt `src/app/api/`-navnerum for server-to-server-integrationer, adskilt fra admin-dashboardets Supabase-session-auth. Ingen CORS-headers sættes (blokerer almindelig browser-brug på tværs af origins). `ANALYTICS_BRIDGE_API_KEY` og `BOOKING_MATCH_SECRET` er to uafhængige secrets — se `docs/ANALYTICS-BRIDGE-API.md`.
 
 ---
 
