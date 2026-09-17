@@ -56,15 +56,17 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
 
 1. **[Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63) —
    Vision 3.0 Fase 1B0: cookie-fri visit-model, docs-only revision af Fase 1-designet.**
-   PR klar til review — ingen implementation endnu. Udfordrede den oprindelige
-   cookie-baserede Fase 1-model (Issue #43) og anbefaler i stedet en cookie-fri, server-side
+   Issue #63 er docs-revisionen der **anbefaler** (ikke vælger) en cookie-fri, server-side
    rolling visit-aggregation (`trip_visits`-tabel, ingen ny cookie, ingen
-   middleware-udvidelse) — se den opdaterede `docs/VISION-3.0-EVENT-MODEL.md`. Fjerner den
-   tidligere blokerende ePrivacy-hard-gate, men rejser fire nye, mindre spørgsmål Ricko
-   fortsat skal tage stilling til (§7/§14 i dokumentet) før Fase 1B kan implementeres.
-2. **Fase 1B — selve opsamlingen bygges** (afventer Rickos stillingtagen til
-   `docs/VISION-3.0-EVENT-MODEL.md` §14: behandlingsgrundlag, transparens,
-   retention-politik — ikke længere cookie-samtykke, se punkt 1). Når den foreligger:
+   middleware-udvidelse) i stedet for den oprindelige cookie-baserede Fase 1-model
+   (Issue #43) — se den opdaterede `docs/VISION-3.0-EVENT-MODEL.md`. Fjerner den
+   tidligere blokerende ePrivacy-hard-gate, men rejser fire nye, mindre spørgsmål. Fase
+   1B-implementation afventer Rickos eksplicitte modelvalg + de resterende
+   beslutninger (§14 i dokumentet) — se punkt 2.
+2. **Fase 1B — selve opsamlingen bygges** (afventer Rickos eksplicitte godkendelse af
+   Model B, samt stillingtagen til `docs/VISION-3.0-EVENT-MODEL.md` §14:
+   behandlingsgrundlag, transparens, retention-politik — ikke længere cookie-samtykke,
+   se punkt 1). Når den foreligger:
    `supabase/010_trip_visits.sql` (tabel + RLS + index + `record_trip_visit`),
    `src/lib/trip-visit.ts` + tests, ét best-effort `waitUntil`-kald i
    `src/app/[bookingId]/page.tsx`. Ingen middleware-ændring i den nye model. Fail-open:

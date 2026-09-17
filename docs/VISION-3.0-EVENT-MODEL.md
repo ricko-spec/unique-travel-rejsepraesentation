@@ -3,13 +3,16 @@
 > Oprindeligt design til [Issue #43](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/43)
 > (PR #44), under [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41).
 > **Revideret af [Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63)
-> (2026-09-17): den anbefalede Fase 1B-model er skiftet fra en ny session-cookie til en
-> cookie-fri, server-side rolling visit-model. Se §0 for hvorfor.**
+> (2026-09-17): dokumentet ANBEFALER nu en cookie-fri, server-side rolling visit-model
+> frem for den oprindelige session-cookie — men det er en anbefaling, ikke en truffet
+> produktbeslutning. Se §0 for hvorfor, og §14 for den eksplicitte Ricko-godkendelse
+> dette kræver før Fase 1B kan implementeres.**
 > **Docs-only. Ingen migration, ingen kode, intet endpoint er bygget endnu.**
 
-## 0. Revisionshistorik og beslutning
+## 0. Revisionshistorik og anbefaling
 
-**Fase 1B er ikke implementeret.** Dette dokument har gennemgået to runder:
+**Fase 1B er ikke implementeret, og ingen model er endnu valgt af Ricko.** Dette
+dokument har gennemgået to runder:
 
 1. **Issue #43/PR #44 (2026-09-16):** designede en ny `trip_session_<slug>`-cookie +
    `customer_sessions`-tabel, session-id mintet i middleware. Teknisk solidt, men gjorde
@@ -17,15 +20,19 @@
    middleware-udvidelse til al kundetrafik — begge blokerende.
 2. **Issue #63 (2026-09-17):** stillede spørgsmålet direkte — kan den samme
    forretningsværdi opnås uden en ny analytics-cookie? Efter en konkret sammenligning
-   (§14, arkiveret nedenfor) er svaret **ja**, og dette dokument er omskrevet til at
-   beskrive den anbefalede model: **cookie-fri, server-side rolling visit-aggregation
-   pr. rejseplan** (herefter "Model B" eller blot "designet").
+   (arkiveret i appendix) er den tekniske anbefaling **ja**, og dette dokument er
+   omskrevet til at beskrive den **anbefalede** model: **cookie-fri, server-side
+   rolling visit-aggregation pr. rejseplan** (herefter "Model B" eller "designet").
 
-Den tidligere cookie-model ("Model A") er **ikke** valgt. Den er arkiveret i §14 sammen
-med den fulde begrundelse, fordi dens afvejninger (særligt ift. en fremtidig Fase 2) er
-reel information, ikke blot historik der skal glemmes.
+**Dette er en anbefaling, ikke et valg.** Issue #63 bad om en beslutningsklar
+sammenligning og en anbefaling — ikke en produktbeslutning på Rickos vegne. Den
+tidligere cookie-model ("Model A") er af samme grund **ikke længere anbefalet**, men
+den er heller ikke formelt fravalgt af Ricko. Den er arkiveret i et appendix sammen med
+den fulde begrundelse, fordi dens afvejninger (særligt ift. en fremtidig Fase 2) er reel
+information, ikke blot historik der skal glemmes.
 
-**Ingen af de to modeller er implementeret. Dette er fortsat kun et beslutningsgrundlag.**
+**Ingen af de to modeller er implementeret. Model B kræver Rickos eksplicitte
+godkendelse (§14, punkt 1) før Fase 1B-implementation må starte.**
 
 ## 1. Hvad Fase 1 skal kunne svare på
 
@@ -88,20 +95,34 @@ retning for et tal der vises sælgere — se §3 for de konkrete afvejninger.
   rækkes egen tilstand — der er intet en klient kan sende der ændrer *om* et besøg
   tælles.
 
-## 3. Model B vs. den forkastede cookie-model — den konkrete afvejning
+## 3. Model B (anbefalet) vs. Model A (ikke længere anbefalet) — den konkrete afvejning
 
-Fuld sammenligning ligger i §14 (arkiveret). Kort:
+Fuld sammenligning ligger i appendix. Kort:
 
-| | Model B (valgt) | Model A (forkastet, arkiveret §14) |
+| | Model B (anbefalet) | Model A (ikke anbefalet, arkiveret i appendix) |
 |---|---|---|
 | Ny cookie | Ingen | `trip_session_<slug>`, ny ePrivacy-vurdering nødvendig |
 | Middleware | Urørt (`/admin` only) | Udvides til al kundetrafik — "den mest risikable del" |
 | Besøgsenhed | Pr. rejseplan | Pr. browser-cookie-jar |
 | Klient-manipulerbar tæller | Nej | Ja (dokumenteret accepteret i Model A) |
-| Sælger-der-logger-ind-efter-åbning-hul | Lukket (tjekkes ved hvert skriv) | Åbent (tjekkes kun ved cookie-mint) |
+| Sælger-der-logger-ind-EFTER-åbning | Første, udloggede åbning tælles stadig — se forbeholdet nedenfor | Samme svaghed, men tjekkes kun én gang (ved cookie-mint), ikke ved hvert besøg |
 | Datavolumen | ≤ 1 række pr. trip (≈ 254 i dag) | Vokser med besøgstrafik |
 | Retention | Politikbeslutning, intet teknisk pres | Bærende pg_cron-krav |
 | Fase 2-fundament | Skal designe egen dedup-nøgle senere | Færdigt sessionsbegreb klar til brug |
+
+**Vigtigt forbehold om sælger-rækken ovenfor — hullet er REDUCERET, ikke lukket.** En
+sælger der åbner sit eget kundelink **udlogget** (ingen admin-auth-cookie endnu) får
+den første åbning talt som en kundeåbning i begge modeller — det kan ingen af
+designene se forskel på, fordi der på det tidspunkt reelt ikke findes noget signal om
+at det er sælgeren. Forskellen mellem modellerne er hvad der sker **bagefter**: Model B
+tjekker admin-auth-cookien ved *hvert* skriveforsøg, så i det øjeblik sælgeren logger
+ind i `/admin` i samme browser, stopper yderligere registrering på det linket med det
+samme. Model A tjekkede kun ved selve cookie-mintningen — en sælger der først logger
+ind *efter* at have åbnet linket udlogget, blev ved med at blive talt, fordi
+session-cookien allerede var mintet og levede videre i op til 30 minutter. Model B
+reducerer altså efterfølgende forurening markant sammenlignet med Model A, men kan
+ikke — ligesom Model A — identificere en sælger der er logget ud, i inkognito, eller på
+en privat enhed. Se §8 for den fulde beskrivelse af dette kendte, uændrede hul.
 
 **Hvad vi taber i præcision — de tre reelle scenarier:**
 
@@ -192,12 +213,26 @@ E2. Nyt device, samme husstand, <30 min. efter forrige (DEN ACCEPTEREDE AFVIGELS
      Som E, men last_opened_at er FRISK -> kun open_count += 1, visit_count UÆNDRET.
    Resultat: stadig ét besøg. Se §3.
 
-F. Sælger der tester (logget ind i /admin i samme browser)
+F. Sælger der tester, allerede logget ind i /admin i samme browser FØR åbning
      page.tsx : hasAdminAuthCookie(cookies) === true -> gate returnerer false
                 -> intet skriv. Siden renderes normalt.
-   Lukker Model A's dokumenterede hul: tjekket sker ved HVERT skriveforsøg, ikke kun
-   ved cookie-mint, så en sælger der logger ind EFTER at have åbnet linket udlogget
-   fanges også (i modsætning til det oprindelige design).
+   Reducerer (lukker IKKE) Model A's dokumenterede hul: tjekket sker ved HVERT
+   skriveforsøg, ikke kun ved cookie-mint, så EFTERFØLGENDE besøg stopper med at blive
+   talt fra det øjeblik sælgeren logger ind — i modsætning til det oprindelige design,
+   hvor et allerede mintet session-id blev ved med at skrive i op til 30 minutter.
+   Forbehold: en sælger der åbner linket UDLOGGET og FØRST bagefter logger ind, får
+   stadig den første åbning talt (se F2, og forbeholdet i §3/§8).
+
+F2. Sælger der åbner linket udlogget, logger ind BAGEFTER (det uændrede hul)
+     page.tsx : hasAdminAuthCookie(cookies) === false på åbningstidspunktet
+                -> gate tillader -> skrives som ét besøg (ukorrekt, men uundgåeligt:
+                   der findes intet signal på skrivetidspunktet om at det er sælgeren)
+     Sælgeren logger ind i /admin bagefter
+                -> INGEN yderligere skrivning på dette besøg eller fremtidige besøg,
+                   fra det øjeblik login-cookien findes
+   Resultat: dette ene besøg er stadig fejlagtigt talt — det er den uændrede, kendte
+   begrænsning (§3, §8). Model B forhindrer kun GENTAGNE fejlregistreringer efter
+   login, ikke den første.
 
 G. Bot / link-preview
      Ingen trip_access-cookie (kender ikke booking_no) -> stopper allerede ved A's
@@ -400,8 +435,8 @@ begge modeller** og er ikke vurderet her — kun beskrevet, så det ikke overses
 2. **Transparens** (fx en kort linje på `AccessGate` om at åbninger registreres) er
    uafhængig af cookie-spørgsmålet. Om det er nødvendigt/ønsket vurderes ikke her.
    **KRÆVER RICKO.**
-3. **Retention er nu en ren politikbeslutning, ikke et teknisk krav.** I den forkastede
-   cookie-model tvang et voksende datasæt en 12-måneders sletning frem. Her kan en
+3. **Retention er nu en ren politikbeslutning, ikke et teknisk krav.** I den
+   ikke-anbefalede cookie-model tvang et voksende datasæt en 12-måneders sletning frem. Her kan en
    `trip_visits`-række leve med rejseplanen (cascade) uden at noget ophobes — men at
    der ikke er teknisk pres er ikke det samme som at "for evigt" er det rigtige svar.
    **KRÆVER RICKO**, se §11.
@@ -429,8 +464,9 @@ export function isProductionHost(host: string | null): boolean;  // kun rejsepla
 export const VISIT_WINDOW_MINUTES = 30;
 ```
 
-Fire betingelser (mod fem i det forkastede design — `trip_access`-tilstedeværelse
-udgår, fordi den autoritative kontrol allerede er sket i `page.tsx` inden gaten nås):
+Fire betingelser (mod fem i den ikke-anbefalede cookie-model — `trip_access`-
+tilstedeværelse udgår, fordi den autoritative kontrol allerede er sket i `page.tsx`
+inden gaten nås):
 
 1. **Ikke bot.** `isBotUserAgent(headers().get("user-agent"))`. Ren regex, transient —
    læses, matches, forsvinder med requesten. Gemmes aldrig, ikke engang som kategori.
@@ -439,8 +475,12 @@ udgår, fordi den autoritative kontrol allerede er sket i `page.tsx` inden gaten
    (samme afvejning som det oprindelige design: et netværkskald til Supabase Auth pr.
    kundevisning er ikke værd prisen; en falsk positiv koster kun ét utalt besøg — den
    sikre retning). Fordi tjekket sker ved **hvert** skriveforsøg (ikke kun ved en
-   cookie-mint), lukkes hullet hvor en sælger logger ind *efter* at have åbnet linket
-   udlogget — noget det oprindelige design ikke kunne.
+   cookie-mint), **reducerer** dette forureningen sammenlignet med det oprindelige
+   design markant: fra det øjeblik en sælger logger ind, stopper alle efterfølgende
+   registreringer på det linket. Det **lukker ikke** hullet helt — en sælger der åbner
+   linket *udlogget* og først logger ind *bagefter* får stadig den første åbning talt,
+   fordi der på skrivetidspunktet reelt ikke findes noget signal om at det er sælgeren.
+   Se §5, scenarie F2, og forbeholdet i §3.
 3. **Produktionsmiljø.** `process.env.VERCEL_ENV === "production"`. Præcedens:
    `rateLimitEnvScope()` i `src/lib/rate-limit.ts` — samme allowlist-mønster,
    fail-safe default ("tæl ikke" i stedet for "development").
@@ -463,7 +503,9 @@ ikke kunne gøre den langsommere (nul kritisk-vej-latens). Løsningen er den sam
 `waitUntil()` fra `@vercel/functions`.
 
 ```tsx
+import { cookies, headers } from "next/headers";
 import { waitUntil } from "@vercel/functions";
+import { shouldRecordTripVisit } from "@/lib/trip-visit";
 
 const row = await loadTrip(params.bookingId);
 if (!row) notFound();                                   // 1. intet skriv
@@ -473,11 +515,27 @@ if (!hasValidTripAccess(accessCookie?.value, row.booking_no)) {
   return <AccessGate slug={params.bookingId} destination={row.destination} />;  // 2. intet skriv
 }
 
-// 3. HER — planlægges, afventes IKKE. Responsen venter ikke på DB'en.
-waitUntil(recordTripVisit(row.id));
+// 3. HER — gaten fra §8 evalueres EKSPLICIT. Kun hvis den tillader det, planlægges
+// skrivningen — og selv da afventes den IKKE. Responsen venter aldrig på DB'en.
+const shouldRecord = shouldRecordTripVisit({
+  vercelEnv: process.env.VERCEL_ENV,
+  host: headers().get("host"),
+  userAgent: headers().get("user-agent"),
+  cookieNames: cookies().getAll().map((cookie) => cookie.name),
+});
+
+if (shouldRecord) {
+  waitUntil(recordTripVisit(row.id));
+}
 
 const parsed = tripSchema.safeParse(row.data);           // 4. fejlsiden tæller som åbning
 ```
+
+**Bevidst eksplicit, ikke ubetinget.** Et ubetinget `waitUntil(recordTripVisit(row.id))`
+uden det omgivende `if (shouldRecord)` ville være en farlig og misvisende
+implementationsspec — det ville tælle preview, admin/sælgere og bots. Gate-kaldet skal
+altid stå skrevet ud i klartekst i enhver fremtidig implementering af dette punkt, ikke
+antages implicit.
 
 Placeringen: efter access-gaten (så `notFound()`/`AccessGate` aldrig tælles), før
 skema-parsingen (en kunde der åbner en rejseplan med ødelagte data *har* åbnet linket).
@@ -534,7 +592,7 @@ netværkskald sker) — genbruges ordret med to filnavne udskiftet.
 
 ## 10. Fase 2-kompatibilitet — den ærlige afvejning
 
-Dette er det stærkeste argument for den forkastede cookie-model, og det skal ikke
+Dette er det stærkeste argument for den ikke-anbefalede cookie-model, og det skal ikke
 affejes.
 
 **Hvad Fase 2 (#41) vil have:** "nåede kunden ned til hotellerne i *dette* besøg?",
@@ -543,7 +601,7 @@ affejes.
 **Fire observationer:**
 
 1. **Fase 2 kræver klient-JavaScript uanset model.** Scroll-position kan kun kendes i
-   browseren. Den forkastede cookie-model leverer ikke Fase 2 — kun én brik til den
+   browseren. Den ikke-anbefalede cookie-model leverer ikke Fase 2 — kun én brik til den
    (et session-id). Fase 2 er et større arkitektonisk skridt end Fase 1 i begge modeller.
 2. **Der er mindst tre mulige dedup-nøgler til Fase 2, og et arvet cookie-session-id er
    ikke oplagt den bedste:** (a) et arvet cookie-session-id fra denne fase, (b) et
@@ -554,10 +612,10 @@ affejes.
    sideindlæsninger, eller (c) ren server-side dedup pr. `(trip_id, event_type)`, som
    dækker en stor del af den faktiske salgsværdi uden noget identifikatorbegreb
    overhovedet.
-3. **Hvad vi permanent mister ved at vælge cookie-fri nu:** kohorte-/funnel-analyse pr.
-   besøg ("af de 12 besøg, hvor mange nåede til prisen?"). Hvis Fase 4's lead score
-   nødvendigvis skal bygge på konverteringsrate *pr. besøg*, er den arkiverede
-   cookie-model det rigtige fundament. Hvis den kan bygge på engagementssignaler *pr.
+3. **Hvad vi permanent mister, hvis den cookie-frie anbefaling følges:**
+   kohorte-/funnel-analyse pr. besøg ("af de 12 besøg, hvor mange nåede til prisen?").
+   Hvis Fase 4's lead score nødvendigvis skal bygge på konverteringsrate *pr. besøg*,
+   er den arkiverede cookie-model det rigtige fundament. Hvis den kan bygge på engagementssignaler *pr.
    rejseplan* — hvilket produktets skala (≈254 trips, en håndfuld sælgere) og #41's
    ordlyd peger på — er forskellen uden praktisk betydning.
 4. **Døren lukkes ikke, den holdes åben.** Beviser Fase 2 senere at der reelt skal
@@ -570,7 +628,7 @@ affejes.
 
 ## 11. Retention
 
-**Ingen bærende teknisk mekanisme i dette design** (modsat den forkastede models
+**Ingen bærende teknisk mekanisme i dette design** (modsat den ikke-anbefalede models
 pg_cron-krav) — men **stadig en beslutning der skal træffes eksplicit**, ikke som
 default (§7, punkt 3). Datasættet vokser ikke med trafik (≤ 1 række pr. trip), så der
 er intet teknisk pres for at slette — men "ingen sletning nogensinde" er ikke
@@ -595,10 +653,10 @@ forudbestemt her.
 | `src/lib/trip-visit.ts` | **NY** | Rene funktioner, §8. Ingen imports fra `next/*`/Supabase |
 | `src/lib/trip-visit.test.ts` | **NY** | Vitest, ingen DB, ingen browser |
 | `src/lib/trip-visit-write.ts` | **NY** | `recordTripVisit()`, §9 |
-| `src/app/[bookingId]/page.tsx` | ÆNDRES | Ét `waitUntil(recordTripVisit(...))` efter access-gaten — ikke `await` |
+| `src/app/[bookingId]/page.tsx` | ÆNDRES | Ét `if (shouldRecordTripVisit(...)) { waitUntil(recordTripVisit(...)); }` efter access-gaten — ikke `await`, §9 |
 | `package.json` + `package-lock.json` | ÆNDRES | Ny dependency: `@vercel/functions` (eneste nye) |
 | `docs/SYSTEM-ARKITEKTUR.md` | ÆNDRES | Datamodel + routebeskrivelse |
-| `docs/DECISIONS.md` | ÆNDRES | Model B valgt (denne revision) · fail-open vs. #38 · retention (§11 — Rickos svar) |
+| `docs/DECISIONS.md` | ÆNDRES | Rickos godkendelse af Model B (§14, punkt 1) · fail-open vs. #38 · retention (§11 — Rickos svar) |
 | `docs/STATUS.md`, `docs/ROADMAP.md` | ÆNDRES | Løbende |
 
 **Ikke i Fase 1B:** admin-UI, `/admin/api`-endpoint, `customer_events`,
@@ -626,8 +684,10 @@ race-scenariet under reelt samtidige requests.
 
 Fail-open betyder at rækkefølgen ikke er tvungen (modsat Issue #38). Anbefalet:
 
-0. Beslutning skrevet i `docs/DECISIONS.md`: Model B valgt, de dokumenterede
-   præcisionsbegrænsninger (§3) og §7's fire punkter eksplicit besvaret.
+0. **(KRÆVER RICKO)** Model B eksplicit godkendt — ikke kun anbefalet — og skrevet i
+   `docs/DECISIONS.md` sammen med svar på de dokumenterede præcisionsbegrænsninger
+   (§3) og §7's fire punkter. Ingen af trin 1-6 nedenfor må påbegyndes før dette
+   foreligger (§14, punkt 1).
 1. **(KRÆVER RICKO)** Kør `010_trip_visits.sql` i SQL Editor på production. Verificér:
    tabel, RLS-policy, index, funktion, grants.
 2. `node scripts/check-schema-drift.mjs --update-baseline` → commit baseline i samme
@@ -648,7 +708,7 @@ Byttes 1 og 5 om, er konsekvensen støj i runtime-loggen — ikke en incident.
 3. **Fuld tilbagerulning:** `drop function public.record_trip_visit(uuid); drop table
    public.trip_visits;` → `--update-baseline` → commit.
 4. **Intet at rydde op i kundernes browsere** — der er aldrig sat noget dér. Dette er
-   den konkrete forskel fra den forkastede models rollback, som ville efterlade
+   den konkrete forskel fra den ikke-anbefalede models rollback, som ville efterlade
    `trip_session_<slug>`-cookies i op til 30 minutter hos rigtige kunder.
 
 Intet i rollbacken rører `trips`, `middleware.ts` eller adgangskontrollen.
@@ -706,8 +766,13 @@ opsamlingen fra dér, fordi preview deler production-DB.
 
 **Skal foreligge før kode skrives:**
 
-1. **Model B er valgt** (denne revision, Issue #63) — kræver ikke yderligere
-   godkendelse i sig selv, men de følgende punkter gør.
+1. **Eksplicit godkendelse af Model B fra Ricko.** Dette dokument (Issue #63)
+   **anbefaler** den cookie-fri model — det er ikke det samme som at den er valgt.
+   Fase 1B-implementation må ikke påbegyndes før Ricko har taget aktivt stilling til
+   anbefalingen (accept, afvisning til fordel for den arkiverede cookie-model, eller
+   en tredje vej) og det er dokumenteret i `docs/DECISIONS.md`. Dette er den første og
+   mest grundlæggende af godkendelserne nedenfor — punkt 2-5 er kun relevante hvis
+   Model B godkendes.
 2. **Eksplicit accept af de dokumenterede præcisionsbegrænsninger** (§3): samtidig
    husstandsbrug inden for 30 min. tælles som ét besøg; relæ-kæder kan kæde flere
    personer sammen; udlogget sælger tæller som kunde; fail-open betyder "tæt på
@@ -733,12 +798,14 @@ opsamlingen fra dér, fordi preview deler production-DB.
 
 ---
 
-## Appendix — Model A (cookie-session, arkiveret, IKKE valgt)
+## Appendix — Model A (cookie-session, arkiveret, IKKE anbefalet)
 
 Bevaret for referencens skyld: den fulde begrundelse for hvorfor cookie-modellen ikke
-blev valgt, og hvornår den kan blive det rigtige valg alligevel.
+længere anbefales, og hvornår den kan blive det rigtige valg alligevel. Model A er
+hverken formelt valgt eller formelt fravalgt af Ricko — kun teknisk fravalgt som
+anbefaling i dette dokument.
 
-### Hvorfor arkiveret
+### Hvorfor ikke længere anbefalet
 
 Model A er ikke dårligt designet — den er overdimensioneret til Fase 1 og betaler
 forud for en Fase 2 der endnu ikke er designet:
