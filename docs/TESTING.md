@@ -4,7 +4,7 @@
 
 ```bash
 npm ci                                 # ALTID først på frisk checkout (sharp er dependency)
-npm test                               # vitest run — >130 tests i src/lib/*.test.ts
+npm test                               # vitest run — >300 tests i src/lib/*.test.ts
 npm run typecheck                      # tsc --noEmit — skal være grøn før push
 npm run lint                           # 0 fejl kræves; 6 kendte no-img-element-warnings er OK (PERF-3)
 npm run build                          # ved ændringer i routes/config/deps (skriver .next lokalt)
@@ -54,6 +54,14 @@ audit `password_changed` uden kode-værdier.
 **Destinations-upload:** opret destination (dublet afvises case-insensitivt) · upload stort
 original-JPEG (8-15 MB) → "Behandler billede..." → WebP vises · galleri-slot · ikke-billede
 afvises med klar fejl · `_staging/` er tom bagefter.
+**Kundeåbning/trip_visits (Issue #65):** `src/lib/trip-visit.ts` er dækket af unit-tests
+(gate-logik: env, host, bot-UA, admin-cookie). RPC'en `record_trip_visit` og selve
+race-sikkerheden (`supabase/010_trip_visits.sql`) er kun statisk/manuelt gennemgået —
+IKKE kørt mod nogen database, hverken lokalt eller i production (intet lokalt
+`psql`/`pg_dump` i arbejdsmiljøet). Når migration 010 er kørt i production, bør Ricko/en
+udvikler smoke-teste: åbn en rejseplan → `trip_visits`-rækken oprettes med `visit_count=1,
+open_count=1` → genindlæs inden for 30 min → kun `open_count` stiger → genindlæs efter 30
+min (eller nulstil `last_opened_at` manuelt i test) → `visit_count` stiger også.
 
 ## Efter enhver testrunde
 

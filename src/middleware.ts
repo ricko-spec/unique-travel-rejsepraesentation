@@ -31,6 +31,12 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// Vision 3.0 Fase 1B (Issue #65, Model B): kundeåbninger registreres
+// cookie-frit direkte i src/app/[bookingId]/page.tsx — bevidst INGEN
+// matcher for kundesider her. Se docs/VISION-3.0-EVENT-MODEL.md §4/§8 for
+// hvorfor det ikke kræver en middleware-udvidelse (den forkastede
+// cookie-model gjorde). Udvid IKKE denne matcher til kundesider uden at
+// genåbne den beslutning eksplicit.
 export const config = {
   matcher: ["/admin", "/admin/:path*"],
 };

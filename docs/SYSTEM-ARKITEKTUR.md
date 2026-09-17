@@ -158,11 +158,13 @@ uniquetravel-rejsepraesentation/
 │       ├── types.ts              # Zod-schemas, Trip-typer, normalizeTrip, danske dato-helpers (537 linjer)
 │       ├── profiles.ts           # Profil-CRUD (RLS self-only) + enrichAdvisorContact (service role)
 │       ├── rate-limit.ts         # checkRateLimit → increment_rate_limit RPC (fail-open)
+│       ├── trip-visit.ts         # shouldRecordTripVisit — ren gate-logik (Issue #65, ingen DB/Next-imports)
+│       ├── trip-visit-write.ts   # recordTripVisit — best-effort RPC-skrivning, kaster aldrig (Issue #65)
 │       └── supabase/
 │           ├── server.ts         # Service-role-klient + nøgle-validering + env-diagnostik
 │           └── auth.ts           # Session-klient (@supabase/ssr) + getSessionUser
 │
-└── supabase/                     # Nummererede, idempotente migrationer (001-007) — hele DB-skemaet
+└── supabase/                     # Nummererede, idempotente migrationer — hele DB-skemaet
     ├── README.md                 # Kør-rækkefølge, regler og drift-tjek
     ├── 001_trips.sql             # trips + RLS + set_updated_at-helper
     ├── 002_profiles.sql          # profiles + RLS + handle_new_user-trigger
@@ -172,6 +174,9 @@ uniquetravel-rejsepraesentation/
     ├── 006_created_by_on_trips.sql  # trips.created_by (sporing; skrives ikke af koden endnu)
     ├── 007_parse_failures.sql    # parse_failures dead-letter (ikke koblet til koden endnu)
     ├── 008_schema_snapshot.sql   # schema_snapshot() RPC — leverer DDL-metadata til drift-tjekket
+    ├── 009_upload_events.sql     # upload_events + usage_period_summary RPC (Issue #38, live)
+    ├── 010_trip_visits.sql       # trip_visits + record_trip_visit RPC (Issue #65 — IKKE kørt live endnu)
+    ├── 010b_trip_visits_retention.sql  # pg_cron-retention, bevidst separat, IKKE aktiveret
     └── schema-baseline.json      # Committet snapshot af live-DDL (opdateres med --update-baseline)
 ```
 
@@ -243,7 +248,7 @@ sequenceDiagram
   2. Ved for mange forsøg: audit-event `unlock_rate_limited` + dansk fejlbesked med ventetid.
   3. Kode sammenlignes med `booking_no`. Forkert → `unlock_failed`-audit + fejlbesked.
   4. Korrekt → `unlock_success`-audit, httpOnly-cookie scoped til `/{slug}` med 30 dages levetid (`actions.ts:112-118`), derefter `redirect`.
-- Med gyldig cookie renderer `page.tsx` hele præsentationen: data Zod-valideres igen (`:74`) og normaliseres (`:93`) ved **hver** visning — gamle rækker med legacy-JSON-form renderes korrekt uden re-parse. Hero-billedet vælges som `trips.hero_photo` → ellers destinationens `hero_url` → ellers CSS-gradient (`page.tsx:97`).
+- Med gyldig cookie evaluerer `page.tsx` derefter (Issue #65) `shouldRecordTripVisit(...)` og planlægger — hvis den er sand — et best-effort `waitUntil(recordTripVisit(row.id))`-kald mod `trip_visits` (§8), inden resten af siden renderes. Aldrig `await`et; kan aldrig forsinke eller ødelægge kundens visning. Derefter renderer `page.tsx` hele præsentationen: data Zod-valideres igen (`:74`) og normaliseres (`:93`) ved **hver** visning — gamle rækker med legacy-JSON-form renderes korrekt uden re-parse. Hero-billedet vælges som `trips.hero_photo` → ellers destinationens `hero_url` → ellers CSS-gradient (`page.tsx:97`).
 
 **4. Løbende redigering (sælger)**
 - Intro-teksten kan redigeres på `/admin/trips/[id]` og gemmes via `POST /admin/api/trips/[id]/intro`, der skriver `intro`, `introEditedAt`, `introEditedBy` ind i `data`-jsonb og audit-logger before/after (se §7 og §13).
@@ -371,7 +376,7 @@ Sælgeren kan redigere **fulde navn**, **telefon** og **rådgivernavn i rejsepla
 
 ## 8. Database-model
 
-Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38). **7 tabeller**, alle med RLS aktiveret.
+Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38). **7 tabeller**, alle med RLS aktiveret. En 8. tabel, `trip_visits` (migration 010, Issue #65), er versioneret men **ikke kørt i production endnu** — se afsnittet nedenfor.
 
 > **Vigtigt om projekt-referencer:** `.env.example:2` og README peger på `iunixfpthdftmkgpugex` — det er dér de 35 rejser, 7 profiler og al audit-data ligger, altså **den faktiske produktionsdatabase**. To andre refs optræder i repoet og er **misvisende**: `supabase/schema.sql:2` nævner `ocxrvkrggzppyhgyambj` (det er Allotment-værktøjets projekt — copy-paste-fejl), og `supabase/profiles.sql:2-3` kalder `iunixfpthdftmkgpugex` for "dev" og nævner `sujimigwcjkzpekkdpzf` som "production" — om dét projekt overhovedet findes/bruges er ukendt — kræver Ricko-bekræftelse.
 
@@ -479,6 +484,49 @@ Ny 7. tabel, adskilt fra `trips.created_by` (som kun sporer den oprindelige opre
 Indexes: `received_at DESC`, `user_id`, `status`, `trip_id`. RLS: kun service_role (samme mønster som `parse_failures`/`audit_log`). **Fail-closed-kontrakt:** `src/lib/upload-events.ts` → `createUploadEvent()` kaldes i `parse/route.ts` FØR Claude — fejler insertet, kaldes Claude ikke, og requesten stopper med en sælgervendt fejl (503). Læs/skriv-adgang i øvrigt via samme service-role-klient som resten af systemet.
 
 **Læsning til `/admin/brug` (reviewfund rettet i PR #39, to iterationer):** `GET /admin/api/usage` henter ALDRIG `upload_events` med et enkelt `.select()` — PostgREST/Supabase har en standard max-rows-grænse (typisk 1000), som ville trunkere resultatet stille (ingen fejl, bare for lave tal) så snart tabellen passerer den grænse. En første rettelse forsøgte keyset-paginering på `id`, men blev selv underkendt i review: `id` er en TILFÆLDIG `gen_random_uuid()`, ikke en monoton nøgle, så et event indsat midt i pagineringen med en uuid der sorterer FØR en allerede passeret cursor kan blive stille misset (regressionstest der beviser dette: `src/lib/usage.test.ts` → "fetchAllUsageEvents brugt med en TILFÆLDIG (ikke-monoton) id"). Den endelige løsning er RPC'en `usage_period_summary` (`supabase/009_upload_events.sql`): ét SQL-statement der aggregerer ALT (pr.-bruger-tal, `trackingSince`, `stalledEvents`, `historicalActorEvents`) i samme Postgres-snapshot — et event indsat efter kaldets start er simpelthen usynligt for det snapshot, uanset dets uuid, og resultatet er desuden bundet af antal aktive sælgere (ikke antal events), så det aldrig kan ramme en rækkegrænse. `fetchUsagePeriodSummary()` kalder RPC'en; `mergeUsageSummary()` (begge i `src/lib/usage.ts`) fletter resultatet med den fulde profiles-liste for 0-upload-sælgere. Den ældre, event-baserede `summarizeUsage()`/`periodStart()`-aggregering ligger fortsat i filen (ren, testet funktion — `periodStart()` genbruges til at beregne RPC'ens `period_start`-parameter), men `summarizeUsage()` selv indgår ikke længere i den rigtige aggregeringsvej.
+
+### `trip_visits` — kundeåbninger, cookie-fri (Issue #65, migration 010 — **IKKE kørt live endnu**)
+
+Rolling 30-min. visit-aggregation **pr. rejseplan** (ikke pr. person/enhed/session). Egen
+tabel frem for kolonner på `trips`, bevidst: `trips_set_updated_at`-triggeren ville ellers
+falsk bumpe `trips.updated_at` ved hver kundeåbning, hvilket admin-listen tolker som
+"senest ændret af sælger". Se `supabase/010_trip_visits.sql` for fuld DDL/kommentarer og
+race-sikkerhedsbevis.
+
+| Kolonne | Type | Betydning |
+|---|---|---|
+| `trip_id` | uuid **PK**, FK → `trips`, `on delete cascade` | Én række pr. rejse |
+| `first_opened_at` | timestamptz | Sat ved insert, ændres aldrig sidenhen |
+| `last_visit_started_at` | timestamptz | Opdateres kun når et NYT besøg starter (>30 min. siden sidste åbning) |
+| `last_opened_at` | timestamptz | Opdateres ved HVER kvalificeret åbning |
+| `visit_count` | integer | Tælles op kun når et nyt besøg starter |
+| `open_count` | integer | Tælles op ved hver kvalificeret render, uanset besøgsvindue |
+
+RLS: kun service_role (samme mønster som `upload_events`/`parse_failures`). Skrives
+udelukkende via RPC'en `record_trip_visit(p_trip_id uuid)` — atomar
+`INSERT ... ON CONFLICT DO UPDATE` efter samme race-sikre mønster som
+`increment_rate_limit` (§12): CASE-udtrykkene evalueres mod raden EFTER dens lock er
+taget, ikke mod en forud-læst værdi, så samtidige requests ikke kan overskrive hinandens
+tælling. Postgres' egen `now()` bruges konsekvent (aldrig Node-tid).
+
+**Skrivevejen er fail-open** (bevidst modsat `upload_events`, som er fail-closed): kaldet
+sker via `waitUntil(recordTripVisit(row.id))` i `src/app/[bookingId]/page.tsx`, EFTER
+kundens adgangskontrol og gate-logikken i `src/lib/trip-visit.ts`
+(`shouldRecordTripVisit`), og bliver ALDRIG `await`et — kundens respons venter ikke på
+DB'en, og en RPC-fejl/timeout (`src/lib/trip-visit-write.ts`, 2 sek. loft) kan aldrig
+ødelægge kundens visning af rejseplanen.
+
+**Ingen ny cookie, ingen middleware-udvidelse.** Gaten bruger kun eksisterende
+request-signaler (`VERCEL_ENV`, `host`-header, `user-agent`-header, eksisterende
+cookie-navne) til at udelukke ikke-production, ikke-kanonisk host, bots og sælgere med
+gyldig admin-session (Supabase-auth-cookie-mønster). `src/middleware.ts`s matcher rører
+fortsat kun `/admin`.
+
+**Data:** kun `trip_id` (allerede en intern uuid) + tidsstempler/tællere — ingen
+booking_no, slug, kundenavn, IP eller User-Agent gemmes. **Retention:** 12 måneder efter
+`last_opened_at`, håndhæves af en bevidst SEPARAT, endnu ikke aktiveret fil
+(`supabase/010b_trip_visits_retention.sql`, pg_cron) — kræver egen godkendelse. Uden den
+lever rækker indtil videre — dokumenteret i `010b_trip_visits_retention.sql` som en gyldig, sikker tilstand.
 
 ### Tilføjelses-tidslinje
 

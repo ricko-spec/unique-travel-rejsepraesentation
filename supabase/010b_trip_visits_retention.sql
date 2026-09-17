@@ -1,0 +1,86 @@
+-- ============================================================================
+-- Migration 010b: trip_visits retention — 12 måneder (Issue #65)
+-- ============================================================================
+-- ================================ VIGTIGT ==================================
+-- IKKE KØRT LIVE. IKKE EN DEL AF 010_trip_visits.sql — BEVIDST SEPARAT FIL.
+--
+-- Denne fil må IKKE køres/aktiveres som en del af den almindelige
+-- release-rækkefølge for Issue #65. Den kræver Rickos SÆRSKILTE godkendelse
+-- (ud over godkendelsen af selve 010_trip_visits.sql), fordi den:
+--   1) aktiverer pg_cron-extensionen hvis den ikke allerede er slået til i
+--      dette Supabase-projekt (Database -> Extensions) — KRÆVER RICKO, og
+--   2) opretter et skemalagt job der SLETTER data automatisk uden manuel
+--      handling ved hvert kørsel — en anden risikoklasse end 010's rene
+--      schema-oprettelse.
+--
+-- 010_trip_visits.sql fungerer fuldt ud UDEN denne fil: trip_visits-rækker
+-- lever da bare videre uden aldersgrænse (ingen teknisk pres for at slette —
+-- se docs/VISION-3.0-EVENT-MODEL.md §11), hvilket er en helt gyldig, sikker
+-- driftstilstand indtil Ricko eksplicit beder om at aktivere retention.
+-- ============================================================================
+--
+-- Beslutning (Issue #65, 2026-09-17): trip_visits-data beholdes 12 måneder
+-- efter last_opened_at. Herefter fjernes rækken.
+--
+-- ----------------------------------------------------------------------------
+-- HVORFOR EN SLETNING IKKE SKABER EN FREMTIDIG UI-LØGN
+-- ----------------------------------------------------------------------------
+-- Problemet retention selv rejser: hvis en trip_visits-række fjernes efter
+-- 12 måneders inaktivitet, ser trippen bagefter IDENTISK ud som en trip der
+-- aldrig blev åbnet — begge har "ingen trip_visits-række". Et Fase 1C-UI der
+-- naivt viser "Ikke åbnet endnu" for enhver trip uden række ville dermed
+-- fejlagtigt påstå at en trip, der faktisk BLEV åbnet (bare for mere end et
+-- år siden), aldrig er blevet det.
+--
+-- LØSNING (dokumenteret her, IKKE implementeret som kode i denne PR — Fase 1C
+-- UI bygges ikke nu, jf. Issue #65's out-of-scope): en fremtidig Fase 1C skal
+-- afgøre visningsteksten ud fra TRIPPENS ALDER, ikke kun tilstedeværelsen af
+-- en trip_visits-række:
+--
+--   lad cutoff = greatest(trips.created_at, TRACKING_SINCE)  -- se nedenfor
+--
+--   HVIS en trip_visits-række findes for trippen:
+--     -> vis de faktiske first_opened_at / last_opened_at / visit_count.
+--   ELLERS HVIS (now() - cutoff) < 12 måneder:
+--     -> "Ikke åbnet endnu". Dette er GARANTERET korrekt: retention kan
+--        ikke have nået at fjerne noget for en trip der er yngre end
+--        retention-vinduet (og hvor sporing har været aktiv hele tiden) —
+--        der er simpelthen ikke gået tid nok til at en rigtig åbning kunne
+--        være aldret bort.
+--   ELLERS ("no row" OG trippen/sporingen er ældre end 12 måneder):
+--     -> "Ingen registrerede åbninger de seneste 12 måneder" — IKKE "aldrig
+--        åbnet". Denne formulering er sand uanset om trippen faktisk aldrig
+--        blev åbnet, eller blev åbnet og siden aldret bort af retention.
+--
+-- TRACKING_SINCE er en FAST konstant sat i src/lib/trip-visit.ts DEN DAG
+-- Fase 1B rent faktisk deployes til production (ikke i denne PR — koden
+-- deployes ikke herfra). Den er nødvendig fordi der allerede findes
+-- eksisterende trips (~254 stk.) fra FØR sporing overhovedet fandtes; uden
+-- den konstant ville en gammel trip uden trip_visits-række fejlagtigt kunne
+-- vises som "Ikke åbnet endnu", selvom sporing bare ikke var aktiv i dens
+-- første leveår. Samme mønster som upload_events' trackingSince-princip fra
+-- Issue #38 (se src/lib/usage.ts) — men her en FAST konstant, ikke et
+-- dynamisk min(), fordi trip_visits-rækker selv kan blive slettet af denne
+-- retention-mekanisme og derfor ikke kan bruges til at udlede tidspunktet.
+-- ----------------------------------------------------------------------------
+--
+-- Selve sletningen — sikker at køre gentagne gange (idempotent i den
+-- forstand at et tomt resultat blot betyder "intet var forfaldent endnu"):
+
+-- select cron.schedule(
+--   'trip_visits_retention',
+--   '23 3 * * *',   -- dagligt kl. 03:23 UTC, uden for normal sælgerarbejdstid
+--   $$delete from public.trip_visits where last_opened_at < now() - interval '12 months'$$
+-- );
+
+-- ----------------------------------------------------------------------------
+-- AKTIVERING (Ricko, kun når/hvis besluttet — se PR-beskrivelsen for Issue #65):
+--   1. Bekræft at pg_cron-extensionen er slået til for dette Supabase-projekt
+--      (Database -> Extensions -> pg_cron). Er den ikke det, aktivér den
+--      FØRST, separat, med fuld forståelse af at det er en projekt-bred
+--      extension, ikke noget scopet til denne ene tabel.
+--   2. Fjern kommentar-markeringen ('-- ') fra cron.schedule(...)-kaldet
+--      ovenfor og kør DENNE FIL for sig selv i SQL Editor.
+--   3. Verificér jobbet: select * from cron.job where jobname = 'trip_visits_retention';
+--   4. For at deaktivere igen: select cron.unschedule('trip_visits_retention');
+-- ----------------------------------------------------------------------------

@@ -17,10 +17,14 @@
   — Vision 3.0 fase 1-design er merget (PR #44, `391bf42`), docs-only:
   `docs/VISION-3.0-EVENT-MODEL.md`. Fase 1B (selve session-opsamlingen) afventer stadig
   Rickos afklaring af de fem KRÆVER RICKO-punkter i dokumentets §14.
-- **Aktivt kapitel:** [Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45)
-  — Vision 3.0: Analytics Bridge API til Marketing Dashboard. Read-only,
-  server-to-server-endpoint der eksporterer eksisterende online rejseplaner (uafhængigt af
-  fase 1B — bruger kun eksisterende `trips`-metadata). Se `docs/ANALYTICS-BRIDGE-API.md`.
+- **Aktivt kapitel:** [Issue #65](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/65)
+  — Vision 3.0 Fase 1B: cookie-fri kundeåbninger (Model B, valgt via
+  [Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63)/PR #64).
+  Implementeret i PR — `supabase/010_trip_visits.sql` (tabel + `record_trip_visit`-RPC),
+  `src/lib/trip-visit*.ts`, `waitUntil()`-kald i `src/app/[bookingId]/page.tsx`, diskret
+  transparens-linje i `AccessGate`. Migration **ikke** kørt i production endnu — afventer
+  Rickos release-godkendelse. [Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45)
+  (Analytics Bridge API) er uafhængigt afsluttet, se punkt herunder.
 
 ## Seneste 3 relevante ændringer
 
@@ -56,18 +60,15 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Afvent Rickos review af Issue #45-PR'en** (Analytics Bridge API,
-`docs/ANALYTICS-BRIDGE-API.md`). Ny read-only route `GET
-/api/internal/analytics/travel-plans` — server-to-server auth
-(`ANALYTICS_BRIDGE_API_KEY`), HMAC-bookingmatch (`BOOKING_MATCH_SECRET`), ingen
-kundedata/bookingnummer i output. Ingen migration, ingen HubSpot-afhængighed i dette
-repo. To nye env-vars skal sættes i Vercel før første rigtige kald fra Marketing
-Dashboard (se docs — ikke gjort her, ingen production writes).
+**Afvent Rickos review af Issue #65-PR'en** (Vision 3.0 Fase 1B, cookie-fri
+kundeåbninger). Migration `010_trip_visits.sql` er versioneret men **ikke** kørt i
+production — release-rækkefølgen (migration først, så merge/deploy — modsat #38, da
+denne løsning er fail-open) og rollback-trin står i PR-beskrivelsen. Retention
+(`010b_trip_visits_retention.sql`, pg_cron) kræver en separat, senere godkendelse og er
+bevidst IKKE en del af denne release.
 
-**Parallelt/herefter:** Fase 1B (session-opsamling) afventer fortsat Rickos afklaring af
-de fem KRÆVER RICKO-punkter i `docs/VISION-3.0-EVENT-MODEL.md` §14 — særligt
-cookie-samtykke/ePrivacy, som er en hard release gate. De to spor (#45 og fase 1B) er
-uafhængige af hinanden og kan godkendes i vilkårlig rækkefølge.
+**Herudover:** [Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45)
+(Analytics Bridge API) er merget og afsluttet — se `docs/ANALYTICS-BRIDGE-API.md`.
 
 Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)
 — Vision 3.0: Customer Engagement & Sales Intelligence. Master-issue/produktkapitel, IKKE én

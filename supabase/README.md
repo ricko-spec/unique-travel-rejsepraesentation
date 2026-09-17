@@ -19,6 +19,8 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `007_parse_failures.sql` | parse_failures dead-letter (koblet til parse-routen siden 2026-08-04) | 2026-07-04 |
 | `008_schema_snapshot.sql` | `schema_snapshot()` RPC — grundlag for drift-tjekket | 2026-07-20 |
 | `009_upload_events.sql` | upload_events — adoption/usage-log pr. sælger (Issue #38) | 2026-09-16 |
+| `010_trip_visits.sql` | trip_visits + RLS + `record_trip_visit` RPC — cookie-fri visit-aggregation (Issue #65) | **Nej — versioneret, afventer Rickos godkendelse** |
+| `010b_trip_visits_retention.sql` | pg_cron-retention for trip_visits (12 mdr.) — bevidst separat fil | **Nej — separat, senere godkendelse (kræver evt. pg_cron-aktivering)** |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.
@@ -74,6 +76,28 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
   `service_role` (revoke fra `public`/`anon`/`authenticated`, samme mønster som
   `schema_snapshot()` i 008). Se den fulde begrundelse i kommentaren ved funktionen i
   `009_upload_events.sql` og regressionstesten i `src/lib/usage.test.ts`.
+
+## Driftsnote: trip_visits (Issue #65)
+
+- **Release-rækkefølge (planlagt, IKKE udført):** migration 010 skal køres og verificeres
+  i production **FØR** kode-deploy. Modsat `upload_events` (#38, fail-closed) er
+  skrive-kaldet i `src/lib/trip-visit-write.ts` fail-open — koden ville ikke fejle uden
+  tabellen, men rækkefølgen holdes alligevel, så første kundeåbning efter deploy rent
+  faktisk bliver registreret i stedet for stille tabt.
+- **`schema-baseline.json` er bevidst IKKE opdateret i denne PR** — production har endnu
+  ikke migration 010's objekter (`node scripts/check-schema-drift.mjs` bekræftede "ingen
+  drift" mod den nuværende baseline). Ricko skal køre
+  `node scripts/check-schema-drift.mjs --update-baseline` **efter** migrationen er kørt
+  live, som separat commit eller i samme ombæring som migrationskørslen.
+- **Retention er en separat fil** (`010b_trip_visits_retention.sql`), ikke en del af 010 —
+  kræver egen godkendelse (og evt. aktivering af `pg_cron`-extensionen). `010_trip_visits.sql`
+  fungerer fuldt ud uden den; rækker lever blot indtil retention aktiveres.
+- **Data:** ingen booking_no, slug, kundenavn, IP eller User-Agent. Kun `trip_id` (uuid,
+  FK til `trips`) + tidsstempler/tællere. Se kommentarerne i `010_trip_visits.sql` for den
+  fulde never-store-liste.
+- **Ingen lokal Postgres-kørsel:** migrationsfilerne er kun statisk/manuelt gennemgået i
+  denne PR — der er ikke `psql`/`pg_dump` tilgængeligt i arbejdsmiljøet, og de er ikke
+  kørt mod nogen database (hverken lokal eller production).
 
 ## Drift-tjek
 
