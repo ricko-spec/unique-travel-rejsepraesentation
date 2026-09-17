@@ -80,7 +80,14 @@ export function AccessGate({ slug, destination }: Props) {
           </button>
         </form>
 
-        <p className="mt-8 text-center text-xs text-grey-text">
+        {/* Issue #65: diskret transparens-info, ikke et consent-banner — ingen
+            checkbox, ingen ny cookie, blokerer aldrig unlock-flowet. */}
+        <p className="mt-6 text-center text-xs text-grey-text/70">
+          Vi registrerer, når rejseplanen åbnes, så din rejserådgiver bedre kan følge op på
+          tilbuddet.
+        </p>
+
+        <p className="mt-2 text-center text-xs text-grey-text">
           Spørgsmål? Kontakt jeres rejserådgiver hos Unique Travel.
         </p>
       </div>

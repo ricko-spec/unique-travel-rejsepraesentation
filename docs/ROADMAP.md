@@ -56,22 +56,20 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
 
 1. **[Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63) —
    Vision 3.0 Fase 1B0: cookie-fri visit-model, docs-only revision af Fase 1-designet.**
-   Issue #63 er docs-revisionen der **anbefaler** (ikke vælger) en cookie-fri, server-side
-   rolling visit-aggregation (`trip_visits`-tabel, ingen ny cookie, ingen
-   middleware-udvidelse) i stedet for den oprindelige cookie-baserede Fase 1-model
-   (Issue #43) — se den opdaterede `docs/VISION-3.0-EVENT-MODEL.md`. Fjerner den
-   tidligere blokerende ePrivacy-hard-gate, men rejser fire nye, mindre spørgsmål. Fase
-   1B-implementation afventer Rickos eksplicitte modelvalg + de resterende
-   beslutninger (§14 i dokumentet) — se punkt 2.
-2. **Fase 1B — selve opsamlingen bygges** (afventer Rickos eksplicitte godkendelse af
-   Model B, samt stillingtagen til `docs/VISION-3.0-EVENT-MODEL.md` §14:
-   behandlingsgrundlag, transparens, retention-politik — ikke længere cookie-samtykke,
-   se punkt 1). Når den foreligger:
-   `supabase/010_trip_visits.sql` (tabel + RLS + index + `record_trip_visit`),
-   `src/lib/trip-visit.ts` + tests, ét best-effort `waitUntil`-kald i
-   `src/app/[bookingId]/page.tsx`. Ingen middleware-ændring i den nye model. Fail-open:
-   kode og migration kan deployes i vilkårlig rækkefølge (modsat #38). Visning i admin er
-   fase 1C/4.
+   Merget (PR #64). Model B (cookie-fri, server-side rolling visit-aggregation) er
+   sidenhen **valgt** af Ricko via Issue #65 — se punkt 2.
+2. **[Issue #65](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/65) —
+   Fase 1B: selve opsamlingen.** Implementeret i PR:
+   `supabase/010_trip_visits.sql` (tabel + RLS + index + `record_trip_visit`-RPC,
+   race-sikker efter mønsteret fra `increment_rate_limit`), separat
+   `010b_trip_visits_retention.sql` (12 mdr. retention, pg_cron IKKE aktiveret — kræver
+   egen godkendelse), `src/lib/trip-visit.ts` + `trip-visit-write.ts` + tests, ét
+   best-effort `waitUntil`-kald i `src/app/[bookingId]/page.tsx`, diskret
+   transparens-linje i `AccessGate`. Ingen middleware-udvidelse. Fail-open: kode og
+   migration kan deployes i vilkårlig rækkefølge (modsat #38). **Migrationen er
+   versioneret men ikke kørt i production** — afventer Rickos release-godkendelse (se
+   PR-beskrivelsen for eksakt rækkefølge og rollback). Visning i admin er fase 1C/4,
+   ikke en del af denne PR.
 3. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
    Vision 3.0: Customer Engagement & Sales Intelligence.** Master-issue — IKKE én stor PR.
    Fase 2-4 (sektionsengagement, kontakt-intent, salgsoversigt) tages ét PR ad gangen efter
@@ -90,12 +88,11 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Vision 3.0 Fase 1B — hvilken visit-model, og fire opfølgende privacy-spørgsmål.**
-  `docs/VISION-3.0-EVENT-MODEL.md` (revideret af
-  [Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63))
-  anbefaler en cookie-fri model. Kræver stillingtagen til: behandlingsgrundlag/formål,
-  transparens over for kunden, retention-politik for `trip_visits`, og accept af de
-  dokumenterede præcisionsbegrænsninger (§14 i dokumentet) — før Fase 1B kan implementeres.
+- **Vision 3.0 Fase 1B — production-release af migration 010.** Model B, transparens og
+  12 mdr. retention er besluttet (se `docs/DECISIONS.md` 2026-09-17). Det resterende er
+  ren release-logistik: køre `supabase/010_trip_visits.sql` i production (og evt. senere,
+  særskilt, aktivere `010b_trip_visits_retention.sql`/pg_cron) — se PR'en for Issue #65
+  for eksakt rækkefølge og rollback.
 - **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning. Designet er færdigt og merget
   (2-3 modeller, trusselsmodel og en konkret anbefaling — Model B, separat hashet
   access_code) i `docs/UNLOCK-CODE-DESIGN.md`
