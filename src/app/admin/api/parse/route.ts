@@ -17,7 +17,7 @@ import {
   resolveActorName,
 } from "@/lib/upload-events";
 import { isPdf } from "@/lib/file-sniff";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, rateLimitEnvScope } from "@/lib/rate-limit";
 import { writeAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
@@ -79,7 +79,15 @@ export async function POST(req: Request) {
   // filen for antal/vindue/begrundelse. Et rate-limitet forsøg tæller ikke
   // som en registreret upload (ingen upload_events-række oprettes), da det
   // aldrig når frem til et reelt parse-forsøg.
-  const rl = await checkRateLimit(`parse:${user.id}`, {
+  //
+  // Reviewrettelse: nøglen er namespacet på VERCEL_ENV (production/preview/
+  // development, allowlistet i rateLimitEnvScope) — preview/dev deler
+  // production-DB'en (docs/ACCESS_MATRIX.md), så uden dette scope ville
+  // testtrafik fra preview kunne forbruge en rigtig sælgers vindue, og
+  // omvendt. Kun parse-limit'et namespaces her — login/password/unlock er
+  // bevidst urørte.
+  const envScope = rateLimitEnvScope(process.env.VERCEL_ENV);
+  const rl = await checkRateLimit(`parse:${envScope}:${user.id}`, {
     windowMs: PARSE_RATE_LIMIT_WINDOW_MS,
     maxAttempts: PARSE_RATE_LIMIT_MAX_ATTEMPTS,
   });

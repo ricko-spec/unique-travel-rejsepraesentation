@@ -40,6 +40,36 @@ export function evaluateRateLimit(
   };
 }
 
+// Issue #54-reviewrettelse: preview og production deler samme Supabase-DB
+// (jf. docs/ACCESS_MATRIX.md), så en rate-limit-nøgle uden miljø-scope lader
+// preview-/dev-testtrafik forbruge en RIGTIG production-brugers vindue (og
+// omvendt). VERCEL_ENV er Vercels dokumenterede system-miljøvariabel
+// (https://vercel.com/docs/environment-variables/system-environment-variables,
+// "Available at: Both build and runtime") med PRÆCIS tre mulige værdier:
+// "production" | "preview" | "development" — verificeret mod Vercels docs,
+// ikke gættet. Vi allowlister eksplicit disse tre i stedet for at bruge
+// værdien råt, så et uventet/malformed input ALDRIG kan blive til en
+// vilkårlig, ukontrolleret nøgle-streng (og slet ikke branch-navn, URL eller
+// anden fritekst-env-data, som opgaven eksplicit forbyder).
+//
+// Lokal `next dev` (ingen Vercel-kontekst) har slet ikke VERCEL_ENV sat —
+// falder derfor til "development", ALDRIG "production", ved almindelig
+// lokal kørsel. Samme fail-safe gælder enhver uventet/tom værdi.
+export type RateLimitEnvScope = "production" | "preview" | "development";
+
+const RATE_LIMIT_ENV_SCOPES: ReadonlySet<string> = new Set([
+  "production",
+  "preview",
+  "development",
+]);
+
+export function rateLimitEnvScope(vercelEnv: string | undefined): RateLimitEnvScope {
+  if (vercelEnv && RATE_LIMIT_ENV_SCOPES.has(vercelEnv)) {
+    return vercelEnv as RateLimitEnvScope;
+  }
+  return "development";
+}
+
 /**
  * Generisk rate limiter backet af Supabase. `key` er typisk "{action}:{ip}:{resource}"
  * eller "{action}:{userId}" for autentificerede brugere.

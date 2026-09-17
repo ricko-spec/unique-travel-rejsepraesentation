@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { evaluateRateLimit } from "./rate-limit";
+import { evaluateRateLimit, rateLimitEnvScope } from "./rate-limit";
 
 const NOW = new Date("2026-09-17T10:00:00.000Z");
 const RESET_IN_5_MIN = new Date(NOW.getTime() + 5 * 60 * 1000).toISOString();
@@ -53,5 +53,44 @@ describe("evaluateRateLimit", () => {
     // hardcode nogen af de to, kun regne ud fra det den får ind.
     expect(evaluateRateLimit({ count: 5, reset_at: RESET_IN_5_MIN }, NOW, 5).allowed).toBe(true);
     expect(evaluateRateLimit({ count: 6, reset_at: RESET_IN_5_MIN }, NOW, 5).allowed).toBe(false);
+  });
+});
+
+describe("rateLimitEnvScope (Issue #54-reviewrettelse: preview/prod key-isolation)", () => {
+  it("mapper 'production' til 'production'", () => {
+    expect(rateLimitEnvScope("production")).toBe("production");
+  });
+
+  it("mapper 'preview' til 'preview'", () => {
+    expect(rateLimitEnvScope("preview")).toBe("preview");
+  });
+
+  it("mapper 'development' til 'development'", () => {
+    expect(rateLimitEnvScope("development")).toBe("development");
+  });
+
+  it("falder til 'development' — ALDRIG 'production' — når VERCEL_ENV mangler (almindelig lokal `next dev`)", () => {
+    expect(rateLimitEnvScope(undefined)).toBe("development");
+  });
+
+  it("falder til 'development' ved tom streng", () => {
+    expect(rateLimitEnvScope("")).toBe("development");
+  });
+
+  it("falder til 'development' ved en uventet/malformed værdi i stedet for at bruge den råt i nøglen", () => {
+    expect(rateLimitEnvScope("Production")).toBe("development"); // case-sensitiv med vilje
+    expect(rateLimitEnvScope("prod")).toBe("development");
+    expect(rateLimitEnvScope("staging")).toBe("development");
+    expect(rateLimitEnvScope("../../etc/passwd")).toBe("development");
+    expect(rateLimitEnvScope("production:evil")).toBe("development");
+  });
+
+  it("de tre gyldige scopes er alle indbyrdes forskellige — mekanisk adskillelse af nøgle-namespaces", () => {
+    const scopes = new Set([
+      rateLimitEnvScope("production"),
+      rateLimitEnvScope("preview"),
+      rateLimitEnvScope("development"),
+    ]);
+    expect(scopes.size).toBe(3);
   });
 });
