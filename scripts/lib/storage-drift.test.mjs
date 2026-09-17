@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { canonicalizeBucket, diffBucket, diffAllBuckets } from "./storage-drift.mjs";
+import {
+  canonicalizeBucket,
+  diffBucket,
+  diffAllBuckets,
+  selectBucketsForBaseline,
+} from "./storage-drift.mjs";
 
 const EXPECTED = {
   name: "destinations",
@@ -135,5 +140,48 @@ describe("diffAllBuckets", () => {
     expect(report).toEqual([
       { name: "destinations", mismatches: [`bucket "destinations" findes ikke live`] },
     ]);
+  });
+});
+
+describe("selectBucketsForBaseline — SAFETY: --update-baseline må ikke acceptere en manglende expected bucket", () => {
+  it("returnerer bucket-listen når alle expected navne findes live", () => {
+    const liveMap = new Map([["destinations", canonicalizeBucket({ ...EXPECTED })]]);
+    expect(selectBucketsForBaseline(["destinations"], liveMap)).toEqual([
+      canonicalizeBucket({ ...EXPECTED }),
+    ]);
+  });
+
+  it("kaster i stedet for at skrive en baseline der 'godkender' en manglende bucket væk", () => {
+    // Dette er selve regressionen: en tom/delvis liveMap må ALDRIG give en
+    // reduceret-men-succesfuld baseline — kun en eksplicit fejl.
+    const emptyLiveMap = new Map();
+    expect(() => selectBucketsForBaseline(["destinations"], emptyLiveMap)).toThrow(
+      /destinations/,
+    );
+    expect(() => selectBucketsForBaseline(["destinations"], emptyLiveMap)).toThrow(
+      /Baseline er IKKE skrevet/,
+    );
+  });
+
+  it("kaster hvis KUN ÉN af flere forventede buckets mangler — delvist match er ikke nok", () => {
+    const liveMap = new Map([["destinations", canonicalizeBucket({ ...EXPECTED })]]);
+    expect(() =>
+      selectBucketsForBaseline(["destinations", "en-slettet-bucket"], liveMap),
+    ).toThrow(/en-slettet-bucket/);
+  });
+
+  it("nævner ALLE manglende buckets i fejlbeskeden, ikke kun den første", () => {
+    expect(() =>
+      selectBucketsForBaseline(["bucket-a", "bucket-b"], new Map()),
+    ).toThrow(/bucket-a.*bucket-b/s);
+  });
+
+  it("sorterer output deterministisk (samme kontrakt som før fixet)", () => {
+    const liveMap = new Map([
+      ["z-bucket", canonicalizeBucket({ name: "z-bucket", public: true })],
+      ["a-bucket", canonicalizeBucket({ name: "a-bucket", public: true })],
+    ]);
+    const result = selectBucketsForBaseline(["z-bucket", "a-bucket"], liveMap);
+    expect(result.map((b) => b.name)).toEqual(["a-bucket", "z-bucket"]);
   });
 });

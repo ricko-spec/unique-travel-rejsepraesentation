@@ -57,3 +57,23 @@ export function diffAllBuckets(baselineBuckets, liveBucketsByName) {
   }
   return report;
 }
+
+/**
+ * SAFETY: bruges udelukkende af --update-baseline. --update-baseline må
+ * ALDRIG kunne "godkende" en manglende/slettet kritisk bucket ved stiltiende
+ * at skrive den ud af baselinen — så en tom/reduceret baseline aldrig kan
+ * maskere at en forventet bucket faktisk mangler live. Kaster en almindelig
+ * Error hvis blot ÉN af expectedNames ikke findes i liveBucketsByName;
+ * kaldestedet (check-storage-drift.mjs) ombryder selv i SetupError for
+ * korrekt exit-kode. Skriver intet selv — ren beslutningslogik.
+ */
+export function selectBucketsForBaseline(expectedNames, liveBucketsByName) {
+  const missing = expectedNames.filter((n) => !liveBucketsByName.has(n));
+  if (missing.length > 0) {
+    throw new Error(
+      `--update-baseline afbrudt: følgende forventede bucket(s) blev IKKE fundet live: ` +
+        `${missing.join(", ")}. Baseline er IKKE skrevet.`,
+    );
+  }
+  return [...expectedNames].sort().map((n) => liveBucketsByName.get(n));
+}
