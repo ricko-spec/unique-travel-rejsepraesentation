@@ -125,8 +125,13 @@ brute-force hele koderummet **offline, pr. række,** på sekunder til minutter. 
 alene løser ikke et lav-entropi-problem; det kræver enten en langsom/memory-hard
 KDF, eller et separat hemmeligt input hashen ikke virker uden.
 
-**Anbefalet retning: Model A — password-KDF med unikt salt pr. række.**
-Konkret: Node's indbyggede `node:crypto`-modul har `scryptSync`/`scrypt`
+> **Navngivning:** for at undgå kollision med produktmodellerne (Model A/B/C,
+> §4-§6) hedder de to storage-tilgange nedenfor **"Storage-strategi 1"** og
+> **"Storage-strategi 2"** — de er begge implementationsdetaljer UNDER Model B,
+> ikke separate produktmodeller.
+
+**Anbefalet retning: Storage-strategi 1 — scrypt med per-record salt.**
+Konkret: Node's indbyggede `node:crypto`-modul har `scrypt`/`scryptSync`
 (memory-hard, tunbar cost-parameter) — **ingen ny dependency**, ingen native
 binding at kompilere på Vercels serverless-runtime (i modsætning til `bcrypt`,
 som kræver en native `.node`-binding, eller `argon2`, som har tilsvarende
@@ -135,49 +140,63 @@ Repoet bruger allerede `node:crypto` direkte flere steder (`randomBytes`,
 `createHmac`, `timingSafeEqual` i `src/lib/analytics-bridge.ts`) — samme
 værktøjskasse, ingen ny afhængighed at vedligeholde/opdatere/patch'e.
 
-Skitse (til en fremtidig implementation, ikke skrevet her):
+Skitse (til en fremtidig implementation, ikke skrevet her). **Async `scrypt`,
+ikke `scryptSync`**, i selve request-pathen (unlock-action, sidevisning): scrypt
+er bevidst CPU-/memory-hård — kørt synkront ville den blokere Node's event loop
+under hvert unlock-/verifikations-kald og dermed forsinke *alle* andre
+samtidige requests på samme serverless-instans. Den async variant frigiver
+event loopet mens KDF'en arbejder:
 ```ts
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 
-function hashAccessCode(code: string): string {
+const scrypt = promisify(scryptCallback);
+
+async function hashAccessCode(code: string): Promise<string> {
   const salt = randomBytes(16);
-  const derived = scryptSync(code, salt, 32); // cost-parametre tunes ved implementation
+  const derived = (await scrypt(code, salt, 32)) as Buffer; // cost-parametre tunes ved implementation
   return `${salt.toString("hex")}:${derived.toString("hex")}`;
 }
 
-function verifyAccessCode(code: string, stored: string): boolean {
+async function verifyAccessCode(code: string, stored: string): Promise<boolean> {
   const [saltHex, hashHex] = stored.split(":");
-  const derived = scryptSync(code, Buffer.from(saltHex, "hex"), 32);
+  const derived = (await scrypt(code, Buffer.from(saltHex, "hex"), 32)) as Buffer;
   return timingSafeEqual(derived, Buffer.from(hashHex, "hex"));
 }
 ```
 `access_code_hash` gemmer `salt:derivedKey` (begge hex) — hvert forsøg er dyrt
-(memory-hard) at teste, selv med hele databasen i hånden.
+(memory-hard) at teste, selv med hele databasen i hånden, uden at blokere
+Node-processen mens det sker.
 
-**Alternativ, kortere diskuteret: Model B — server-keyed HMAC-SHA256 med separat
-pepper.** `HMAC-SHA256(PEPPER_SECRET, code)`, hvor `PEPPER_SECRET` er en ny,
-high-entropy server-secret (Vercel env-var, ALDRIG i databasen). Fordel: meget
-billigere at beregne end scrypt, og fordi DB'en (Supabase) og pepperen (Vercel env)
+**Alternativ, kortere diskuteret: Storage-strategi 2 — server-keyed HMAC-SHA256
+med separat pepper.** `HMAC-SHA256(PEPPER_SECRET, code)`, hvor `PEPPER_SECRET` er
+en ny, high-entropy server-secret (Vercel env-var, ALDRIG i databasen). Fordel:
+meget billigere at beregne end scrypt (og synkron `createHmac` blokerer ikke
+event loopet nævneværdigt, i modsætning til scrypt — HMAC-SHA256 er mikrosekunder,
+ikke titals millisekunder), og fordi DB'en (Supabase) og pepperen (Vercel env)
 lever i **forskellige systemer** i denne stack, beskytter det reelt mod et
 DB-only-læk (fx en fejlkonfigureret RLS-policy eller en Supabase-side-hændelse) —
 uden pepperen kan en hurtig HMAC ikke brute-forces offline af et rent DB-læk alene.
 Ulempe: sikkerheden hviler nu på at ÉN ekstra secret aldrig lækker sammen med
 DB'en, og det introducerer en ny secret at oprette, rotere og dokumentere
 (rotation af `PEPPER_SECRET` ville kræve at rehashe ALLE eksisterende access_codes
-— enten ved næste unlock, eller en batch-jobs, en driftskompleksitet Model A
-ikke har). **Ingen ny secret oprettes i denne PR** — nævnt kun som en vurderet,
-men ikke anbefalet, alternativ retning.
+— enten ved næste unlock, eller en batch-jobs, en driftskompleksitet
+Storage-strategi 1 ikke har). **Ingen ny secret oprettes i denne PR** — nævnt kun
+som en vurderet, men ikke anbefalet, alternativ retning.
 
-**Anbefaling:** Model A (scrypt, per-record salt). Den er sikker uafhængigt af om
-databasen nogensinde lækker alene, kræver ingen ny server-secret at oprette/rotere/
-dokumentere, og bruger udelukkende Node's indbyggede `crypto`-modul — ingen ny
-dependency, ingen native-binding-risiko på Vercel.
+**Anbefaling:** Storage-strategi 1 (async scrypt, per-record salt). Den er
+sikker uafhængigt af om databasen nogensinde lækker alene, kræver ingen ny
+server-secret at oprette/rotere/dokumentere, og bruger udelukkende Node's
+indbyggede `crypto`-modul — ingen ny dependency, ingen native-binding-risiko på
+Vercel. Den async variant undgår desuden at blokere event loopet under
+unlock/sidevisning.
 
-Ulempe fælles for begge modeller: sælgeren kan ikke længere "se koden igen" i admin
-— kun regenerere den (se §"Workflow/UX" nedenfor for hvad det konkret betyder).
-Det er en acceptabel, endda ønskværdig, konsekvens (samme princip som at man ikke
-kan se en glemt adgangskode, kun nulstille den) — men det ER en reel ændring i
-sælgerens arbejdsgang ift. i dag, beskrevet konkret nedenfor.
+Ulempe fælles for begge storage-strategier: sælgeren kan ikke længere "se koden
+igen" i admin — kun regenerere den (se §"Workflow/UX" nedenfor for hvad det
+konkret betyder). Det er en acceptabel, endda ønskværdig, konsekvens (samme
+princip som at man ikke kan se en glemt adgangskode, kun nulstille den) — men
+det ER en reel ændring i sælgerens arbejdsgang ift. i dag, beskrevet konkret
+nedenfor.
 
 ### Reset/rotation
 En admin-handling: "Generér ny adgangskode" på trippen — overskriver hash, ugyldiggør
