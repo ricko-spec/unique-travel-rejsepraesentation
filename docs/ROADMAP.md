@@ -26,26 +26,50 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
   Vision 2.0 finishing touch: desktop progress navigation (≥1180px).** Merget til main
   (PR #42). Rent frontend/CSS, ingen DB/migration involveret.
 - **[Issue #43](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/43) —
-  Vision 3.0 fase 1: design af eventmodellen.** Docs-only, merget (PR #44). Designet ligger i
-  `docs/VISION-3.0-EVENT-MODEL.md`. Fase 1B (selve implementationen) afventer stadig de fem
-  KRÆVER RICKO-punkter i dokumentets §14 (bl.a. cookie-samtykke/ePrivacy — hard release gate).
+  Vision 3.0 fase 1: design af eventmodellen (oprindelig cookie-baseret model).** Docs-only,
+  merget (PR #44). **Revideret af [Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63)
+  — se punktet under "Skal besluttes af Ricko".**
+- **[Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45) —
+  Vision 3.0: Analytics Bridge API til Marketing Dashboard.** Merget (PR #46). Read-only,
+  server-to-server-endpoint (`GET /api/internal/analytics/travel-plans`) der eksponerer
+  eksisterende online rejseplaner — ingen kundedata, intet bookingnummer i klartekst, ingen
+  HubSpot-afhængighed i dette repo. Se `docs/ANALYTICS-BRIDGE-API.md`.
+- **[Issue #47](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/47) —
+  Hotel website-links på trip-detaljesiden.** Merget.
+- **[Issue #48](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/48) —
+  Vandflyver-markør på transfers.** Merget.
+- **[Issue #49](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/49) —
+  Reliability hardening: ERR-1 (max_tokens-detektion), ERR-3 (fejltilstand i
+  trips-listen), SEC-6 (envDiagnostics ud af klientsvar).** Merget.
+- **[Issue #53](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/53) —
+  Storage bucket-config i drift-tjekket.** Merget. Lukker den tidligere kendte blinde vinkel
+  — se `scripts/check-storage-drift.mjs`.
+- **[Issue #54](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/54) —
+  SEC-4: rate-limit på PDF parse-endpointet.** Merget.
+- **[Issue #56](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/56) —
+  Security regression suite for kundens adgangskontrol/cookies.** Merget
+  (`src/lib/trip-access.ts` + tests).
+- **[Issue #57](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/57) —
+  PAIN-1: deploy/version-SHA i admin.** Merget (`src/app/admin/VersionBadge.tsx`).
 
 ## Næste
 
-1. **[Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45) —
-   Vision 3.0: Analytics Bridge API til Marketing Dashboard.** Read-only,
-   server-to-server-endpoint (`GET /api/internal/analytics/travel-plans`) der eksponerer
-   eksisterende online rejseplaner (trip-id, HMAC-bookingmatch-nøgle, oprettelsestidspunkt,
-   active, destination) — ingen kundedata, intet bookingnummer i klartekst, ingen
-   HubSpot-afhængighed i dette repo. Uafhængig af fase 1B (kører allerede på eksisterende
-   `trips`-data). Se `docs/ANALYTICS-BRIDGE-API.md`.
-2. **Fase 1B — session-opsamlingen bygges** (afventer Rickos afklaring i
-   `docs/VISION-3.0-EVENT-MODEL.md` §14 — særligt cookie-samtykke). Når den foreligger:
-   `supabase/010_customer_sessions.sql` (tabel + RLS + indexes +
-   `record_customer_session`/`trip_session_summary` + pg_cron-retention),
-   `src/lib/customer-session.ts` + tests, udvidet middleware-matcher til kundesider, ét
-   best-effort kald i `src/app/[bookingId]/page.tsx`. Fail-open: kode og migration kan
-   deployes i vilkårlig rækkefølge (modsat #38). Visning i admin er fase 1C/4.
+1. **[Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63) —
+   Vision 3.0 Fase 1B0: cookie-fri visit-model, docs-only revision af Fase 1-designet.**
+   PR klar til review — ingen implementation endnu. Udfordrede den oprindelige
+   cookie-baserede Fase 1-model (Issue #43) og anbefaler i stedet en cookie-fri, server-side
+   rolling visit-aggregation (`trip_visits`-tabel, ingen ny cookie, ingen
+   middleware-udvidelse) — se den opdaterede `docs/VISION-3.0-EVENT-MODEL.md`. Fjerner den
+   tidligere blokerende ePrivacy-hard-gate, men rejser fire nye, mindre spørgsmål Ricko
+   fortsat skal tage stilling til (§7/§14 i dokumentet) før Fase 1B kan implementeres.
+2. **Fase 1B — selve opsamlingen bygges** (afventer Rickos stillingtagen til
+   `docs/VISION-3.0-EVENT-MODEL.md` §14: behandlingsgrundlag, transparens,
+   retention-politik — ikke længere cookie-samtykke, se punkt 1). Når den foreligger:
+   `supabase/010_trip_visits.sql` (tabel + RLS + index + `record_trip_visit`),
+   `src/lib/trip-visit.ts` + tests, ét best-effort `waitUntil`-kald i
+   `src/app/[bookingId]/page.tsx`. Ingen middleware-ændring i den nye model. Fail-open:
+   kode og migration kan deployes i vilkårlig rækkefølge (modsat #38). Visning i admin er
+   fase 1C/4.
 3. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
    Vision 3.0: Customer Engagement & Sales Intelligence.** Master-issue — IKKE én stor PR.
    Fase 2-4 (sektionsengagement, kontakt-intent, salgsoversigt) tages ét PR ad gangen efter
@@ -57,25 +81,24 @@ eller GitHub Issues.
 
 ## Backlog (uprioriteret — se GitHub Issues for fuld liste)
 
-- **Hotel-website-links** på trip-detalje-siden — handoff klar (`handoff-hotel-links.md`)
-- **Vandflyver-tag** — dedikeret markør/ikon for vandflyver-transfers (transport-chips blev
-  bevidst fjernet fra hotel-elementer i PR #24; ønsket er et visuelt løft, ikke ny information)
-- **Storage bucket-config i drift-tjekket** — udvid drift-scriptet til `storage.buckets`
-  (kendt blind vinkel)
 - **Supabase custom SMTP** — fjerner Supabase' delte mail-rate-limit på recovery-/system-mails
 - **`parse_failures`-oprydning** — pg_cron-job der sletter rækker > 30 dage
-- Småting: ERR-1 (max_tokens-detektion), ERR-3 (fejltilstand i trips-listen),
-  PERF-1 (trim dashboard-select), SEC-4 (rate-limit på parse — magic-byte-delen
-  landet i Issue #38-PR'en: `isPdf()` i `src/lib/file-sniff.ts`),
-  SEC-6 (envDiagnostics ud af fejlsvar), PAIN-1 (deploy-SHA i admin-footer),
-  staging-oprydning som rigtig cron
+- **PERF-1** — trim dashboard-select
+- **Staging-oprydning som rigtig cron** (i dag opportunistisk ved hver ny upload-URL)
 
 ## Skal besluttes af Ricko
 
-- **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning. Design med 2-3 modeller,
-  trusselsmodel og anbefaling klar til beslutning i `docs/UNLOCK-CODE-DESIGN.md`
-  ([Issue #55](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/55),
-  docs-only, PR klar til review — ingen implementation endnu)
+- **Vision 3.0 Fase 1B — hvilken visit-model, og fire opfølgende privacy-spørgsmål.**
+  `docs/VISION-3.0-EVENT-MODEL.md` (revideret af
+  [Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63))
+  anbefaler en cookie-fri model. Kræver stillingtagen til: behandlingsgrundlag/formål,
+  transparens over for kunden, retention-politik for `trip_visits`, og accept af de
+  dokumenterede præcisionsbegrænsninger (§14 i dokumentet) — før Fase 1B kan implementeres.
+- **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning. Designet er færdigt og merget
+  (2-3 modeller, trusselsmodel og en konkret anbefaling — Model B, separat hashet
+  access_code) i `docs/UNLOCK-CODE-DESIGN.md`
+  ([Issue #55](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/55)).
+  **Selve beslutningen om at implementere er stadig Rickos** — ingen kode er skrevet.
 - **Slug-override-feltet i admin** — har aldrig virket (serveren ignorerer det); fjern eller
   gør funktionelt
 - **`stash@{0}` image-library WIP** — genoptag, flyt til branch, eller drop

@@ -1,444 +1,353 @@
 # Vision 3.0 — eventmodel (Fase 1: fundament + åbninger)
 
-> Design til [Issue #43](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/43),
-> under [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41).
-> **Docs-only.** Ingen migration, ingen kode, intet endpoint er bygget i denne omgang.
-> Skrevet 2026-09-16 mod main efter PR #42.
->
-> Dokumentet er beslutningsgrundlaget: det fastlægger sessiondefinition, datamodel,
-> privacy-grænser og fejlkontrakt, så Fase 1B kan implementeres uden nye åbne spørgsmål.
+> Oprindeligt design til [Issue #43](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/43)
+> (PR #44), under [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41).
+> **Revideret af [Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63)
+> (2026-09-17): den anbefalede Fase 1B-model er skiftet fra en ny session-cookie til en
+> cookie-fri, server-side rolling visit-model. Se §0 for hvorfor.**
+> **Docs-only. Ingen migration, ingen kode, intet endpoint er bygget endnu.**
+
+## 0. Revisionshistorik og beslutning
+
+**Fase 1B er ikke implementeret.** Dette dokument har gennemgået to runder:
+
+1. **Issue #43/PR #44 (2026-09-16):** designede en ny `trip_session_<slug>`-cookie +
+   `customer_sessions`-tabel, session-id mintet i middleware. Teknisk solidt, men gjorde
+   Fase 1B afhængig af en uafklaret ePrivacy-vurdering (§7 dengang) og en
+   middleware-udvidelse til al kundetrafik — begge blokerende.
+2. **Issue #63 (2026-09-17):** stillede spørgsmålet direkte — kan den samme
+   forretningsværdi opnås uden en ny analytics-cookie? Efter en konkret sammenligning
+   (§14, arkiveret nedenfor) er svaret **ja**, og dette dokument er omskrevet til at
+   beskrive den anbefalede model: **cookie-fri, server-side rolling visit-aggregation
+   pr. rejseplan** (herefter "Model B" eller blot "designet").
+
+Den tidligere cookie-model ("Model A") er **ikke** valgt. Den er arkiveret i §14 sammen
+med den fulde begrundelse, fordi dens afvejninger (særligt ift. en fremtidig Fase 2) er
+reel information, ikke blot historik der skal glemmes.
+
+**Ingen af de to modeller er implementeret. Dette er fortsat kun et beslutningsgrundlag.**
 
 ## 1. Hvad Fase 1 skal kunne svare på
 
-Pr. rejseplan, til sælgeren:
+Pr. rejseplan, til sælgeren — uændret fra oprindelig scope:
 
 | Signal | Kilde |
 |---|---|
-| Ikke åbnet endnu | ingen `customer_sessions`-rækker for trippen |
-| Første reelle kundeåbning | `min(started_at)` |
-| Seneste reelle kundeåbning | `max(last_seen_at)` |
-| Antal besøg | `count(*)` — én række = ét besøg |
+| Ikke åbnet endnu | ingen `trip_visits`-række for trippen |
+| Første reelle kundeåbning | `trip_visits.first_opened_at` |
+| Seneste reelle kundeåbning | `trip_visits.last_opened_at` |
+| Antal besøg | `trip_visits.visit_count` |
 
 Intet andet. Sektionsengagement, kontaktklik, lead score og salgsoversigt er Fase 2-4
-(se Issue #41) og er bevidst ikke designet ind her ud over at skemaet skal kunne vokse.
+(Issue #41) og designes bevidst ikke ind her ud over at skemaet skal kunne vokse (§9).
 
-## 2. Sessiondefinition (mekanisk)
+## 2. Hvad er ét besøg? (mekanisk, cookie-fri)
 
-**Ét besøg = ét session-id = én række i `customer_sessions`.**
+**Ét besøg = én sammenhængende læseperiode pr. rejseplan — ikke pr. browser, pr. enhed
+eller pr. person.** Der findes intet klient-holdt identifikatorbegreb af nogen art: ingen
+cookie ud over den eksisterende `trip_access_<slug>` (som fortsat kun bruges til
+adgangskontrol, uændret), ingen `localStorage`, intet session-id sendt til klienten.
 
-Session-id'et lever i en cookie:
+Al tilstand lever i én database-række pr. trip (`trip_visits`, §6):
 
-| Egenskab | Værdi | Hvorfor |
-|---|---|---|
-| Navn | `trip_session_<slug>` | Ét id pr. rejseplan, aldrig ét på tværs |
-| Værdi | `crypto.randomUUID()`, server-genereret | Opaque, tilfældig, ikke afledt af noget om brugeren |
-| `httpOnly` | true | Ingen JS skal læse den; ingen client-tracking-flade |
-| `secure` | true | Samme krav som `trip_access_<slug>` |
-| `sameSite` | `lax` | Overlever unlock-redirectet (POST → 303 → GET) |
-| `path` | `/<slug>` | **Gør cross-trip-identitet teknisk umulig** |
-| `maxAge` | 1800 sek. (30 min.), **sat på ny ved hvert besøg** | Rullende inaktivitetsvindue |
+| Kolonne | Betydning |
+|---|---|
+| `first_opened_at` | Sat ved første kvalificerede åbning nogensinde. Ændres aldrig igen. |
+| `last_visit_started_at` | Starttidspunkt for den *aktuelle* besøgsperiode. |
+| `last_opened_at` | Tidspunkt for den seneste kvalificerede render, uanset besøg. |
+| `visit_count` | Antal besøgsperioder. |
+| `open_count` | Antal kvalificerede sidevisninger i alt (blødt signal). |
 
-### Hvorfor rullende inaktivitetsvindue og ikke fast levetid
+**Reglen, evalueret server-side ved hver kvalificeret render:**
 
-En fast levetid (fx "session = 24 timer") splitter en kunde der læser rejseplanen igennem
-hen over et døgn i to besøg, og limer to reelt adskilte åbninger sammen hvis de falder
-tæt på hinanden. Et rullende vindue matcher det sælgeren faktisk spørger om — *en
-brugssituation* — og er samtidig branchestandard (GA's session-timeout er 30 min.).
+- Er `last_opened_at` **mere end 30 minutter gammel** (eller findes rækken slet ikke
+  endnu) → dette er et **nyt besøg**: `visit_count += 1`, `last_visit_started_at = now()`.
+- Ellers → **samme besøg fortsætter**: kun `last_opened_at` og `open_count` opdateres.
 
-Mekanikken er billig: fordi `maxAge` sættes forfra ved hvert besøg, håndterer **browseren
-selv** sessiongrænsen. Serveren behøver ikke sammenligne tidsstempler for at afgøre om et
-besøg er nyt — cookien er der (samme session) eller den er væk (nyt id, ny række). Ingen
-tilstand, ingen tidszoneproblemer, ingen kant-tilfælde.
+Hele beslutningen og skrivningen sker i **ét atomart SQL-statement** i Postgres (§6.2) —
+der er intet tidsstempel der sendes fra Node, og der er intet mellemliggende læs-så-skriv
+hverken i applikationskoden eller i SQL'en selv.
 
-### Path-scopingen er selve privacy-garantien
+### Hvorfor 30 minutter
 
-`path=/<slug>` betyder at browseren aldrig sender trip A's session-cookie til trip B.
-To rejseplaner til samme familie kan derfor ikke kobles sammen — ikke fordi vi lader være,
-men fordi datagrundlaget ikke findes. Det er gratis og det er den samme mekanik som
-`trip_access_<slug>` allerede bruger.
+Samme branchestandard-begrundelse som det oprindelige design (GA's session-timeout er
+30 min.): det matcher "en brugssituation" bedre end en fast levetid, og en fejl i den
+ene retning (to reelt adskilte læsninger tæt på hinanden limes sammen) er den sikre
+retning for et tal der vises sælgere — se §3 for de konkrete afvejninger.
 
 ### Konsekvenser vi accepterer bevidst
 
-- **Samme kunde på mobil + desktop = to besøg.** Korrekt ifølge Issue #43. Vi forsøger
-  ikke at koble dem. Ingen fingerprinting.
-- **Rydder kunden cookies, tæller næste åbning som et nyt besøg.** Accepteret; alternativet
-  kræver identifikation af personen.
-- **Ingen absolut sessionslængde.** En kunde der rammer siden hvert 25. minut i tre dage
-  tæller som ét besøg. Urealistisk for en rejseplan, og fejlen går mod **under**tælling —
-  den sikre retning for et tal vi viser sælgere.
-- **Klienten kunne teoretisk sende et nyt tilfældigt id pr. request og oppuste tælleren.**
-  Det kræver kendskab til `booking_no` (se §3), rammer kun én rejseplan, og giver ingen
-  adgang til noget. Accepteret i Fase 1; ingen mitigering bygges.
+- **Mobil + desktop, samme husstand, inden for 30 min. af hinanden = ét besøg**, ikke to.
+  Det er den systematiske forskel fra en cookie-baseret model, og den er accepteret
+  eksplicit — se §3's scenarier.
+- **Ingen besøgshistorik.** Vi ved *at* der har været 4 besøg og *hvornår* det seneste
+  var — ikke hvornår de tre foregående faldt. Vil man senere kunne se en tidslinje, er
+  det en bevidst senere udvidelse (en logtabel ved siden af, ikke en ombygning af denne).
+- **Tælleren kan ikke manipuleres af klienten.** I modsætning til et klient-sendt
+  session-id er vinduet håndhævet udelukkende mod serverens eget ur og den låste
+  rækkes egen tilstand — der er intet en klient kan sende der ændrer *om* et besøg
+  tælles.
 
-## 3. Hvad er en "reel kundeåbning"?
+## 3. Model B vs. den forkastede cookie-model — den konkrete afvejning
 
-Fem betingelser. **Alle** skal være opfyldt, ellers skrives der intet — og der mintes
-ikke engang en session-cookie.
+Fuld sammenligning ligger i §14 (arkiveret). Kort:
 
-| # | Betingelse | Hvor | Hvorfor |
-|---|---|---|---|
-| 1 | `trip_access_<slug>`-cookien findes | middleware | Uden unlock er der ingen kunde |
-| 2 | Værdien matcher `trips.booking_no` | `page.tsx` (eksisterende gren) | Den autoritative adgangskontrol |
-| 3 | Ingen Supabase-auth-cookie i browseren | middleware | Sælger der tester kundelinket |
-| 4 | User-Agent er ikke bot-klassificeret | middleware | Link-previewers, scannere |
-| 5 | `VERCEL_ENV === "production"` **og** host er det kanoniske domæne | middleware | Lokal dev, Vercel preview, branch-alias |
+| | Model B (valgt) | Model A (forkastet, arkiveret §14) |
+|---|---|---|
+| Ny cookie | Ingen | `trip_session_<slug>`, ny ePrivacy-vurdering nødvendig |
+| Middleware | Urørt (`/admin` only) | Udvides til al kundetrafik — "den mest risikable del" |
+| Besøgsenhed | Pr. rejseplan | Pr. browser-cookie-jar |
+| Klient-manipulerbar tæller | Nej | Ja (dokumenteret accepteret i Model A) |
+| Sælger-der-logger-ind-efter-åbning-hul | Lukket (tjekkes ved hvert skriv) | Åbent (tjekkes kun ved cookie-mint) |
+| Datavolumen | ≤ 1 række pr. trip (≈ 254 i dag) | Vokser med besøgstrafik |
+| Retention | Politikbeslutning, intet teknisk pres | Bærende pg_cron-krav |
+| Fase 2-fundament | Skal designe egen dedup-nøgle senere | Færdigt sessionsbegreb klar til brug |
 
-**Mulig 6. betingelse — `consent_given`.** Hvis Ricko beslutter at opt-in-samtykke er
-nødvendigt (§7 er en hard release gate), tilføjes samtykke som endnu en AND-betingelse i
-den samme gate. Designet er forberedt til det; se §8 for den konkrete variant og dens
-konsekvenser.
+**Hvad vi taber i præcision — de tre reelle scenarier:**
 
-### Betingelse 1+2 — unlock-cookien
+1. **Husstanden kigger sammen** (mor på telefon kl. 20:14, far på laptop kl. 20:19):
+   tælles som 1 besøg (`open_count = 2`), ikke 2. Ikke entydigt forkert for "har
+   husstanden set tilbuddet" — men skal stå tydeligt i UI'et som "besøg = læseperiode,
+   ikke enhed".
+2. **Relæ-kæden** (flere personer, <30 min. mellem hvert skridt): kæder på tværs af
+   *alle* enheder, ikke kun pr. enhed som i en cookie-model. Værste case, kræver et
+   ubrudt mønster for at opstå.
+3. **Kunde rydder cookies og låser op igen inden for 30 min.:** Model B tæller korrekt
+   ét besøg. En cookie-model ville (fejlagtigt) tælle to — Model B er her **mere**
+   præcis, ikke mindre.
 
-Bot- og støjfiltrering får uforholdsmæssigt meget opmærksomhed i analytics-projekter.
-Her er det værd at sige højt: **adgangskravet gør det meste af arbejdet.** For at få en
-`trip_access_<slug>`-cookie skal man POST'e det korrekte `booking_no` gennem `unlockTrip`
-(rate-limitet til 10 forsøg/15 min. pr. IP+slug). Ingen crawler, ingen link-preview og
-ingen tilfældig scanner kommer forbi det. Filter 3-5 er ekstra lag, ikke hovedforsvaret.
-
-Middleware kan kun se at cookien *findes* — den kan ikke verificere værdien uden et
-DB-opslag, og det skal middleware ikke lave. En forfalsket cookie får derfor mintet en
-session-cookie, men `page.tsx` renderer `AccessGate` og skriver aldrig til DB'en. Ingen
-forurening.
-
-### Betingelse 3 — admin/sælger
-
-Sælgeren er logget ind i `/admin` i samme browser når hun tester kundelinket. Supabase'
-auth-cookie (`sb-<projekt-ref>-auth-token`, evt. chunket `.0`/`.1`) har `path=/` og sendes
-derfor også til kundesiden. Vi tjekker **kun at cookien findes** — vi validerer ikke
-sessionen.
-
-Det er et bevidst valg: `getSessionUser()` laver et netværkskald til Supabase Auth, og det
-vil vi ikke lægge på hver eneste kundesidevisning. Til formålet "er det her sandsynligvis
-en sælger?" er cookiens tilstedeværelse nok, og en falsk positiv koster kun at ét besøg
-ikke tælles — igen den sikre retning.
-
-**Dokumenteret begrænsning:** dette fanger **ikke** en sælger der er logget ud, bruger
-inkognito, en anden browser eller sin private telefon. Det er accepteret. Alternativet
-(identificere personer bag kundesiden) er i direkte modstrid med privacy-princippet.
-Konsekvensen er at et lille antal sælger-test kan optræde som kundeåbninger; sælgerne skal
-vide det, og det skal stå ved tallet i Fase 4's UI.
-
-### Betingelse 4 — bots
-
-Ren regex-klassifikation af `User-Agent`-headeren i middleware, **transient**: strengen
-læses, matches, og forsvinder med requesten. Den logges ikke, hashes ikke og gemmes ikke —
-heller ikke som kategori. Der er ingen dokumenteret nødvendighed for at gemme den i Fase 1
-(jf. Issue #43 §5), og "mobil vs. desktop" er ikke et Fase 1-signal.
-
-Tom UA behandles som bot. En rigtig browser sender altid en UA.
-
-### Betingelse 5 — miljø
-
-```ts
-process.env.VERCEL_ENV === "production" && isProductionHost(host)
-```
-
-To lag, fordi preview deler production-DB og derfor ikke må beskyttes af en antagelse:
-
-- `VERCEL_ENV` er `"production"` / `"preview"` / `"development"` / undefined (lokalt).
-  Det er den eneste dokumenterede, aktive måde at kende miljøet på når databasen er den
-  samme. Dette er svaret på Issue #43's krav om ikke at stole på "det er bare preview":
-  **det er et eksplicit kodetjek, ikke en implicit antagelse.**
-- Host-tjekket lukker det sidste hul: production-deployet er også nåbart på
-  branch-aliaset `...-git-main-unique-travel.vercel.app`, hvor `VERCEL_ENV` *er*
-  `"production"`. Kun `rejseplaner.uniquetravel.dk` tæller.
-
-Begge er rene funktioner med miljø/host som argumenter — derfor unit-testbare uden at
-sætte `process.env` i testen.
+Alt andet — refresh, flere faner, genåbning efter >30 min., nyt device efter >30 min.,
+bot-forsøg, "er den overhovedet åbnet" — leverer identisk resultat i begge modeller.
+Fejlretningen er konsekvent undertælling, den samme sikre retning det oprindelige design
+selv insisterede på.
 
 ## 4. Server vs. browser
 
 **Alt er server-side. Der køres ingen analytics-JavaScript i kundens browser i Fase 1.**
+Uændret princip fra det oprindelige design — kun *hvor* server-side-koden bor er
+anderledes.
 
-| Signal | Autoritet | Begrundelse |
-|---|---|---|
-| Blev siden åbnet? | Server (request'en selv) | Browseren ved intet serveren ikke ved |
-| Hvornår? | Server (`now()` i Postgres) | Én urkilde, ingen klient-tidszoner |
-| Hvilken rejseplan? | Server (`row.id` fra det opslag der allerede sker) | |
-| Session-identitet | Server (mintet i middleware) | Klienten opbevarer, serveren udsteder |
-
-En klientside-beacon (`fetch` til et tracking-endpoint) blev overvejet og **forkastet**:
-den kræver et nyt offentligt endpoint, den koster en ekstra netværksrequest på kundesiden,
-den blokeres af adblockers, og den gør analytics til noget der kan gå i stykker i
-kundens browser. Ingen af Fase 1's fire signaler kræver den. Fase 2 (sektionsengagement)
-*kan* kræve browser-input — den beslutning tages der, ikke her.
-
-### Hvorfor cookien mintes i middleware og ikke i `page.tsx`
-
-Det er den centrale arkitektoniske tvang i dette design:
-
-- `page.tsx` er en Server Component og **kan ikke sætte cookies**.
-- `unlockTrip` (Server Action) kan — men kører **kun i selve unlock-øjeblikket**. Et
-  genbesøg dag 3 med den eksisterende 30-dages access-cookie rammer `page.tsx` direkte,
-  og `unlockTrip` køres aldrig igen. Al sessionslogik placeret dér ville kun se den
-  allerførste åbning.
-- **Middleware er det eneste sted der kan sætte en cookie ved ethvert besøg.**
-
-Middleware i dag: `matcher: ["/admin", "/admin/:path*"]` — kundesider rammes ikke.
-Fase 1B skal udvide matcheren. Se §8 for det præcise mønster og risikoen.
-
-### Arbejdsdeling
-
-| Middleware (edge) | `page.tsx` (node) |
+| Signal | Autoritet |
 |---|---|
-| Læser cookies + UA + env + host | Har allerede `row.id` og den verificerede adgangskontrol |
-| Kører filter 1, 3, 4, 5 (rene funktioner) | Kører filter 2 (eksisterende kode-gren) |
-| Minter/genopfrisker session-cookien | **Planlægger** det ene DB-kald via `waitUntil()` — uden `await` |
-| **Ingen DB, ingen secrets, intet netværk** | Service-role som resten af systemet |
+| Blev siden åbnet? | Server (request'en selv) |
+| Hvornår? | Server (`now()` i Postgres — ét ur) |
+| Hvilken rejseplan? | Server (`row.id` fra det opslag der allerede sker i `page.tsx`) |
+| Nyt besøg eller fortsat besøg? | Server (Postgres, i samme statement som skrivningen) |
 
-Middleware holdes fri for service-role-nøglen med vilje: den kører på alle matchede
-requests, inkl. RSC-prefetches, og nøglen skal ikke udvides til edge-runtimen for
-analytics' skyld. **Det er uændret af `waitUntil`-designet:** kun `page.tsx` (Node
-runtime) rører service-role-klienten og planlægger baggrundsskrivningen. Middleware
-læser cookies og headere og sætter én cookie — intet andet.
+En klientside-beacon blev overvejet i det oprindelige design og forkastet af samme
+grunde som stadig gælder: nyt offentligt endpoint, ekstra netværksrequest på
+kundesiden, adblocker-sårbar. Ingen af Fase 1's fire signaler kræver den.
 
-**Invariant:** ingen session-cookie ⇒ intet DB-skriv. `page.tsx` planlægger kun en
-skrivning når der ligger en gyldig UUID i `trip_session_<slug>`.
+### Hvorfor det hele nu bor i `page.tsx` — ingen middleware nødvendig
 
-**Performance-kontrakten:** DB-skrivningen ligger uden for responsens kritiske vej.
-Se §10 — kundens HTML sendes uden at vente på analytics, hverken ved succes eller fejl.
+Det oprindelige design krævede middleware, fordi en cookie skal mintes ved **hvert**
+besøg, og `page.tsx` (Server Component) kan ikke sætte cookies — kun `unlockTrip`
+(Server Action) kan, men den kører kun ved selve unlock-øjeblikket, ikke ved genbesøg
+med den eksisterende 30-dages `trip_access_<slug>`-cookie.
 
-## 5. Flow — unlock → visning → session
+Cookie-fri fjerner den tvang: der er intet at *sætte* ved hvert besøg — kun noget at
+*læse og skrive i databasen*, og `page.tsx` har allerede en verificeret service-role
+DB-forbindelse og den autoritative adgangskontrol (`hasValidTripAccess`, linje 68).
+**Middleware-matcheren forbliver `["/admin", "/admin/:path*"]`, urørt.**
+
+## 5. Flow — unlock → visning → besøgsregistrering
 
 ```
 A. Første besøg, ukendt kunde
    GET /ab12cd34ef56
-     middleware : ingen trip_access-cookie          -> mint intet, videre
-     page.tsx   : accessCookie != booking_no        -> <AccessGate/>, intet skriv
-   POST unlockTrip (Server Action)
-     rate-limit ok, kode ok
-     -> audit_log: unlock_success        (uændret, eksisterende adfærd)
-     -> sæt trip_access_<slug> (30 dage, httpOnly, path=/<slug>)
+     page.tsx : accessCookie != booking_no  -> <AccessGate/>, intet skriv
+   POST unlockTrip (Server Action) — UÆNDRET, ingen ændring i denne fil ud over uberørt
+     rate-limit ok, kode ok -> audit_log: unlock_success -> sæt trip_access_<slug>
      -> redirect /<slug>
    GET /ab12cd34ef56   (redirectet)
-     middleware : trip_access findes, ingen sb-cookie, ikke bot, prod+kanonisk host
-                  ingen trip_session_<slug>
-                  -> id = crypto.randomUUID()
-                  -> request.cookies.set(...)   <-- så page.tsx ser den NU
-                  -> response.cookies.set(..., maxAge 1800)
-     page.tsx   : accessCookie == booking_no
-                  -> waitUntil(recordCustomerSession(row.id, slug))   [INGEN await]
-                  -> render rejseplanen og SEND responsen                <-- kunden venter ikke
-                  ~~ baggrund, efter responsen ~~
-                  -> record_customer_session(id, row.id)  [best-effort, internt tidsloft]
-                  -> INSERT: ny række, started_at = last_seen_at = now(), view_count = 1
+     page.tsx : accessCookie == booking_no, gate-funktion tillader
+                -> waitUntil(recordTripVisit(row.id))   [INGEN await]
+                -> render rejseplanen og SEND responsen
+                ~~ baggrund, efter responsen ~~
+                -> record_trip_visit(trip_id): ingen række fandtes -> INSERT,
+                   first_opened_at = last_opened_at = last_visit_started_at = now(),
+                   visit_count = open_count = 1
    Resultat: 1 række. "Første åbning" = nu.
 
 B. Refresh x20 inden for 30 min.
-     middleware : trip_session findes og er gyldig uuid -> GENBRUG id, forny maxAge
-     page.tsx   : samme id, samme waitUntil-mønster
-                  -> baggrund: ON CONFLICT -> last_seen_at = now(), view_count += 1
-   Resultat: stadig 1 række. Besøgstallet rører sig ikke.
+     page.tsx : samme trip_id, samme gate-udfald
+                -> baggrund: last_opened_at < 30 min. gammel -> KUN
+                   last_opened_at = now(), open_count += 1
+   Resultat: stadig visit_count = 1. Besøgstallet rører sig ikke.
 
 C. Ny fane / nyt vindue, samme browser, inden for vinduet
-     Samme cookie-jar -> samme id -> som B. Stadig 1 besøg.
+     Samme trip_id -> som B. Stadig 1 besøg.
 
 D. Genåbning næste dag
-     Cookien er udløbet (>30 min. inaktivitet) -> nyt id -> ny række.
-   Resultat: 2 rækker = 2 besøg. Seneste åbning opdateret.
+     last_opened_at er nu >30 min. gammel -> nyt besøg
+   Resultat: visit_count = 2. last_visit_started_at og last_opened_at opdateret,
+   first_opened_at uændret.
 
-E. Nyt device
-     Ingen trip_access-cookie dér -> AccessGate -> unlock -> som A.
-   Resultat: endnu et besøg. Bevidst; vi matcher ikke devices.
+E. Nyt device, samme husstand, >30 min. efter forrige
+     Ingen trip_access-cookie dér -> AccessGate -> unlock -> som A, men trip_visits-
+     rækken findes allerede -> UPDATE-grenen -> visit_count += 1 (>30 min. gammel).
+   Resultat: endnu et besøg.
+
+E2. Nyt device, samme husstand, <30 min. efter forrige (DEN ACCEPTEREDE AFVIGELSE)
+     Som E, men last_opened_at er FRISK -> kun open_count += 1, visit_count UÆNDRET.
+   Resultat: stadig ét besøg. Se §3.
 
 F. Sælger der tester (logget ind i /admin i samme browser)
-     middleware : sb-...-auth-token findes -> mint intet
-     page.tsx   : ingen session-cookie -> intet skriv. Siden renderes normalt.
+     page.tsx : hasAdminAuthCookie(cookies) === true -> gate returnerer false
+                -> intet skriv. Siden renderes normalt.
+   Lukker Model A's dokumenterede hul: tjekket sker ved HVERT skriveforsøg, ikke kun
+   ved cookie-mint, så en sælger der logger ind EFTER at have åbnet linket udlogget
+   fanges også (i modsætning til det oprindelige design).
 
 G. Bot / link-preview
-     Ingen trip_access-cookie (kender ikke booking_no) -> stopper allerede i A's første
-     trin. UA-filteret er andet lag.
+     Ingen trip_access-cookie (kender ikke booking_no) -> stopper allerede ved A's
+     første trin. UA-filteret (§8) er andet lag.
 
 H. Localhost / Vercel preview / branch-alias
      VERCEL_ENV != "production" eller host != rejseplaner.uniquetravel.dk
-     -> mint intet -> intet skriv. Samme DB, men ingen forurening.
+     -> gate returnerer false -> intet skriv. Samme DB, ingen forurening.
 ```
 
 ## 6. Datamodel (SKITSE — ikke en migration)
 
-Al SQL herunder er illustrativ. Den rigtige fil hedder `supabase/010_customer_sessions.sql`
-og skrives i Fase 1B.
+Al SQL herunder er illustrativ. Den rigtige fil hedder `supabase/010_trip_visits.sql` og
+skrives først når Fase 1B implementeres (se §12).
 
-### Tabel
+### 6.1 Tabel — egen tabel, ikke kolonner på `trips`
+
+**Bevidst valg: en dedikeret tabel, ikke nye kolonner på `trips`.** Én grund er
+diskvalificerende for kolonne-varianten: `trips` har en `BEFORE UPDATE`-trigger
+(`trips_set_updated_at`, `supabase/001_trips.sql`) der sætter `updated_at` ved enhver
+opdatering — og `updated_at` betyder i dag "sælgeren ændrede rejseplanen"
+(`admin/api/trips`-listen bruger det sådan). Kolonner på `trips` ville lade hver
+kundeåbning bumpe det felt og gøre admin-listens "senest ændret" ubrugelig. Samme
+mønster som `audit_log`, `rate_limits`, `parse_failures`, `upload_events`: hver
+tværgående bekymring får sin egen service-role-only tabel.
 
 ```sql
-create table if not exists public.customer_sessions (
-  id           uuid primary key,
-  trip_id      uuid not null references public.trips(id) on delete cascade,
-  started_at   timestamptz not null default now(),
-  last_seen_at timestamptz not null default now(),
-  view_count   integer not null default 1
+create table if not exists public.trip_visits (
+  trip_id               uuid primary key
+                          references public.trips(id) on delete cascade,
+  first_opened_at       timestamptz not null default now(),
+  last_visit_started_at timestamptz not null default now(),
+  last_opened_at        timestamptz not null default now(),
+  visit_count           integer     not null default 1,
+  open_count            integer     not null default 1
 );
 
-comment on table public.customer_sessions is
-  'Kundebesøg pr. rejseplan (Vision 3.0 fase 1). Én række = ét besøg. Ingen persondata: ingen IP, ingen user-agent, intet bookingnummer, intet navn. Service-role-only.';
-comment on column public.customer_sessions.id is
-  'Tilfældig uuid, mintet server-side i middleware og opbevaret i cookien trip_session_<slug> (httpOnly, path=/<slug>, 30 min. rullende). Opaque — ikke afledt af noget om brugeren.';
-comment on column public.customer_sessions.trip_id is
-  'ON DELETE CASCADE: engagementdata om en slettet rejseplan har ingen værdi og skal ikke overleve den.';
-comment on column public.customer_sessions.view_count is
-  'Sidevisninger inden for samme session. Sekundært signal — besøgstallet er count(*), ikke summen af dette.';
+comment on table public.trip_visits is
+  'Kundeåbninger pr. rejseplan (Vision 3.0 fase 1). Én række pr. trip — aldrig pr. person, enhed eller session. Ingen identifikator af nogen art: ingen cookie, ingen IP, ingen user-agent, intet bookingnummer, intet navn. Service-role-only.';
+comment on column public.trip_visits.first_opened_at is
+  'Første kvalificerede kundeåbning. Sættes på insert-grenen og opdateres ALDRIG.';
+comment on column public.trip_visits.last_visit_started_at is
+  'Starttidspunkt for den seneste besøgsperiode.';
+comment on column public.trip_visits.visit_count is
+  'Antal besøgsperioder. Et nyt besøg tælles kun når der er gået mere end 30 min. siden last_opened_at — på tværs af alle enheder. Kan ikke manipuleres af klienten (håndhævet udelukkende mod serverens ur og den låste rækkes tilstand).';
+comment on column public.trip_visits.open_count is
+  'Samlet antal kvalificerede sidevisninger. Blødt signal: refresh og flere enheder inden for samme besøg tæller her, ikke i visit_count.';
+
+alter table public.trip_visits enable row level security;
+
+drop policy if exists "service_role full access trip_visits" on public.trip_visits;
+create policy "service_role full access trip_visits"
+  on public.trip_visits for all
+  to service_role
+  using (true)
+  with check (true);
+
+create index if not exists trip_visits_last_opened_idx
+  on public.trip_visits (last_opened_at desc);
 ```
 
-Fem kolonner. Det er hele datasættet.
+Ingen `set_updated_at`-trigger på denne tabel — `last_opened_at` *er* det feltet.
+Tabellen har højst én række pr. trip (≈254 i dag), så ét index ud over primærnøglen er
+tilstrækkeligt. **Ingen separat læse-RPC nødvendig:** aggregeringen findes allerede som
+selve rækken — Fase 1C/4 læser med et almindeligt `select`/`left join`, ikke en
+`jsonb_object_agg`-aggregering som det oprindelige design krævede.
 
-#### `id` = cookieværdien — er det trygt?
-
-`upload_events.id` er `gen_random_uuid()` server-side og krydser aldrig klientgrænsen.
-Her er det omvendt: primærnøglen *er* den værdi klienten sender tilbage. Det er trygt her
-og ikke i `upload_events`, fordi:
-
-- Værdien er **opaque og tilfældig** — ikke afledt af device, IP, bookingnummer eller
-  noget andet om personen. Den er ikke et fingerprint, den er et løbenummer.
-- Der er **ingen rettigheder** knyttet til den. At kende et session-id giver adgang til
-  ingenting. Adgangskontrollen er og bliver `trip_access_<slug>` + `booking_no`.
-- Den er **kortlivet** (30 min.) og **path-scopet** til én rejseplan.
-- Det værste en ondsindet klient kan gøre er at oppuste sit eget besøgstal på én
-  rejseplan han allerede har adgang til (§2).
-
-`page.tsx` skal validere formatet før brug (`isValidSessionId`) — en ugyldig værdi
-kasseres, og der skrives ikke. Det er en ren funktion og unit-testes.
-
-#### Hvorfor `on delete cascade` og ikke `set null` som `upload_events`
-
-De to tabeller handler om forskellige ting. `upload_events` er en **adoptionslog om
-sælgeren**: "Marie uploaderede 14 PDF'er i august" er sandt uanset om en af de trips
-senere slettes — derfor `set null`, derfor `actor_name`-snapshot. `customer_sessions`
-handler om **rejseplanen**; en session uden trip er analytisk værdiløs og alene en
-privacy-omkostning. Cascade gør desuden `not null` muligt, og giver en ren
-sletningshistorie: slettes trippen, forsvinder engagementdata med den.
-
-Bemærk at trips i praksis **soft-deletes** (`active = false`). En deaktiveret rejseplan
-beholder sine sessioner — korrekt, rækken findes stadig.
-
-#### Indexes
+### 6.2 Skriv-RPC — den atomare operation
 
 ```sql
-create index if not exists customer_sessions_trip_started_idx
-  on public.customer_sessions (trip_id, started_at);
-create index if not exists customer_sessions_trip_last_seen_idx
-  on public.customer_sessions (trip_id, last_seen_at desc);
-create index if not exists customer_sessions_last_seen_idx
-  on public.customer_sessions (last_seen_at);
-```
-
-De to første dækker `count(*)`, `min(started_at)` og `max(last_seen_at)` pr. trip. Den
-tredje dækker retention-slettningen. Tabellen er lille (237 aktive rejser × få besøg), så
-tre indexes er billige.
-
-### Skriv-RPC
-
-```sql
-create or replace function public.record_customer_session(
-  p_session_id uuid,
-  p_trip_id    uuid
-)
+create or replace function public.record_trip_visit(p_trip_id uuid)
 returns void
 language sql
 volatile
 security definer
 set search_path = public, pg_catalog
 as $function$
-  insert into public.customer_sessions as cs (id, trip_id)
-  values (p_session_id, p_trip_id)
-  on conflict (id) do update
-    set last_seen_at = now(),
-        view_count   = cs.view_count + 1
-    where cs.trip_id = excluded.trip_id;
+  insert into public.trip_visits as tv (trip_id)
+  values (p_trip_id)
+  on conflict (trip_id) do update
+    set last_opened_at        = now(),
+        open_count            = tv.open_count + 1,
+        visit_count           = tv.visit_count
+                                  + (case when tv.last_opened_at < now() - interval '30 minutes'
+                                          then 1 else 0 end),
+        last_visit_started_at = case when tv.last_opened_at < now() - interval '30 minutes'
+                                     then now() else tv.last_visit_started_at end;
 $function$;
 
-revoke execute on function public.record_customer_session(uuid, uuid) from public;
-revoke execute on function public.record_customer_session(uuid, uuid) from anon;
-revoke execute on function public.record_customer_session(uuid, uuid) from authenticated;
-grant  execute on function public.record_customer_session(uuid, uuid) to service_role;
+revoke execute on function public.record_trip_visit(uuid) from public;
+revoke execute on function public.record_trip_visit(uuid) from anon;
+revoke execute on function public.record_trip_visit(uuid) from authenticated;
+grant  execute on function public.record_trip_visit(uuid) to service_role;
 ```
 
-Hvorfor RPC og ikke `supabase.from(...).upsert(...)`: klientbiblioteket kan ikke udtrykke
-hverken `view_count + 1` eller `where`-klausulen på konfliktgrenen. Præcedensen findes
-allerede i repoet — `increment_rate_limit` (migration 005) er nøjagtig samme mønster:
-atomar UPSERT som RPC frem for læs-ret-skriv i Node.
+Ét statement. Intet `select` forud, intet læs-så-skriv — hverken i Node eller i SQL'en
+selv. Samme begrundelse for RPC frem for `supabase.from().upsert()` som
+`increment_rate_limit` (migration 005): klientbiblioteket kan ikke udtrykke
+`tv.open_count + 1` eller et betinget `CASE`-udtryk på konfliktgrenen.
 
-`where cs.trip_id = excluded.trip_id` er forsvar i dybden: et session-id der præsenteres
-for en *anden* rejseplan kan ikke overskrive den eksisterende række. Konfliktgrenen bliver
-en tavs no-op — ingen fejl, ingen forurening. Cookiens path-scoping burde gøre det
-umuligt, men et krafteret request skal ikke kunne flytte en session mellem rejseplaner.
+**Fælde for en fremtidig implementering:** i en `RETURNING`-klausul refererer
+`tv`-alias'et til rækken *efter* opdateringen — `returning (tv.last_opened_at < now() -
+interval '30 minutes')` er derfor altid falsk og kan ikke bruges til at rapportere "var
+dette et nyt besøg". Fase 1 har ikke brug for den returværdi (fail-open ignorerer den
+alligevel); en fremtidig Fase 2 der har brug for det, må bruge `xmax = 0`-mønstret eller
+en PL/pgSQL-variant med en eksplicit variabel.
 
-### Læse-RPC (aggregering live)
+### 6.3 Bevis for race-sikkerhed
 
-```sql
-create or replace function public.trip_session_summary(p_trip_ids uuid[] default null)
-returns jsonb
-language sql
-stable
-security definer
-set search_path = public, pg_catalog
-as $function$
-  select coalesce(jsonb_object_agg(trip_id, jsonb_build_object(
-           'sessionCount',  session_count,
-           'firstOpenedAt', first_opened_at,
-           'lastSeenAt',    last_seen,
-           'viewCount',     views
-         )), '{}'::jsonb)
-  from (
-    select trip_id,
-           count(*)            as session_count,
-           min(started_at)     as first_opened_at,
-           max(last_seen_at)   as last_seen,
-           sum(view_count)     as views
-    from public.customer_sessions
-    where p_trip_ids is null or trip_id = any(p_trip_ids)
-    group by trip_id
-  ) s;
-$function$;
+**Påstand:** samtidige requests mod samme rejseplan kan hverken dobbelttælle et besøg
+eller tabe en opdatering.
 
-revoke execute on function public.trip_session_summary(uuid[]) from public;
-revoke execute on function public.trip_session_summary(uuid[]) from anon;
-revoke execute on function public.trip_session_summary(uuid[]) from authenticated;
-grant  execute on function public.trip_session_summary(uuid[]) to service_role;
-```
+1. **Serialisering.** `trip_id` er primærnøgle. `ON CONFLICT DO UPDATE` bruger
+   speculative insertion: Postgres tager rækkelås på den konfliktende række **før**
+   `SET`-udtrykkene evalueres. To transaktioner kan derfor aldrig evaluere
+   `SET`-grenen for samme `trip_id` samtidig.
+2. **Evalueringstidspunktet er det afgørende.** `tv.`-referencen i `SET`-udtrykket er
+   rækken *som den er lige nu, efter låsen er taget* — ikke et snapshot fra
+   statementets start. En ventende transaktion ser derfor den værdi den foregående
+   netop skrev.
+3. **Gennemgang.** Række: `last_opened_at = 11:00`, `visit_count = 3`. T1 og T2 ankommer
+   begge ca. kl. 12:00.
+   - T1 låser, evaluerer `11:00 < (12:00 − 30 min)` = `11:00 < 11:30` → sandt →
+     `visit_count = 4`, `last_opened_at = 12:00:00.000`. Commit.
+   - T2 får låsen, gen-læser `last_opened_at = 12:00:00.000`. Evaluerer
+     `12:00:00.000 < 11:30:00.0xx` → **falsk** → `visit_count` uændret (4),
+     `open_count += 1`.
+   - Resultat: præcis ét besøg, to sidevisninger — uafhængigt af hvilken transaktion
+     der reelt kom først (forskellen mellem de to `now()`-værdier er mikrosekunder,
+     vinduet er 30 minutter).
+4. **Første besøg / dobbeltklik:** rækken findes ikke. Begge forsøger insert;
+   unikhedsindekset lader én vinde (`visit_count = 1`); den anden falder i
+   konfliktgrenen og ser en frisk `last_opened_at` → ingen forøgelse. Én række, ét
+   besøg, `open_count = 2`.
+5. **Præcedens, ikke nyudvikling.** `increment_rate_limit` (migration 005, i produktion
+   siden 2026-06-15) er samme konstruktion: `on conflict (key) do update set count =
+   case when rate_limits.reset_at < now() then 1 else rate_limits.count + 1 end` — en
+   tidsbetinget tæller på en låst række. `record_trip_visit` er samme mønster med et
+   rullende prædikat i stedet for et absolut.
 
-**Ingen lagrede tællere.** Samme lære som PR #39: aggregér i Postgres, hent aldrig rå
-rækker til Node for at tælle dem. Ét SQL-statement = ét READ COMMITTED-snapshot, så alle
-fire tal for en rejseplan er indbyrdes konsistente, og resultatet (én nøgle pr. trip med
-mindst ét besøg) kan aldrig ramme PostgREST' max-rows-grænse.
+### 6.4 30-minutters-vinduet — ét ur
 
-**Semantikken er vigtig:** en rejseplan der mangler i resultatet har ingen besøg. Det er
-"ikke åbnet endnu" — eksplicit fravær, ingen null-jonglering i UI-laget.
-
-### Aggregater: live eller gemt?
-
-Live i Fase 1. Datamængden er triviel og et gemt aggregat ville være en anden kilde til
-sandhed der kan komme ud af trit. Et per-trip-aggregat bliver først relevant hvis
-retention skal være kortere end den periode sælgerne vil kigge tilbage over — se §9.
-
-### `customer_events` — skitse til Fase 2-3, IKKE Fase 1B-scope
-
-Kun her for at vise at skemaet kan vokse konsistent. **Bygges ikke nu.**
-
-```sql
--- FASE 2-3. Ikke en del af Fase 1B. Kun illustrativ.
-create table if not exists public.customer_events (
-  id          uuid primary key default gen_random_uuid(),
-  session_id  uuid not null references public.customer_sessions(id) on delete cascade,
-  trip_id     uuid not null references public.trips(id) on delete cascade,
-  event_type  text not null,
-  occurred_at timestamptz not null default now(),
-  constraint customer_events_type_check check (event_type in (
-    'section_intro','section_rejseplan','section_billeder',
-    'section_hoteller','section_pris','section_kontakt',
-    'contact_email_click','contact_phone_click'
-  )),
-  constraint customer_events_once_per_session unique (session_id, event_type)
-);
-```
-
-To ting er allerede afklaret af Fase 1-designet: `section_*`-værdierne er de stabile
-sektions-id'er fra Issue #40's progress-nav (`src/lib/progress-nav.ts`), og
-`unique (session_id, event_type)` håndhæver Issue #41's krav om højst ét event pr.
-sektion pr. session i **databasen** frem for i klientkode — ingen scroll-spam mulig,
-uanset hvad browseren sender. `customer_sessions` er forudsætningen for begge dele; det
-er derfor Fase 1 kommer først.
+Vinduet beregnes **udelukkende i Postgres**, af `now()` og en fast `interval`. Node
+sender ingen tidsstempler og ingen varighed — bevidst forskel fra `checkRateLimit()`,
+som beregner sit vindue i Node (`Date.now()`); det ville her blande to ure
+(Node vs. Postgres) i samme sammenligning. `VISIT_WINDOW_MINUTES = 30` eksporteres som
+konstant i `src/lib/trip-visit.ts` udelukkende til dokumentation/UI-tekst — den sendes
+aldrig over ledningen. Ændres vinduet, kræver det en ny migration; det er en bevidst
+konsekvens, fordi en vinduesændring ændrer betydningen af historiske
+`visit_count`-værdier.
 
 ## 7. Privacy og sikkerhed
 
@@ -446,596 +355,419 @@ er derfor Fase 1 kommer først.
 
 | Data | Hvorfor ikke |
 |---|---|
-| `booking_no` i klartekst | Det er kundens adgangskode. Eksplicit krav i #41/#43 |
-| `booking_no` som hash | Unødvendigt — `trip_id` er en bedre nøgle og allerede intern |
+| Ny cookie af nogen art | Hele formålet med denne revision — se §0/§3 |
+| `booking_no` i klartekst eller hash | Det er kundens adgangskode. `trip_id` er en bedre, allerede-intern nøgle |
 | `slug` | Samme: `trip_id` dækker behovet |
 | Kundens navn, email, telefon | Ikke nødvendigt for nogen af de fire signaler |
-| IP-adresse (også hashet/trunkeret) | Ikke nødvendig. Bot-filtrering sker på UA, transient |
-| Rå User-Agent | Intet dokumenteret formål i Fase 1. Læses, matches, kasseres |
-| UA-kategori (mobil/desktop) | Ikke et Fase 1-signal. Tages op i Fase 4 hvis nogen faktisk spørger |
+| IP-adresse (også hashet/trunkeret) | Ikke nødvendig |
+| Rå eller kategoriseret User-Agent | Læses transient til bot-filtrering (§8), gemmes aldrig |
 | Referrer, geo, sprog, skærmstørrelse, tidszone | Fingerprinting-materiale |
-| Enhver kobling mellem to rejseplaner | Umuligt via cookie-path-scoping |
-| Supabase-bruger-id på en kundesession | Kunder har ingen konto, og sælgere tælles ikke |
+| Enhver kobling mellem to rejseplaner | Umuligt — der findes intet krydsende id at koble på |
+| Session-/besøgshistorik | Kun aggregater (`first/last/visit_count/open_count`) — ingen logtabel i Fase 1 |
 
 ### Gemmes
 
-Tilfældig uuid · `trip_id` · to tidsstempler · ét heltal.
-
-Rækken er kun personhenførbar via `trips`, som sælgeren i forvejen har lovligt. Analytics
-tilføjer altså ingen ny kategori af persondata — kun "dette tilbud blev åbnet på disse
-tidspunkter". Formålsbegrænset (dokumentere kundens interaktion med sit eget tilbud),
-dataminimeret og retention-begrænset (§9). Sletning følger rejseplanen automatisk via
-`on delete cascade`.
+`trip_id` · tre tidsstempler · to heltal. Ingen identifikator af nogen art.
 
 ### Sikkerhedsgrænser
 
-- Tabel og begge funktioner er **service-role-only**, samme mønster som `audit_log`,
-  `rate_limits`, `parse_failures`, `upload_events`. Ingen anon-/authenticated-policies.
-- RLS slået til med den etablerede policy:
+- Tabel og funktion er **service-role-only**, samme mønster som `audit_log`,
+  `rate_limits`, `parse_failures`, `upload_events`. RLS slået til, ingen
+  anon-/authenticated-policies.
+- Skrivningen ligger **efter** den eksisterende access-gate (`hasValidTripAccess`) og
+  kan kun nås af en request der allerede har bevist kendskab til `booking_no`.
+- Ingen læsning eksponeres kundevendt — kun fra `/admin`, bag den eksisterende
+  auth-gate (Fase 1C/4, ikke bygget nu).
+- Service-role-nøglen forbliver i `src/lib/supabase/server.ts`. Der er intet
+  edge-/middleware-lag i dette design overhovedet.
 
-```sql
-alter table public.customer_sessions enable row level security;
-drop policy if exists "service_role full access customer_sessions" on public.customer_sessions;
-create policy "service_role full access customer_sessions"
-  on public.customer_sessions for all
-  to service_role
-  using (true)
-  with check (true);
-```
+### Fire punkter der KRÆVER Rickos stillingtagen — uafhængigt af model
 
-- Analytics må ikke omgå adgangskontrol: skrivningen ligger **efter** access-gaten og kan
-  kun nås af en request der allerede har bevist kendskab til `booking_no`.
-- Ingen læsning eksponeres kundevendt. `trip_session_summary` kaldes kun fra
-  `/admin`-siden af systemet (Fase 1C/4), bag den eksisterende auth-gate.
-- Service-role-nøglen forbliver i `src/lib/supabase/server.ts` og kommer ikke til edge.
-- `Set-Cookie` på hvert kundesidesvar gør svaret ucachebart på CDN-niveau. Uden betydning:
-  siden er allerede `force-dynamic` + `revalidate = 0`.
+Det er en **faktuel forskel**, ikke en juridisk konklusion, at Model B ikke sætter en ny
+cookie: Model A's design gjorde cookiens nødvendighed under ePrivacy art. 5(3) til en
+uafklaret, blokerende hard release gate (arkiveret §14). Model B sætter ingen ny cookie
+og udløser derfor ikke det specifikke spørgsmål.
 
-### Uafklaret: lovligt grundlag for cookien — HARD RELEASE GATE, KRÆVER RICKO
+**Det betyder ikke at alle privacy-spørgsmål er besvaret.** Følgende gælder **uændret i
+begge modeller** og er ikke vurderet her — kun beskrevet, så det ikke overses:
 
-**Udgangspunktet i dette design er at `trip_session_<slug>` er en ikke-nødvendig
-analytics-cookie under ePrivacy art. 5(3), indtil andet er afklaret.** Undtagelsen i
-bestemmelsen gælder cookies der er strengt nødvendige for at levere den tjeneste brugeren
-har bedt om; en besøgstæller er det ikke — rejseplanen renderer fuldstændig uden den.
-Dokumentet træffer ingen juridisk konklusion, og ingen af argumenterne nedenfor skal læses
-som en vurdering af lovligheden.
+1. **Det er behandling af persondata i begge modeller.** `trip_visits.trip_id` kan
+   kobles til `trips.customer_name` — "denne navngivne kunde åbnede sit tilbud kl.
+   20:14" er en oplysning om en identificerbar person. At rækken kun er
+   personhenførbar via `trips`, som sælgeren i forvejen har lovlig adgang til, ændrer
+   ikke *arten* af behandlingen. **Formål og behandlingsgrundlag bør skrives
+   eksplicit ned — KRÆVER RICKO.**
+2. **Transparens** (fx en kort linje på `AccessGate` om at åbninger registreres) er
+   uafhængig af cookie-spørgsmålet. Om det er nødvendigt/ønsket vurderes ikke her.
+   **KRÆVER RICKO.**
+3. **Retention er nu en ren politikbeslutning, ikke et teknisk krav.** I den forkastede
+   cookie-model tvang et voksende datasæt en 12-måneders sletning frem. Her kan en
+   `trip_visits`-række leve med rejseplanen (cascade) uden at noget ophobes — men at
+   der ikke er teknisk pres er ikke det samme som at "for evigt" er det rigtige svar.
+   **KRÆVER RICKO**, se §11.
+4. **Sælgerkommunikation.** Fordi tælleren er pr. rejseplan (ikke pr. person), er
+   "5 besøg" en husstandsoplysning, ikke en oplysning om én bestemt person. Det er en
+   fordel — men en sælger der læser "5 besøg" må ikke overfortolke det som fem
+   forskellige mennesker. Fase 1C/4's UI skal sige hvad et besøg er (§3). Dette er en
+   leveringsforpligtelse ved valget af Model B, ikke en åben beslutning.
 
-Argumenter der er blevet fremført **for** at grundlaget kan være i orden uden samtykke:
-
-- Siden er privat og adgangsbeskyttet; den besøgende har selv låst op med en kode.
-- Målingen er førsteparts, deles med ingen tredjepart og forlader ikke vores egen database.
-- Cookien er path-scopet til én rejseplan og kan hverken følge personen på tværs af
-  rejseplaner eller på tværs af websites.
-- Der gemmes hverken IP, user-agent eller andre identifikatorer (§7).
-
-Argumenter **imod**:
-
-- Ordlyden i art. 5(3) knytter sig til om cookien er nødvendig for tjenesten — ikke til
-  hvor lidt data den indeholder, hvem der ejer den, eller om formålet er marketing.
-  "Det er ikke marketing-tracking" er ikke i sig selv en undtagelse.
-- Datatilsynets og EDPB's praksis har historisk lagt en snæver fortolkning af
-  nødvendighedskriteriet, og ren publikumsmåling har i flere tilfælde krævet samtykke.
-- Kunden har ikke bedt om at blive målt; unlock-koden er givet for at se sin rejseplan.
-- Vi er databehandler/dataansvarlig for kundedata i forvejen, og fejlvurderingen rammer
-  rigtige kunder, ikke interne brugere.
-
-**Konsekvens for release: Fase 1B må ikke deploye tracking-cookien før Ricko har truffet
-og dokumenteret en beslutning om lovligt grundlag.** Det er ikke et punkt der kan
-udskydes til efter deploy — cookien sættes ved første kundebesøg. Se §12's
-release-rækkefølge, trin 0, og §8's beskrivelse af samtykke-varianten af gaten.
-
-Mulighederne, uden at der vælges mellem dem her:
-
-| | Variant | Konsekvens |
-|---|---|---|
-| (a) | Deploy som designet, uden samtykke | Kræver en dokumenteret vurdering af at grundlaget holder |
-| (b) | Deploy som designet + kort infolinje på `AccessGate` | Gennemsigtighed, men ikke samtykke — løser ikke art. 5(3) hvis samtykke kræves |
-| (c) | Opt-in-samtykke som 6. betingelse i gaten | Klar compliance; åbninger før samtykke tælles ikke (§8) |
-| (d) | Drop cookien helt | Ingen sessionpræcision; kræver en helt anden, grovere model |
-
-Hvis Ricko — eventuelt efter juridisk rådgivning — vurderer at samtykke ikke er påkrævet,
-er en kort infolinje på `AccessGate` (b) den billigste og mest gennemsigtige tilføjelse
-oveni. Det er en sekundær bemærkning om udførelsen, ikke en anbefaling af grundlaget.
-
-## 8. Admin, preview og bots — mekanikken
-
-Hele gaten samles i én ren funktion så den kan unit-testes uden browser, DB eller Vercel,
-præcis som `visibleNavSections`/`isScrolledToBottom` i `src/lib/progress-nav.ts`:
+## 8. Gaten — én ren funktion, ét sted, ingen middleware
 
 ```ts
-// src/lib/customer-session.ts (FASE 1B — skitse)
-export type TrackDecisionInput = {
+// src/lib/trip-visit.ts (FASE 1B — skitse). Ingen imports fra next/* eller Supabase.
+export type VisitDecisionInput = {
   vercelEnv: string | undefined;   // process.env.VERCEL_ENV
-  host: string | null;             // request.headers.get("host")
-  userAgent: string | null;
-  hasAccessCookie: boolean;        // trip_access_<slug>
-  cookieNames: string[];           // til admin-detektion
+  host: string | null;             // headers().get("host")
+  userAgent: string | null;        // headers().get("user-agent")
+  cookieNames: string[];           // cookies().getAll().map(c => c.name)
 };
 
-export function shouldTrackCustomerView(input: TrackDecisionInput): boolean;
-export function isValidSessionId(value: string | undefined): boolean;
-export function isBotUserAgent(ua: string | null): boolean;
-export function hasAdminAuthCookie(cookieNames: string[]): boolean;
-export function isProductionHost(host: string | null): boolean;
-export const SESSION_COOKIE_MAX_AGE_SECONDS = 1800;
-export function sessionCookieName(slug: string): string;
+export function shouldRecordTripVisit(input: VisitDecisionInput): boolean;
+export function isBotUserAgent(ua: string | null): boolean;      // tom UA => bot
+export function hasAdminAuthCookie(names: string[]): boolean;    // ^sb-.*-auth-token(\.\d+)?$
+export function isProductionHost(host: string | null): boolean;  // kun rejseplaner.uniquetravel.dk
+export const VISIT_WINDOW_MINUTES = 30;
 ```
 
-### Samtykke-varianten af gaten (klar til brug, ikke valgt)
+Fire betingelser (mod fem i det forkastede design — `trip_access`-tilstedeværelse
+udgår, fordi den autoritative kontrol allerede er sket i `page.tsx` inden gaten nås):
 
-Kræver §7's afklaring opt-in-samtykke, udvides gaten med en sjette betingelse. Ændringen
-er lille netop fordi alle betingelser allerede er samlet ét sted:
+1. **Ikke bot.** `isBotUserAgent(headers().get("user-agent"))`. Ren regex, transient —
+   læses, matches, forsvinder med requesten. Gemmes aldrig, ikke engang som kategori.
+2. **Ikke sælger/admin.** `hasAdminAuthCookie(cookies().getAll()...)` — kun
+   *tilstedeværelse* af Supabase' auth-cookie tjekkes, ikke sessionens gyldighed
+   (samme afvejning som det oprindelige design: et netværkskald til Supabase Auth pr.
+   kundevisning er ikke værd prisen; en falsk positiv koster kun ét utalt besøg — den
+   sikre retning). Fordi tjekket sker ved **hvert** skriveforsøg (ikke kun ved en
+   cookie-mint), lukkes hullet hvor en sælger logger ind *efter* at have åbnet linket
+   udlogget — noget det oprindelige design ikke kunne.
+3. **Produktionsmiljø.** `process.env.VERCEL_ENV === "production"`. Præcedens:
+   `rateLimitEnvScope()` i `src/lib/rate-limit.ts` — samme allowlist-mønster,
+   fail-safe default ("tæl ikke" i stedet for "development").
+4. **Kanonisk host.** `isProductionHost(host)` — kun `rejseplaner.uniquetravel.dk`.
+   Nødvendigt fordi produktions-deployet også er nåbart på branch-aliaset
+   `...-git-main-unique-travel.vercel.app`, hvor `VERCEL_ENV` *er* `"production"`.
 
-```ts
-export type TrackDecisionInput = {
-  // ... de fem eksisterende felter
-  hasConsentCookie: boolean;       // NY: sat af kundens eget aktive valg
-};
-// shouldTrackCustomerView() returnerer false hvis hasConsentCookie er false.
-```
+Alle fire er rene funktioner, unit-testbare uden browser, DB eller
+`process.env`-manipulation — samme mønster som `progress-nav.ts`/`trip-access.ts`.
 
-Samtykket lever i sin egen cookie (fx `trip_consent_<slug>`, samme path-scoping og
-levetid som access-cookien), sat af et eksplicit valg på `AccessGate` eller i en lille
-banner på rejseplanen. Middleware minter ingen session-cookie før samtykket findes.
+**Kendt, uændret hul:** en udlogget sælger, i inkognito, eller på en privat telefon,
+tælles som kunde. Alternativet er at identificere personer bag kundesiden — i direkte
+modstrid med præmissen. Skal stå ved tallet i Fase 1C/4's UI.
 
-**Konsekvensen skal accepteres eksplicit, ikke omgås:** åbninger der sker før kunden har
-givet samtykke — eller hvis hun aldrig giver det — **tælles simpelthen ikke**. Der
-opsamles ikke "anonymt" i mellemtiden, der gemmes ingen pladsholder-række, og der tælles
-ikke server-side bagom cookien. En rejseplan hvor kunden har sagt nej vil for altid stå
-som "ikke åbnet endnu", og sælgeren kan ikke skelne det fra en kunde der aldrig klikkede.
-Det er prisen ved denne variant, og den skal være kendt før den vælges.
+## 9. Fail-open og nul-latens
 
-Denne variant er beskrevet for at vise at designet kan bære kravet uden omskrivning.
-**Om den skal bruges er Rickos beslutning, ikke dokumentets.**
-
-### Middleware-matcheren
-
-Kundeslugs er `lower(encode(gen_random_bytes(6),'hex'))` = præcis 12 hextegn (migration
-001). Matcheren kan derfor være kirurgisk præcis frem for en bred negativ lookahead:
-
-```ts
-export const config = {
-  matcher: [
-    "/admin",
-    "/admin/:path*",
-    "/:bookingId([0-9a-f]{12})",   // NY — kun kundesider
-  ],
-};
-```
-
-Det rammer hverken `/admin`, `/api`, `/_next`, statiske filer eller forsiden. Selve
-middleware-kroppen skal forgrenes på path: auth-refresh **kun** for `/admin*` (uændret
-adfærd), cookie-mint **kun** for kundeslugs.
-
-**Verificér før implementering** (Fase 1B, ét SQL-opslag):
-
-```sql
-select count(*) from public.trips where slug !~ '^[0-9a-f]{12}$';
-```
-
-Slug-override-feltet i admin har aldrig virket (serveren ignorerer det — se
-`docs/ROADMAP.md`), så svaret forventes at være 0. Er det ikke 0, falder vi tilbage til
-`"/((?!admin|api|_next|favicon.ico|.*\\.).*)"` og dokumenterer det.
-
-Matcher-ændringen er **den mest risikable del af Fase 1B**: den lægger en
-middleware-invokation på al kundetrafik. Den skal reviewes for sig.
-
-### Hvad strategien ikke kan
-
-- Sælger i inkognito/anden browser/privat telefon tælles som kunde (§3).
-- En bot der på en eller anden måde har fået en gyldig access-cookie og sender en normal
-  browser-UA tælles med. Praktisk talt kun kundens eget sikkerhedssoftware.
-- Vi opdager ikke om to personer deler ét device.
-
-Alle tre fejl går mod støj i **plus**, aldrig mod at miste en ægte kundeåbning — og de er
-små nok til at tallet stadig kan bruges operationelt, forudsat sælgerne kender
-forbeholdet.
-
-## 9. Konsistens, concurrency og idempotens
-
-**Hele skrivningen er ét statement.** Der findes intet læs-så-skriv i applikationskoden,
-og derfor intet vindue at tabe en opdatering i.
-
-- **To samtidige requests med samme session-id:** begge kører `insert ... on conflict`.
-  Postgres serialiserer på den unikke primærnøgle-index. Én vinder insertet; den anden
-  tager rækkelås på konfliktgrenen og opdaterer. Resultat: præcis én række. Ingen
-  duplikat, ingen tabt opdatering.
-- **`view_count = cs.view_count + 1`** evalueres på den låste række inde i konfliktgrenen,
-  ikke på en værdi Node har læst tidligere. Sikkert under samtidighed.
-- **Dobbeltklik / dobbelt-submit på første besøg:** begge forsøger insert; én vinder,
-  den anden bliver en update. Én række, `view_count = 2`. Korrekt: ét besøg.
-- **Idempotens-nøglen er session-id'et.** Samme id skriver aldrig en ny række, uanset hvor
-  mange gange det præsenteres.
-- **Besøgstallet er `count(*)`** — ikke en tæller der kan komme ud af trit med
-  virkeligheden.
-- **Prefetch:** der linkes ingen steder fra internt til kundesider, så Next' `<Link>`-
-  prefetch er ikke i spil. Skulle en RSC-prefetch alligevel ske, bærer den cookien og
-  bumper kun `view_count` — aldrig besøgstallet. Det er netop derfor `count(*)` er
-  overskriften og `view_count` det bløde tal.
-- **Læsning:** `trip_session_summary` er ét statement under READ COMMITTED = ét snapshot.
-  Et besøg der lander midt i kaldet er enten helt med eller helt ude; de fire tal kan
-  ikke modsige hinanden.
-
-## 10. Fail-open og nul-latens — hvor skrivningen sker, og hvorfor den ikke kan gøre skade
-
-To krav skal holdes samtidig, og de er ikke det samme:
-
-1. **Analytics må ikke kunne ødelægge kundesiden** (fail-open) — §10.3 nedenfor.
-2. **Analytics må ikke kunne gøre kundesiden langsommere** (Issue #41) — §10.2.
-
-En `try/catch` løser kun det første. Et `await` på en DB-skrivning før responsen sendes
-bryder det andet, uanset hvor kort timeout man sætter: ventetiden lander stadig på
-kundens Time To First Byte. Derfor bruger designet `waitUntil()`.
-
-### 10.1 Placering i `page.tsx`
+**Uændret fra det oprindelige design — kun funktions-/filnavne er anderledes.** To krav
+holdes samtidig: analytics må ikke kunne ødelægge kundesiden (fail-open), og den må
+ikke kunne gøre den langsommere (nul kritisk-vej-latens). Løsningen er den samme:
+`waitUntil()` fra `@vercel/functions`.
 
 ```tsx
 import { waitUntil } from "@vercel/functions";
 
 const row = await loadTrip(params.bookingId);
-if (!row) notFound();                                  // 1. intet skriv
+if (!row) notFound();                                   // 1. intet skriv
 
-const accessCookie = cookies().get(`trip_access_${params.bookingId}`);
-if (accessCookie?.value !== row.booking_no) {
-  return <AccessGate .../>;                            // 2. intet skriv
+const accessCookie = cookies().get(tripAccessCookieName(params.bookingId));
+if (!hasValidTripAccess(accessCookie?.value, row.booking_no)) {
+  return <AccessGate slug={params.bookingId} destination={row.destination} />;  // 2. intet skriv
 }
 
 // 3. HER — planlægges, afventes IKKE. Responsen venter ikke på DB'en.
-waitUntil(recordCustomerSession(row.id, params.bookingId));
+waitUntil(recordTripVisit(row.id));
 
-const parsed = tripSchema.safeParse(row.data);         // 4. fejlsiden tæller som åbning
-...
+const parsed = tripSchema.safeParse(row.data);           // 4. fejlsiden tæller som åbning
 ```
 
-Placeringen er valgt bevidst: **efter** access-gaten (så `notFound()` og `AccessGate`
-aldrig tælles) og **før** skema-parsingen. En kunde der åbner en rejseplan med ødelagte
-data *har* åbnet linket — sælgerens spørgsmål er "har kunden klikket?", og svaret er ja,
-også selvom vores rendering fejlede. Én placering, ét kald, ingen grene at holde styr på.
+Placeringen: efter access-gaten (så `notFound()`/`AccessGate` aldrig tælles), før
+skema-parsingen (en kunde der åbner en rejseplan med ødelagte data *har* åbnet linket).
 
-### 10.2 Hvorfor `waitUntil` — og hvorfor ikke `after()`
-
-`waitUntil(promise)` er Vercels platform-primitiv: den sender HTTP-responsen til kunden
-med det samme og beder runtime'en (Fluid Compute) holde funktions-instansen i live indtil
-den medsendte promise er afgjort. Uden den ville et ikke-afventet promise i en almindelig
-serverless-funktion blive afbrudt i det øjeblik responsen er sendt — instansen fryses
-eller termineres, og skrivningen ville forsvinde tilfældigt. `waitUntil` er præcis
-forskellen mellem "fire and forget" og "fire and actually finish".
-
-- **Ikke Next.js' `after()`.** Den API kræver Next.js 15; repoet kører Next 14.
-  `waitUntil` fra `@vercel/functions` er en platform-primitiv der virker uafhængigt af
-  Next-versionen.
-- **Kaldet skal ske synkront inde i requesthåndteringen** — altså i selve
-  komponentkroppen, før eller omkring JSX-returneringen, som i §10.1. Det virker i en
-  async Server Component, fordi Vercels Next.js-integration eksponerer request-konteksten
-  via `AsyncLocalStorage`; `waitUntil` finder den kontekst selv. Kaldes det først efter at
-  requesten er afsluttet (fx fra en detached timer), er der ingen kontekst at knytte sig
-  til.
-- **Uden for Vercel** (lokal `next dev`) er der ingen request-kontekst at hægte sig på.
-  Det er uden praktisk betydning her, fordi miljø-gaten (§3, betingelse 5) allerede sikrer
-  at der aldrig mintes en session-cookie lokalt — og uden cookie sker der ingen skrivning.
-- **Service-role-nøglen forbliver ude af middleware.** Kun `page.tsx` på Node-runtime
-  kalder `waitUntil` og rører `getSupabaseService()`. Uændret fra §4.
-
-Nettoresultatet: analytics-skrivningen ligger strukturelt uden for responsens kritiske
-vej. Kundens TTFB påvirkes ikke — hverken når DB'en svarer hurtigt, når den svarer
-langsomt, eller når den slet ikke svarer.
-
-### 10.3 Fejlkontrakten
+`recordTripVisit()` er strukturelt identisk med det oprindelige designs
+`recordCustomerSession()`, kun med `trip_id` i stedet for et session-id-opslag:
 
 ```ts
-// src/lib/customer-session-write.ts (FASE 1B — skitse)
+// src/lib/trip-visit-write.ts (FASE 1B — skitse)
 const WRITE_TIMEOUT_MS = 2000;
 
-export async function recordCustomerSession(tripId: string, slug: string): Promise<void> {
+export async function recordTripVisit(tripId: string): Promise<void> {
   try {
-    const sessionId = cookies().get(sessionCookieName(slug))?.value;
-    if (!isValidSessionId(sessionId)) return;          // ingen cookie = ingen skrivning
-
     const supabase = getSupabaseService();
-    const write = supabase.rpc("record_customer_session", {
-      p_session_id: sessionId,
-      p_trip_id: tripId,
-    });
+    const write = supabase.rpc("record_trip_visit", { p_trip_id: tripId });
     const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), WRITE_TIMEOUT_MS));
-
     const result = await Promise.race([write, timeout]);
-
     if (result === null) {
-      console.error("[customer-session] timeout", { tripId, sessionId });
+      console.error("[trip-visit] timeout", { tripId });
       return;
     }
-    // Fejlen er et OBJEKT, ikke en exception — den skal tjekkes eksplicit.
     const { error } = result;
     if (error) {
-      // Sanitiseret: kun Postgres/PostgREST-metadata + de to uuid'er. Se grænsen nedenfor.
-      console.error("[customer-session] rpc-fejl", {
-        tripId,
-        sessionId,
-        code: error.code,
-        message: error.message,
-      });
+      console.error("[trip-visit] rpc-fejl", { tripId, code: error.code, message: error.message });
     }
   } catch (e) {
-    console.error("[customer-session] uventet fejl", e);
+    console.error("[trip-visit] uventet fejl", e);
   }
   // Kaster ALDRIG.
 }
 ```
 
-**Hvad der må logges — og grænsen.** `error.code`/`error.message` fra Postgres/PostgREST
-er generisk teknisk metadata (constraint-navn, `relation does not exist`,
-forbindelsesfejl) og indeholder ikke kundedata. `tripId` og `sessionId` er begge uuid'er
-— interne, opaque nøgler, ikke persondata — og de er det eneste der gør en fejllinje
-brugbar til fejlsøgning. **Præcis dér går grænsen:** `booking_no`, slug, kundenavn,
-rejsedata eller rå request-headere må aldrig logges, heller ikke delvist, heller ikke
-"til debug".
+**Loggrænsen, uændret:** `tripId` + Postgres' `error.code`/`error.message` er det eneste
+der logges — aldrig `booking_no`, slug, kundenavn, rejsedata eller rå request-headere.
 
-**Tidsloftet beskytter ikke længere kunden — det beskytter platformen.** Kunde-latens er
-allerede løst strukturelt af `waitUntil` (§10.2). `WRITE_TIMEOUT_MS` er der for at en
-hængende DB-forbindelse ikke holder funktions-instansen kunstigt i live og brænder
-eksekveringstid på et kald der aldrig bliver til noget. Det er en ressourcegrænse, ikke en
-brugeroplevelsesgrænse — og derfor kan den sættes rundhåndet (2 s), hvor et blokerende
-loft ville skulle være aggressivt kort.
+**Hvorfor `waitUntil` og ikke Next.js' `after()`:** `after()` kræver Next.js 15; repoet
+kører Next 14. `waitUntil` fra `@vercel/functions` er en platform-primitiv, virker
+uafhængigt af Next-version, og er **den eneste nye dependency** i dette design.
 
-**Try/catch-kontrakten gælder uændret, selvom fejlen nu sker efter responsen.** Det er
-ikke overflødigt: en promise der rejecter inde i `waitUntil` giver en unhandled rejection
-i funktions-instansen, hvilket støjer i runtime-loggen og i værste fald påvirker
-instansens oprydning. Funktionen skal derfor stadig *aldrig* kunne rejecte — den logger og
-returnerer.
+**Hvorfor fail-open og ikke fail-closed som Issue #38's `upload_events`:** der er
+prisen for et svigt forskellig. I #38 rammer et fail-closed-svigt en kollega, der kan
+prøve igen. Her ville et fail-closed-svigt ramme **kunden** med en fejl på sit
+rejsetilbud, fordi vores statistik havde en dårlig dag. Et tabt datapunkt i en tæller er
+en ubetydelig omkostning; et ødelagt kundetilbud er ikke. Derfor fail-open, uden
+forbehold — tallene er "tæt på eksakte", ikke garanteret komplette, og sælgerne skal
+kende den byttehandel.
 
-Samme filosofi som `writeAudit` i `src/lib/audit.ts` — men bevidst **modsat**
-`upload_events`.
+**Beviset for at det ikke kan forsinke eller ødelægge siden** er identisk med det
+oprindelige designs §10.5 (ni led: `waitUntil` returnerer synkront, ingen `await` på
+skrivestien, ingen analytics-JS i browseren, hele funktionskroppen i try/catch uden
+`throw`, en afvist RPC kommer som fejl-objekt ikke exception, `Promise.race` mod en
+timer der *resolver* aldrig kaster, manglende cookie/gate-afvisning stopper før noget
+netværkskald sker) — genbruges ordret med to filnavne udskiftet.
 
-### 10.4 Hvorfor modsat Issue #38
+## 10. Fase 2-kompatibilitet — den ærlige afvejning
 
-`upload_events` er **fail-closed**: fejler event-insertet, afvises sælgerens upload. Det
-var rigtigt dér, fordi kravet var 100% dækning i et internt værktøj — en usynlig upload
-gør hele adoptionstallet utroværdigt, og prisen for fejlen bæres af en kollega der kan
-prøve igen og sige til.
+Dette er det stærkeste argument for den forkastede cookie-model, og det skal ikke
+affejes.
 
-Her er alt anderledes. Prisen for et fail-closed-svigt ville blive båret af **kunden**,
-som ville se en fejl på sit rejsetilbud fordi vores statistik havde en dårlig dag. Et
-manglende besøg i en tæller er en ubetydelig omkostning; et ødelagt kundetilbud er ikke.
-Issue #41 siger det direkte: kundesiden må aldrig blive skrøbeligere på grund af
-analytics. **Derfor fail-open, uden forbehold** — og derfor er tallene "næsten helt
-eksakte" frem for garanteret komplette. Det er den rigtige byttehandel, og sælgerne skal
-kende den.
+**Hvad Fase 2 (#41) vil have:** "nåede kunden ned til hotellerne i *dette* besøg?",
+"klikkede de på kontakt?", med dedup "højst ét event pr. sektion pr. besøg".
 
-### 10.5 Beviset
+**Fire observationer:**
 
-**At det ikke kan forsinke kunden:**
-
-1. `waitUntil(...)` modtager et promise og returnerer synkront `void`. Der er intet `await`
-   på skrivestien, så komponentkroppen fortsætter til JSX-returneringen uden at vente.
-2. Responsen streames til kunden uafhængigt af den planlagte promise. Om DB'en svarer på
-   5 ms, 2 s eller aldrig, er TTFB den samme.
-3. Der er ingen analytics-JavaScript i browseren (§4), så der er heller ingen
-   klientside-omkostning.
-
-**At det ikke kan ødelægge siden:**
-
-4. Funktionen returnerer `Promise<void>` og har hele kroppen i `try/catch`. Den har intet
-   `throw` og ingen `finally` der kan kaste. Den kan derfor ikke *rejecte* — hverken mod
-   `waitUntil` eller mod noget andet.
-5. Fordi kaldet ikke afventes, kan en fejl derinde per definition ikke nå
-   error-boundary'en, `notFound()`, `AccessGate`, fejlsiden eller JSX-returneringen.
-   Renderingen er allerede sket.
-6. En PostgREST-fejl (tabel mangler, RLS afviser, FK-violation fordi trippen blev slettet
-   midt i requesten) kommer tilbage som et **fejl-objekt**, ikke en exception. Den
-   destruktureres og logges eksplicit (§10.3) — ikke stiltiende kasseret.
-7. `Promise.race` mod timeren: timeren *resolver* (rejecter ikke), så racet kan ikke kaste.
-   Et `null`-resultat betyder timeout og logges som sådan.
-8. Mangler cookien, returneres der før noget netværkskald overhovedet sker.
-9. Ingen anden kode læser returværdien; der er ingen tilstand at komme ud af trit med.
-
-Forventet omkostning ved succes: ét RPC-kald i samme region (Vercel + Supabase, begge
-eu-west-1) — tiere af millisekunder, afviklet efter at kunden har fået sin side.
+1. **Fase 2 kræver klient-JavaScript uanset model.** Scroll-position kan kun kendes i
+   browseren. Den forkastede cookie-model leverer ikke Fase 2 — kun én brik til den
+   (et session-id). Fase 2 er et større arkitektonisk skridt end Fase 1 i begge modeller.
+2. **Der er mindst tre mulige dedup-nøgler til Fase 2, og et arvet cookie-session-id er
+   ikke oplagt den bedste:** (a) et arvet cookie-session-id fra denne fase, (b) et
+   **in-memory page-load-id** genereret i browseren ved sideindlæsning (lagres intet
+   sted — hverken cookie eller `localStorage` — lever kun i JS-hukommelsen og dør ved
+   navigation), som for "scrollede de til hotellerne under *denne* sideindlæsning" reelt
+   er **mere** præcist end et 30-minutters vindue der kan spænde over flere
+   sideindlæsninger, eller (c) ren server-side dedup pr. `(trip_id, event_type)`, som
+   dækker en stor del af den faktiske salgsværdi uden noget identifikatorbegreb
+   overhovedet.
+3. **Hvad vi permanent mister ved at vælge cookie-fri nu:** kohorte-/funnel-analyse pr.
+   besøg ("af de 12 besøg, hvor mange nåede til prisen?"). Hvis Fase 4's lead score
+   nødvendigvis skal bygge på konverteringsrate *pr. besøg*, er den arkiverede
+   cookie-model det rigtige fundament. Hvis den kan bygge på engagementssignaler *pr.
+   rejseplan* — hvilket produktets skala (≈254 trips, en håndfuld sælgere) og #41's
+   ordlyd peger på — er forskellen uden praktisk betydning.
+4. **Døren lukkes ikke, den holdes åben.** Beviser Fase 2 senere at der reelt skal
+   bruges et sessionsbegreb, tilføjes det **da** — sammen med den klient-JavaScript der
+   rent faktisk gør det nødvendigt, og med kendskab til hvad eventsne faktisk er værd.
+   `trip_visits` bliver stående uændret ved siden af. Rækkelåsen på `trip_visits` kan
+   desuden bære mere end én tæller: en PL/pgSQL-variant kan i samme transaktion, mens
+   låsen holdes, betinget skrive til en tilstødende eventtabel — race-sikkert af samme
+   grund som §6.3, uden noget klient-holdt id.
 
 ## 11. Retention
 
-| Data | Periode | Mekanisme |
-|---|---|---|
-| `customer_sessions` (rå) | **12 måneder** på `last_seen_at` | pg_cron, dagligt |
-| Aggregater | ingen gemmes i Fase 1 | live RPC |
+**Ingen bærende teknisk mekanisme i dette design** (modsat den forkastede models
+pg_cron-krav) — men **stadig en beslutning der skal træffes eksplicit**, ikke som
+default (§7, punkt 3). Datasættet vokser ikke med trafik (≤ 1 række pr. trip), så der
+er intet teknisk pres for at slette — men "ingen sletning nogensinde" er ikke
+automatisk det rigtige svar til dataminimering.
 
-**12 måneder** afvejer de to hensyn: en rejse har et salgsforløb på uger til måneder, og
-en sælger kan med rimelighed ville se tilbage på en sæson ("åbnede de overhovedet
-tilbuddet sidste efterår?"). Ud over ét år er værdien reelt nul, mens rækkerne bliver ren
-ophobning. Rækkerne indeholder ingen direkte persondata, men dataminimering handler også
-om ikke at gemme noget uden formål.
+Hvis Ricko beslutter en retention-periode, er mekanismen den samme som det oprindelige
+design skitserede (pg_cron, `where last_opened_at < now() - interval '...'`) — men
+**krymper** rækken i stedet for at slette den (fx nulstil `visit_count`/`open_count`,
+behold `first_opened_at`), eller sletter den helt, afhængig af hvad Ricko beslutter
+skal ske med "ikke set i X måneder"-signalet i UI'et. Denne beslutning er bevidst ikke
+forudbestemt her.
 
-```sql
--- kræver extension pg_cron (Supabase: Database -> Extensions) — KRÆVER RICKO
-select cron.schedule(
-  'customer_sessions_retention',
-  '17 3 * * *',
-  $$delete from public.customer_sessions where last_seen_at < now() - interval '12 months'$$
-);
-```
-
-**Cron-jobbet skal med i migration 010 — ikke som "en senere driftsopgave".** Præcedensen
-er ubehagelig tydelig: `parse_failures` har haft en dokumenteret 30-dages oprydning som
-hensigt siden migration 007 og har stadig ingen. En retention-politik der ikke er
-schedulet er ikke en politik. Kan pg_cron ikke enables, skal Fase 1B i stedet levere et
-Vercel Cron-endpoint — men noget skal køre fra dag ét.
-
-### Konsekvens der skal håndteres i UI'et
-
-Når rækker slettes efter 12 måneder, får en gammel rejseplan igen nul sessioner. Uden
-forholdsregler ville den blive vist som **"ikke åbnet endnu"** — direkte misvisende over
-for sælgeren.
-
-Reglen for visningslaget (Fase 1C/4):
-
-- Trip oprettet **inden for** retention-vinduet og uden sessioner → "Ikke åbnet endnu".
-- Trip **ældre end** vinduet og uden sessioner → "Ingen registrerede åbninger de seneste
-  12 måneder".
-- Trip oprettet **før** sporingen blev slået til → "Sporing startede <dato>". Der
-  backfilles ikke; samme situation som `upload_events`' `trackingSince`. Datoen lægges som
-  konstant `TRACKING_SINCE` i `src/lib/customer-session.ts` når Fase 1B deployes, og
-  `trip_session_summary` returnerer derudover `min(started_at)` som sanity-værdi.
-
-Vil man senere kigge længere tilbage end 12 måneder, er svaret et per-trip-aggregat der
-overlever oprydningen — en bevidst Fase 4-beslutning, ikke noget der sniges ind nu.
-
-## 12. Fase 1B — implementeringsplan
-
-Fase 1B er **kun opsamling**. Visningen i admin er Fase 1C (eller lægges ind i Fase 4's
-salgsoversigt) — det holder den risikable middleware-ændring i et lille, isoleret PR, i
-tråd med Issue #41's "én fase ≈ én PR".
+## 12. Fase 1B — implementeringsplan (IKKE bygget endnu)
 
 ### Filer
 
 | Fil | Handling | Indhold |
 |---|---|---|
-| `supabase/010_customer_sessions.sql` | **NY** | Tabel + comments + RLS-policy + 3 indexes + `record_customer_session` + `trip_session_summary` + revoke/grant + pg_cron-job. Idempotent |
-| `supabase/README.md` | ÆNDRES | Tabelrække i migrationsoversigten + driftsnote (retention, release-rækkefølge, fail-open-kontrakten) |
+| `supabase/010_trip_visits.sql` | **NY** | Tabel + comment + RLS-policy + index + `record_trip_visit` + revoke/grant. Idempotent |
+| `supabase/README.md` | ÆNDRES | Tabelrække i migrationsoversigten |
 | `supabase/schema-baseline.json` | ÆNDRES | Efter `--update-baseline` |
-| `src/lib/customer-session.ts` | **NY** | Rene funktioner, jf. §8. Ingen imports fra `next/*` eller Supabase |
-| `src/lib/customer-session.test.ts` | **NY** | Vitest, ingen DB, ingen browser |
-| `src/lib/customer-session-write.ts` | **NY** | `recordCustomerSession()`, best-effort med eksplicit `{ error }`-tjek og sanitiseret logging, jf. §10.3 |
-| `src/middleware.ts` | ÆNDRES | Matcher udvides med `/:bookingId([0-9a-f]{12})`; krop forgrenes på path. `/admin`-flowet røres ikke |
-| `src/app/[bookingId]/page.tsx` | ÆNDRES | Ét `waitUntil(recordCustomerSession(...))` efter access-gaten — **ikke** `await` (§10.1) |
-| `package.json` + `package-lock.json` | ÆNDRES | **Ny dependency: `@vercel/functions`** (leverer `waitUntil`). Eneste nye afhængighed i Fase 1B |
-| `docs/SYSTEM-ARKITEKTUR.md` | ÆNDRES | §8 datamodel + middleware-afsnittet |
-| `docs/DECISIONS.md` | ÆNDRES | Fail-open vs. #38's fail-closed · retention · cookie-samtykke (Rickos svar) |
-| `docs/TESTING.md` | ÆNDRES | Testniveau for middleware-ændringer |
+| `src/lib/trip-visit.ts` | **NY** | Rene funktioner, §8. Ingen imports fra `next/*`/Supabase |
+| `src/lib/trip-visit.test.ts` | **NY** | Vitest, ingen DB, ingen browser |
+| `src/lib/trip-visit-write.ts` | **NY** | `recordTripVisit()`, §9 |
+| `src/app/[bookingId]/page.tsx` | ÆNDRES | Ét `waitUntil(recordTripVisit(...))` efter access-gaten — ikke `await` |
+| `package.json` + `package-lock.json` | ÆNDRES | Ny dependency: `@vercel/functions` (eneste nye) |
+| `docs/SYSTEM-ARKITEKTUR.md` | ÆNDRES | Datamodel + routebeskrivelse |
+| `docs/DECISIONS.md` | ÆNDRES | Model B valgt (denne revision) · fail-open vs. #38 · retention (§11 — Rickos svar) |
 | `docs/STATUS.md`, `docs/ROADMAP.md` | ÆNDRES | Løbende |
 
-**Ikke i Fase 1B:** admin-UI, `/admin/api`-endpoint, `customer_events`, sektionsevents,
-kontaktklik, HubSpot, lead score.
+**Ikke i Fase 1B:** admin-UI, `/admin/api`-endpoint, `customer_events`,
+sektionsevents, kontaktklik, HubSpot, lead score, `src/middleware.ts` (urørt).
 
-### Tests (`src/lib/customer-session.test.ts`)
+### Tests (`src/lib/trip-visit.test.ts`)
 
-Samme mønster som `progress-nav.test.ts`: ren logik ind, boolean/streng ud.
+Samme mønster som `progress-nav.test.ts`/`trip-access.test.ts`: ren logik ind,
+boolean/streng ud.
 
-- `isValidSessionId`: gyldig v4-uuid · uppercase · tom streng · `undefined` · `"abc"` ·
-  36 tegn med forkert format · SQL-injektionsstreng.
 - `isBotUserAgent`: googlebot · bingbot · facebookexternalhit · WhatsApp · Slackbot ·
-  Twitterbot · LinkedInBot · Applebot · curl · python-requests · HeadlessChrome ·
-  tom/`null` UA (→ bot) · ægte Safari iOS · ægte Chrome Windows · ægte Edge.
+  curl · python-requests · HeadlessChrome · tom/`null` UA (→ bot) · ægte Safari/Chrome/Edge.
 - `hasAdminAuthCookie`: `sb-iunixfpthdftmkgpugex-auth-token` · chunket `...-auth-token.0` ·
   kun `trip_access_x` · tom liste.
 - `isProductionHost`: `rejseplaner.uniquetravel.dk` · med portsuffiks · branch-alias ·
   `localhost:3000` · `null`.
-- `shouldTrackCustomerView`: sandhedstabel — alle fem betingelser opfyldt → true; hver
-  enkelt betingelse negeret → false (5 cases); plus preview-host med
+- `shouldRecordTripVisit`: sandhedstabel — alle fire betingelser opfyldt → true; hver
+  betingelse negeret enkeltvis → false (4 cases); preview-host med
   `VERCEL_ENV="production"` → false.
-- `sessionCookieName` + `SESSION_COOKIE_MAX_AGE_SECONDS === 1800`.
 
-**Kan ikke unit-testes** (verificeres manuelt i production, se nedenfor): selve
-middleware-matcheren, upsert-adfærden, pg_cron-jobbet.
+**Kan ikke unit-testes** (verificeres manuelt i production): upsert-adfærden,
+race-scenariet under reelt samtidige requests.
 
 ### Release-rækkefølge
 
-Issue #38 **krævede** migration før kode, fordi parse-routen var fail-closed: kode først
-ville have afvist alle uploads. **Her gælder den tvang ikke.** Fail-open betyder at koden
-kan deployes før migrationen uden at noget går i stykker — RPC-kaldet returnerer blot en
-fejl der logges, og kundesiden renderer som altid.
+Fail-open betyder at rækkefølgen ikke er tvungen (modsat Issue #38). Anbefalet:
 
-Den frihed er en sikkerhedsegenskab, ikke en anbefaling. Anbefalet rækkefølge:
+0. Beslutning skrevet i `docs/DECISIONS.md`: Model B valgt, de dokumenterede
+   præcisionsbegrænsninger (§3) og §7's fire punkter eksplicit besvaret.
+1. **(KRÆVER RICKO)** Kør `010_trip_visits.sql` i SQL Editor på production. Verificér:
+   tabel, RLS-policy, index, funktion, grants.
+2. `node scripts/check-schema-drift.mjs --update-baseline` → commit baseline i samme
+   ombæring.
+3. `npm i @vercel/functions` → commit `package.json` + `package-lock.json`.
+4. `npm run typecheck && npm run lint && npm test`; `npm run build` (route-ændring).
+5. Push branch → Vercel-preview → **Rickos OK** → fast-forward-merge til main.
+6. Produktionsverifikation (nedenfor).
 
-0. **HARD GATE (KRÆVER RICKO) — lovligt grundlag for session-cookien er afklaret og
-   dokumenteret** (§7). Trin 1-5 må ikke påbegyndes før dette foreligger. Falder
-   beslutningen ud som opt-in-samtykke, skal samtykke-varianten af gaten (§8) bygges med
-   i samme PR — ikke eftermonteres. Dette er den eneste blokerende forudsætning i
-   rækkefølgen; alt andet nedenfor er praktisk optimering.
-1. **(KRÆVER RICKO)** Kør `010_customer_sessions.sql` i SQL Editor på production.
-   Verificér: tabel, RLS-policy, 3 indexes, 2 funktioner, cron-jobbet i `cron.job`.
-2. `node scripts/check-schema-drift.mjs --update-baseline` → commit baseline.
-3. Verificér slug-formatet (§8) før matcheren låses.
-4. `npm i @vercel/functions` — commit `package.json` + `package-lock.json`.
-5. Merge og deploy koden.
-6. Produktionsverifikation (se nedenfor).
+Byttes 1 og 5 om, er konsekvensen støj i runtime-loggen — ikke en incident.
 
-Begrundelse for rækkefølgen: den giver nul fejllogs og dataopsamling fra første request
-efter deploy. Men skulle rækkefølgen af en eller anden grund blive byttet om, er
-konsekvensen støj i loggen — ikke en incident.
+### Rollback-rækkefølge
+
+1. **Stop opsamling øjeblikkeligt:** revert kode-commit'en (eller blot
+   `waitUntil`-linjen) → push til main. Fra næste request skrives der intet.
+2. `trip_visits` kan blive stående uden skade — fire tal og en FK, ingen
+   identifikatorer.
+3. **Fuld tilbagerulning:** `drop function public.record_trip_visit(uuid); drop table
+   public.trip_visits;` → `--update-baseline` → commit.
+4. **Intet at rydde op i kundernes browsere** — der er aldrig sat noget dér. Dette er
+   den konkrete forskel fra den forkastede models rollback, som ville efterlade
+   `trip_session_<slug>`-cookies i op til 30 minutter hos rigtige kunder.
+
+Intet i rollbacken rører `trips`, `middleware.ts` eller adgangskontrollen.
 
 ### Produktionsverifikation (Ricko, efter deploy)
 
-Skrivestien kan **ikke** testes på preview: `VERCEL_ENV`/host-gaten slår bevidst
-opsamlingen fra dér, og preview er desuden bag Vercel SSO. Det er en direkte konsekvens af
-at preview deler production-DB — og prisen er værd at betale. Verifikation sker derfor på
-production, med en rigtig (test)rejseplan:
+Kan **ikke** testes på preview: miljø-gaten (§8, betingelse 3-4) slår bevidst
+opsamlingen fra dér, fordi preview deler production-DB.
 
-1. Åbn kundelinket i en browser **uden** admin-login, unlock normalt.
-   → `select count(*) from customer_sessions where trip_id = '<id>'` skal give **1**.
-   Bemærk: skrivningen sker i baggrunden efter responsen (`waitUntil`), så rækken kan
-   lande et øjeblik efter at siden er vist. Giv det et par sekunder før du konkluderer
-   at intet blev skrevet — og tjek runtime-loggen for `[customer-session]` hvis den
-   udebliver.
-2. Refresh 5 gange. → stadig **1** række, `view_count = 6`, `last_seen_at` rykker.
-3. Vent 35+ min., genåbn. → **2** rækker.
-4. Åbn samme link i en browser hvor du er logget ind i `/admin`. → **ingen** ny række.
-5. Åbn linket på branch-aliaset `...-git-main-...vercel.app`. → **ingen** ny række.
-6. Tjek at intet i tabellen indeholder andet end uuid, uuid, to tidsstempler og et tal.
+1. Åbn kundelinket i en browser **uden** admin-login, lås op normalt →
+   `select * from trip_visits where trip_id = '<id>'` giver 1 række,
+   `visit_count = 1`, `open_count = 1`. Skrivningen sker i baggrunden
+   (`waitUntil`) — giv det et par sekunder, tjek runtime-loggen for
+   `[trip-visit]` hvis rækken udebliver.
+2. Refresh 5 gange → stadig `visit_count = 1`, `open_count = 6`.
+3. Åbn samme link på en anden enhed inden for 5 minutter → **stadig**
+   `visit_count = 1`, `open_count` stiger. Dette er den accepterede afvigelse (§3) —
+   verificér den bevidst, ikke som en fejl.
+4. Vent 35+ min., genåbn → `visit_count = 2`, `last_visit_started_at` opdateret,
+   `first_opened_at` uændret.
+5. Åbn linket i en browser hvor du er logget ind i `/admin` → ingen ændring.
+6. Åbn linket på branch-aliaset `...-git-main-...vercel.app` → ingen ændring.
+7. Bekræft at rækken kun indeholder én uuid, tre tidsstempler og to heltal.
 
-Bemærk at tricket fra `docs/TESTING.md` — at sætte `trip_access_<slug>`-cookien direkte —
-**ikke** kan bruges til at teste opsamlingen lokalt: miljø-gaten slår til før alt andet.
-Det er tilsigtet.
+## 13. Acceptance — svar på Issue #43's oprindelige ti spørgsmål (opdateret til Model B)
 
-## 13. Acceptance — svar på Issue #43's ti spørgsmål
-
-1. **Hvad tæller som ét besøg?** Ét session-id = én række i `customer_sessions`. Id'et
-   mintes i middleware og lever i `trip_session_<slug>` med et rullende 30-minutters
-   inaktivitetsvindue. Alle sidevisninger inden for vinduet er samme besøg.
-2. **Hvornår tæller det næste besøg?** Når session-cookien er udløbet (>30 min. uden
-   request) eller er væk — så mintes et nyt id, og der oprettes en ny række. Nyt device
-   eller ryddede cookies giver også et nyt besøg; det er bevidst.
-3. **Kunde med eksisterende 30-dages access-cookie?** Hun rammer `page.tsx` direkte uden
-   at køre `unlockTrip`. Middleware ser access-cookien, minter en ny session-cookie, og
-   `page.tsx` skriver rækken. Derfor **skal** logikken ligge i middleware — Server
-   Components kan ikke sætte cookies, og `unlockTrip` kører kun ved selve unlock.
-4. **Hvordan undgår vi at en refresh tæller igen?** Cookien overlever refreshet, så det
-   samme id præsenteres, og `on conflict (id) do update` rammer den eksisterende række:
-   kun `last_seen_at` og `view_count` ændres. Besøgstallet er `count(*)` og rører sig ikke.
-5. **Hvordan holdes admin/preview/bots ude?** Fem AND-betingelser i middleware (§3):
-   access-cookie til stede, ingen Supabase-auth-cookie, ikke bot-UA,
-   `VERCEL_ENV === "production"`, kanonisk host. Fejler én, mintes der ingen cookie — og
-   uden cookie skriver `page.tsx` ikke. Adgangskravet (`booking_no`) er i praksis det
-   stærkeste bot-filter. Kendt hul: udlogget sælger i anden browser (§8).
-6. **Hvilke persondata gemmer vi — og hvilke ikke?** Gemt: tilfældig uuid, `trip_id`,
-   `started_at`, `last_seen_at`, `view_count`. **Ikke** gemt: bookingnummer (hverken
-   klartekst eller hash), slug, navn/email/telefon, IP, rå eller kategoriseret User-Agent,
-   referrer, geo, skærm/tidszone, nogen form for fingerprint, nogen kobling mellem to
-   rejseplaner. Fuld liste i §7.
-7. **Hvordan undgår vi race conditions/dobbelttælling?** Hele skrivningen er ét
-   `insert ... on conflict do update`-statement i en RPC — intet læs-så-skriv i Node.
-   Postgres serialiserer på primærnøglen; samtidige requests med samme id giver præcis én
-   række. `view_count + 1` evalueres på den låste række. Læsningen aggregeres i ét
-   statement = ét snapshot.
-8. **Hvad sker der hvis analytics fejler?** Ingenting, for kunden — og den er allerede
-   væk med sin side inden fejlen sker. Skrivningen planlægges med `waitUntil()` fra
-   `@vercel/functions` og afventes aldrig, så den ligger uden for responsens kritiske vej
-   (§10.2). Funktionen kan ikke rejecte (hele kroppen i try/catch, intet throw),
-   PostgREST-fejl destruktureres og logges eksplicit og sanitiseret (§10.3), og et internt
-   2-sekunders loft hindrer at en hængende DB holder funktions-instansen i live —
-   et ressourceværn, ikke et latensværn. Manglende tabel, RLS-afvisning eller død DB
-   koster ét tabt datapunkt og en linje i runtime-loggen. Bevidst modsat Issue #38's
-   fail-closed — begrundet i §10.4.
-9. **Hvor længe gemmes data?** 12 måneder på `last_seen_at`, slettet af et pg_cron-job der
-   oprettes i selve migration 010 (ikke som en senere driftsopgave — se `parse_failures`).
-   Ingen aggregater gemmes. UI'et skal skelne "ikke åbnet endnu" fra "ingen åbninger inden
-   for opbevaringsperioden" (§11).
-10. **Hvad skal bygges i Fase 1B?** Migration `supabase/010_customer_sessions.sql`
-    (tabel + RLS + 3 indexes + 2 RPC'er + cron), `src/lib/customer-session.ts` (ren logik)
-    + tests, `src/lib/customer-session-write.ts`, udvidet matcher i `src/middleware.ts`,
-    ét `waitUntil(...)`-kald i `src/app/[bookingId]/page.tsx`, og én ny dependency
-    (`@vercel/functions`). Ingen admin-UI, intet endpoint, ingen `customer_events`.
-    Forudsætningen i trin 0 — Rickos afklaring af cookiens lovlige grundlag — blokerer
-    hele fase 1B. Fuld liste og release-rækkefølge i §12.
+1. **Hvad tæller som ét besøg?** En sammenhængende læseperiode pr. rejseplan (ikke pr.
+   enhed), afgrænset af et 30-minutters inaktivitetsvindue på `trip_visits.last_opened_at`.
+2. **Hvornår tæller det næste besøg?** Når `last_opened_at` er mere end 30 minutter
+   gammel ved næste kvalificerede render.
+3. **Kunde med eksisterende 30-dages access-cookie?** Rammer `page.tsx` direkte som i
+   dag; gaten evalueres, og skrivningen sker i samme `page.tsx`-request. Ingen
+   middleware involveret.
+4. **Hvordan undgår vi at en refresh tæller igen?** `record_trip_visit` opdaterer kun
+   `last_opened_at`/`open_count` når vinduet ikke er udløbet — `visit_count` er
+   urørt.
+5. **Hvordan holdes admin/preview/bots ude?** Fire betingelser i `page.tsx` (§8):
+   ikke-bot-UA, ingen admin-auth-cookie, `VERCEL_ENV === "production"`, kanonisk host.
+6. **Hvilke persondata gemmer vi — og hvilke ikke?** Gemt: `trip_id`, tre
+   tidsstempler, to heltal. Ikke gemt: nogen form for identifikator, cookie, IP,
+   User-Agent, kundedata. Fuld liste §7.
+7. **Hvordan undgår vi race conditions/dobbelttælling?** Ét
+   `insert ... on conflict do update`-statement med et betinget `CASE`-udtryk,
+   evalueret på den låste række. Bevist i §6.3.
+8. **Hvad sker der hvis analytics fejler?** Ingenting for kunden — `waitUntil` +
+   fail-open, identisk kontrakt til det oprindelige design (§9).
+9. **Hvor længe gemmes data?** Ingen teknisk tvunget grænse (datasættet vokser ikke
+   med trafik); retention er en ren, endnu ubesluttet politik (§11 — KRÆVER RICKO).
+10. **Hvad skal bygges i Fase 1B?** `supabase/010_trip_visits.sql`,
+    `src/lib/trip-visit.ts` + tests, `src/lib/trip-visit-write.ts`, ét
+    `waitUntil(...)`-kald i `page.tsx`, én ny dependency. **Ingen middleware-ændring.**
+    Fuld liste §12.
 
 ## 14. Beslutninger der kræver Ricko før Fase 1B
 
-1. **Lovligt grundlag for session-cookien** (§7) — **HARD RELEASE GATE.** Designet
-   behandler cookien som ikke-nødvendig analytics under ePrivacy art. 5(3) indtil andet er
-   afklaret og dokumenteret. Fase 1B må ikke deployes før beslutningen foreligger. Kræves
-   opt-in-samtykke, bygges samtykke-varianten af gaten (§8) med fra start — med den
-   accepterede konsekvens at åbninger uden samtykke slet ikke tælles.
-2. **Kør migration 010 i production** — DDL på produktionsdatabasen.
-3. **Aktivér pg_cron-extension** i Supabase, hvis den ikke allerede er slået til.
-4. **Middleware-matcheren udvides til kundesider** — ændrer request-håndteringen for al
-   kundetrafik. Lille diff, men vær opmærksom ved review.
-5. **Accepter de dokumenterede huller** (§8): udlogget sælger tæller som kunde, og
-   fail-open betyder at tallene er tæt på eksakte frem for garanteret komplette.
+**Skal foreligge før kode skrives:**
+
+1. **Model B er valgt** (denne revision, Issue #63) — kræver ikke yderligere
+   godkendelse i sig selv, men de følgende punkter gør.
+2. **Eksplicit accept af de dokumenterede præcisionsbegrænsninger** (§3): samtidig
+   husstandsbrug inden for 30 min. tælles som ét besøg; relæ-kæder kan kæde flere
+   personer sammen; udlogget sælger tæller som kunde; fail-open betyder "tæt på
+   eksakt", ikke "garanteret komplet" — og et tilsagn om at det står ved tallet i
+   Fase 1C/4's UI.
+3. **Behandlingsgrundlag og formål** for besøgsregistreringen skrevet ned (§7, pkt. 1).
+4. **Transparens-beslutning:** siges der noget til kunden, og hvor (§7, pkt. 2).
+5. **Retention-beslutning for `trip_visits`** (§7 pkt. 3, §11).
+
+**Skal foreligge før deploy:**
+
+6. **Kør migration 010 i production** — DDL på produktionsdatabasen.
+7. **Bekræft kanonisk produktionsdomæne** som eneste tællende host.
+8. **Accept af ny dependency** `@vercel/functions`.
+9. **Rickos OK på preview før fast-forward-merge til main** (standardflow).
+
+**Bortfaldet ift. den arkiverede cookie-model:**
+
+- ePrivacy-afklaringen for en ny analytics-cookie — **udgår, ingen ny cookie sættes**.
+- Godkendelse af middleware-matcher-udvidelse til kundesider — **middleware røres ikke**.
+- Aktivering af pg_cron som forudsætning — kun relevant hvis punkt 5 lander på aldring.
+- Verifikation af slug-formatet til en middleware-matcher — var kun nødvendig for den.
+
+---
+
+## Appendix — Model A (cookie-session, arkiveret, IKKE valgt)
+
+Bevaret for referencens skyld: den fulde begrundelse for hvorfor cookie-modellen ikke
+blev valgt, og hvornår den kan blive det rigtige valg alligevel.
+
+### Hvorfor arkiveret
+
+Model A er ikke dårligt designet — den er overdimensioneret til Fase 1 og betaler
+forud for en Fase 2 der endnu ikke er designet:
+
+- Den introducerer en klient-cookie for at kunne svare på fire spørgsmål der kan
+  besvares uden.
+- Den lægger middleware på al kundetrafik for at kunne sætte den cookie — det
+  oprindelige design kaldte selv dette "den mest risikable del af Fase 1B".
+- Den er blokeret bag en juridisk afklaring der **kun** udløses af cookien (§7's
+  daværende hard release gate).
+- Den accepterer to huller Model B ikke har: en klient kan i teorien oppuste sin egen
+  tæller ved at rotere cookieværdien (dokumenteret accepteret i det oprindelige §2),
+  og en sælger der logger ind i `/admin` *efter* at have åbnet et kundelink udlogget
+  bliver ikke fanget (tjekket skete kun ved cookie-mint, ikke ved hvert besøg).
+
+### Hvornår Model A alligevel er det rigtige valg
+
+**Model A bliver den rigtige model i det øjeblik Fase 2 beviser at der skal bruges et
+rigtigt sessionsbegreb** — typisk hvis Fase 4's lead score nødvendigvis skal bygge på
+konverteringsrate *pr. besøg* snarere end *pr. rejseplan* (§10). Da indføres cookien
+sammen med den klient-JavaScript der rent faktisk kræver den, som en langt lettere
+nødvendighedsdiskussion at føre end i dag — og med reelt kendskab til hvad eventsne er
+værd. `trip_visits` kan blive stående ved siden af uden at skulle rulles tilbage.
+
+### Model A's fulde tekniske design
+
+Den oprindelige, fulde specifikation (`trip_session_<slug>`-cookie, `customer_sessions`-
+tabel, middleware-mint, sessiondefinition, sandhedstabel for gaten, fulde flow-scenarier
+A-H, retention via pg_cron som bærende krav) er ikke gentaget her i fuld længde — den
+lever i repoets git-historik (denne fils tilstand før Issue #63's revision,
+commit-historikken for `docs/VISION-3.0-EVENT-MODEL.md` på `main`). Kernepunkterne der
+adskiller den fra Model B er opsummeret i §3's sammenligningstabel.
