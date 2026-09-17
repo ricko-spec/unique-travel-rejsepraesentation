@@ -31,7 +31,11 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import { canonicalizeBucket, diffAllBuckets } from "./lib/storage-drift.mjs";
+import {
+  canonicalizeBucket,
+  diffAllBuckets,
+  selectBucketsForBaseline,
+} from "./lib/storage-drift.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -99,9 +103,16 @@ async function main() {
   const liveByName = await fetchLiveBucketsByName(supabase);
 
   if (update) {
-    const buckets = EXPECTED_BUCKET_NAMES.filter((n) => liveByName.has(n))
-      .sort()
-      .map((n) => liveByName.get(n));
+    // SAFETY: kaster hvis en forventet bucket mangler live — se
+    // selectBucketsForBaseline i lib/storage-drift.mjs. Skriver ALDRIG en
+    // reduceret baseline der stiltiende "godkender" en manglende/slettet
+    // kritisk bucket.
+    let buckets;
+    try {
+      buckets = selectBucketsForBaseline(EXPECTED_BUCKET_NAMES, liveByName);
+    } catch (e) {
+      throw new SetupError(e instanceof Error ? e.message : String(e));
+    }
     writeFileSync(BASELINE_PATH, JSON.stringify({ buckets }, null, 2) + "\n", "utf8");
     console.log(`Baseline opdateret fra ${host} → supabase/storage-baseline.json`);
     console.log(`  buckets: ${buckets.length}`);
@@ -140,7 +151,13 @@ main().catch((e) => {
   if (e instanceof SetupError) {
     console.error(e.message);
   } else {
-    console.error("Storage-drift-tjek fejlede:", e);
+    // Aldrig det rå exception-objekt: en uventet fejl her kan i teorien
+    // være en fetch-/Supabase-fejl der bærer request-/config-detaljer.
+    // Kun navn + besked — samme sanitiseringsprincip som resten af repoet
+    // (fx catch-blokken i src/app/api/internal/analytics/travel-plans).
+    const name = e instanceof Error ? e.name : "unknown";
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("Storage-drift-tjek fejlede:", { name, message });
   }
   process.exitCode = 2;
 });
