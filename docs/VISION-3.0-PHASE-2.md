@@ -23,7 +23,8 @@ Det er Fase 3/4.
 
 ## Datamodel
 
-`public.trip_section_engagement` (migration 011, **ikke kørt i production** — se
+`public.trip_section_engagement` (migration 011, **kørt i production 2026-09-18** som
+`20260918184105_trip_section_engagement`, read-only verificeret, 0 rækker — se
 Release-rækkefølge nedenfor):
 
 ```sql
@@ -211,20 +212,27 @@ Ingen ny `010c`/pg_cron-fil er oprettet i denne PR.
 
 ## Release-rækkefølge (samme mønster som migration 010/Issue #65)
 
-1. Implementér branch + migration + kode + tests + docs — **denne PR**.
-2. ChatGPT architecture/security-review af PR'en.
-3. Ricko godkender KONKRET production-migration af `011_trip_section_engagement.sql`.
-4. Migrationen køres (godkendt production migration workflow), og tabel/RLS/policy/CHECK/
-   **table grants**/RPC-grants verificeres read-only — forventet: `anon`/`authenticated`/
-   PUBLIC har INGEN table privileges, `service_role` har præcis SELECT/INSERT/UPDATE.
-5. `node scripts/check-schema-drift.mjs --update-baseline` køres, og den opdaterede
-   `schema-baseline.json` committes — **kun efter** migrationen faktisk er kørt.
-6. Alle checks + Vercel preview køres igen.
-7. ChatGPT final HEAD-review.
+Status pr. 2026-09-18 (✅ = gennemført):
+
+1. ✅ Implementér branch + migration + kode + tests + docs — **PR #72**.
+2. ✅ ChatGPT architecture/security-review af PR'en (fire fund rettet).
+3. ✅ Ricko godkendte KONKRET production-migration af `011_trip_section_engagement.sql`.
+4. ✅ Migrationen er **kørt i production** som `20260918184105_trip_section_engagement`,
+   og tabel/RLS/PK/FK/CHECK/**table grants**/RPC-grants er verificeret read-only:
+   `anon`/`authenticated`/PUBLIC har INGEN table privileges, `service_role` har præcis
+   SELECT/INSERT/UPDATE; RPC er `SECURITY INVOKER` med EXECUTE kun for `service_role`;
+   0 rækker (ingen syntetiske engagement-events); Security Advisor uden nye findings.
+5. ✅ `node scripts/check-schema-drift.mjs --update-baseline` kørt **efter** live-migrationen;
+   `schema-baseline.json` opdateret (kun `trip_section_engagement`-objekter) og committet.
+   Drift-tjek bagefter: "Ingen drift".
+6. ✅ Alle checks + Vercel preview køres igen (efter baseline/docs-opdateringen).
+7. ⏭ **NÆSTE:** ChatGPT final HEAD-review.
 8. Rickos eksplicitte merge-godkendelse.
 9. Merge/deploy.
 10. Production-smoketest med en rigtig kundevisning (dokumenteret i `docs/TESTING.md`,
-    ikke udført i denne PR).
+    ikke udført i denne PR; kan udskydes og blokerer ikke merge, hvis kode/schema/checks
+    er grønne).
 11. Read-only DB-verifikation + admin-detaljeverifikation.
 
-**Ingen migration eller merge sker automatisk.** `010b`/pg_cron rører intet af dette.
+**Ingen merge sker automatisk.** `010b`/pg_cron rører intet af dette og er stadig ikke
+kørt/aktiveret. Fase 3 er ikke startet.

@@ -2,9 +2,14 @@
 -- Migration 011: trip_section_engagement — sektionsengagement (Vision 3.0
 -- Fase 2, Issue #71)
 -- ============================================================================
--- IKKE kørt live endnu. Idempotent — klar til godkendt production migration
--- workflow (samme kontrollerede release-flow som migration 010; kræver
--- Rickos eksplicitte godkendelse, se PR-beskrivelsen for Issue #71).
+-- Kørt i production 2026-09-18 via migration
+-- `20260918184105_trip_section_engagement` (projekt iunixfpthdftmkgpugex),
+-- efter Rickos eksplicitte godkendelse og samme kontrollerede release-flow som
+-- migration 010. Read-only verificeret efter kørslen: tabel, RLS, PK, FK
+-- (on delete cascade), CHECK, table grants (kun service_role: SELECT/INSERT/
+-- UPDATE) og RPC-grants. Ingen syntetiske engagement-rækker skrevet (0 rækker
+-- efter migrationen). SQL'en nedenfor er uændret siden kørslen; kun denne
+-- statuskommentar er opdateret. Idempotent.
 -- Denne fil opretter KUN tabel, eksplicitte table grants/revokes, RLS-policy,
 -- CHECK-constraint og skriv-RPC'en.
 -- Ingen retention-mekanisme i denne omgang — se "RETENTION" nederst i denne

@@ -87,8 +87,10 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
    (`POST /[bookingId]/engagement` — IKKE `/api/…`, fordi adgangscookien er path-scoped),
    en `SectionEngagementTracker`-klientkomponent (IntersectionObserver + 750 ms dwell,
    ingen ny cookie/localStorage/sessionStorage), og en minimal "Set i rejseplanen"-visning
-   i admin. Se `docs/VISION-3.0-PHASE-2.md`. **Migration 011 er IKKE kørt i production** —
-   kræver Rickos separate godkendelse, samme rækkefølge som migration 010.
+   i admin. Se `docs/VISION-3.0-PHASE-2.md`. **Migration 011 er kørt i production**
+   (`20260918184105_trip_section_engagement`, read-only verificeret, schema-baseline
+   opdateret; 0 syntetiske engagement-events) — koden i PR #72 er endnu ikke merget.
+   Næste: ChatGPT final HEAD-review → Rickos merge-godkendelse.
 2. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
    Vision 3.0: Customer Engagement & Sales Intelligence.** Master-issue — IKKE én stor PR.
    Fase 3 (kontakt-intent), fase 4 (salgsoversigt/sortering-efter-besøg/-sektion) tages ét
@@ -107,11 +109,12 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Vision 3.0 Fase 2 — production-migration af 011 + merge-godkendelse af Issue #71-PR'en.**
-  Migration `011_trip_section_engagement.sql` er versioneret, ikke kørt. Release-rækkefølgen
-  (samme mønster som migration 010): Ricko godkender migrationen konkret → den køres og
-  verificeres read-only (schema/RLS/grants) → checks/Vercel preview igen → ChatGPT final
-  HEAD-review → Rickos merge-godkendelse → merge/deploy → production-smoketest. Se
+- **Vision 3.0 Fase 2 — merge-godkendelse af Issue #71-PR'en (PR #72).**
+  Migration `011_trip_section_engagement.sql` er godkendt, kørt i production
+  (`20260918184105_trip_section_engagement`) og read-only verificeret; schema-baseline er
+  opdateret. Tilbage (samme mønster som migration 010): checks/Vercel preview grønne →
+  ChatGPT final HEAD-review → Rickos eksplicitte merge-godkendelse → merge/deploy →
+  production-smoketest (kan udskydes; blokerer ikke merge). Se
   `docs/VISION-3.0-PHASE-2.md` og PR'en for eksakt rækkefølge og rollback.
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af

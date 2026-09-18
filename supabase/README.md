@@ -21,6 +21,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `009_upload_events.sql` | upload_events — adoption/usage-log pr. sælger (Issue #38) | 2026-09-16 |
 | `010_trip_visits.sql` | trip_visits + RLS + `record_trip_visit` RPC — cookie-fri visit-aggregation (Issue #65) | 2026-09-18T11:31:14Z (`20260918113114_trip_visits_usage_tracking`) — DB kun, koden er endnu ikke merget/deployet |
 | `010b_trip_visits_retention.sql` | pg_cron-retention for trip_visits (12 mdr.) — bevidst separat fil | **Nej — separat, senere godkendelse (kræver evt. pg_cron-aktivering)** |
+| `011_trip_section_engagement.sql` | trip_section_engagement + eksplicitte table grants + RLS + `record_trip_section_engagement` RPC — sektionsengagement (Issue #71) | 2026-09-18T18:41:05Z (`20260918184105_trip_section_engagement`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.

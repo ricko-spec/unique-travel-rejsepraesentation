@@ -214,6 +214,34 @@
       "column": "trip_id",
       "default": null,
       "nullable": "NO",
+      "table": "trip_section_engagement",
+      "type": "uuid"
+    },
+    {
+      "column": "section",
+      "default": null,
+      "nullable": "NO",
+      "table": "trip_section_engagement",
+      "type": "text"
+    },
+    {
+      "column": "first_seen_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "trip_section_engagement",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "last_seen_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "trip_section_engagement",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "trip_id",
+      "default": null,
+      "nullable": "NO",
       "table": "trip_visits",
       "type": "uuid"
     },
@@ -479,6 +507,31 @@
     },
     {
       "column": null,
+      "comment": "Sektionsengagement pr. rejseplan (Vision 3.0 Fase 2, Issue #71). Højst 5 rækker pr. trip_id — én pr. hovedafsnit, aldrig én pr. visning. Ingen identifikator af nogen art: ingen cookie, ingen IP, ingen user-agent, intet bookingnummer, intet navn. Skrives kun via record_trip_section_engagement(). Service-role-only på BÅDE Postgres GRANT-laget (kun service_role har table privileges: SELECT/INSERT/UPDATE) og RLS-laget. Retention er endnu IKKE aktiveret (bevidst, separat release-/policy-beslutning) — se driftsnoten i supabase/README.md.",
+      "table": "trip_section_engagement"
+    },
+    {
+      "column": "first_seen_at",
+      "comment": "Første gang denne sektion blev registreret set. Sættes på insert-grenen i record_trip_section_engagement() og opdateres ALDRIG efterfølgende.",
+      "table": "trip_section_engagement"
+    },
+    {
+      "column": "last_seen_at",
+      "comment": "Seneste gang denne sektion blev registreret set. Opdateres ved hver kvalificeret registrering (fx efter et refresh).",
+      "table": "trip_section_engagement"
+    },
+    {
+      "column": "section",
+      "comment": "Kontrolleret enum, håndhævet af CHECK-constraint: itinerary | gallery | hotels | price | contact. Svarer til DOM-ankrene #rejseplan/#billeder/#hoteller/#pris/#kontakt i kundesiden (src/lib/section-engagement.ts har den delte mapping). IKKE intro — en kvalificeret åbning er allerede dækket af trip_visits (Fase 1B).",
+      "table": "trip_section_engagement"
+    },
+    {
+      "column": "trip_id",
+      "comment": "FK til trips.id, on delete cascade — en slettet rejseplan tager sit sektionsengagement med sig.",
+      "table": "trip_section_engagement"
+    },
+    {
+      "column": null,
       "comment": "Kundeåbninger pr. rejseplan (Vision 3.0 Fase 1B, Issue #65). Én række pr. trip — aldrig pr. person, enhed eller session. Ingen identifikator af nogen art: ingen cookie, ingen IP, ingen user-agent, intet bookingnummer, intet navn. Skrives kun via record_trip_visit(). Service-role-only. Retention: 12 måneder efter last_opened_at, se 010b_trip_visits_retention.sql (IKKE aktiveret).",
       "table": "trip_visits"
     },
@@ -595,6 +648,21 @@
       "table": "rate_limits"
     },
     {
+      "def": "PRIMARY KEY (trip_id, section)",
+      "name": "trip_section_engagement_pkey",
+      "table": "trip_section_engagement"
+    },
+    {
+      "def": "CHECK ((section = ANY (ARRAY['itinerary'::text, 'gallery'::text, 'hotels'::text, 'price'::text, 'contact'::text])))",
+      "name": "trip_section_engagement_section_check",
+      "table": "trip_section_engagement"
+    },
+    {
+      "def": "FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE",
+      "name": "trip_section_engagement_trip_id_fkey",
+      "table": "trip_section_engagement"
+    },
+    {
       "def": "PRIMARY KEY (trip_id)",
       "name": "trip_visits_pkey",
       "table": "trip_visits"
@@ -665,6 +733,10 @@
       "name": "increment_rate_limit"
     },
     {
+      "def": "CREATE OR REPLACE FUNCTION public.record_trip_section_engagement(p_trip_id uuid, p_section text)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\ndeclare\n  v_now timestamptz := clock_timestamp();\nbegin\n  insert into public.trip_section_engagement as tse\n    (trip_id, section, first_seen_at, last_seen_at)\n  values\n    (p_trip_id, p_section, v_now, v_now)\n  on conflict (trip_id, section) do update\n    set last_seen_at = greatest(tse.last_seen_at, v_now);\nend;\n$function$\n",
+      "name": "record_trip_section_engagement"
+    },
+    {
       "def": "CREATE OR REPLACE FUNCTION public.record_trip_visit(p_trip_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\ndeclare\n  v_now timestamptz := clock_timestamp();\nbegin\n  insert into public.trip_visits as tv\n    (trip_id, first_opened_at, last_visit_started_at, last_opened_at, visit_count, open_count)\n  values\n    (p_trip_id, v_now, v_now, v_now, 1, 1)\n  on conflict (trip_id) do update\n    set last_opened_at        = greatest(tv.last_opened_at, v_now),\n        open_count            = tv.open_count + 1,\n        visit_count           = tv.visit_count\n                                  + (case when tv.last_opened_at < v_now - interval '30 minutes'\n                                          then 1 else 0 end),\n        last_visit_started_at = case when tv.last_opened_at < v_now - interval '30 minutes'\n                                     then greatest(tv.last_visit_started_at, v_now)\n                                     else tv.last_visit_started_at end;\nend;\n$function$\n",
       "name": "record_trip_visit"
     },
@@ -729,6 +801,10 @@
     {
       "def": "CREATE INDEX rate_limits_reset_at_idx ON public.rate_limits USING btree (reset_at)",
       "name": "rate_limits_reset_at_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX trip_section_engagement_pkey ON public.trip_section_engagement USING btree (trip_id, section)",
+      "name": "trip_section_engagement_pkey"
     },
     {
       "def": "CREATE INDEX trip_visits_last_opened_idx ON public.trip_visits USING btree (last_opened_at DESC)",
@@ -837,6 +913,14 @@
       "policy": "service_role full access",
       "roles": "{service_role}",
       "table": "rate_limits",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access trip_section_engagement",
+      "roles": "{service_role}",
+      "table": "trip_section_engagement",
       "using": "true",
       "with_check": "true"
     },
