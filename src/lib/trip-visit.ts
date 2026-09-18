@@ -26,34 +26,28 @@ export const VISIT_WINDOW_MINUTES = 30;
 // derfor er host-tjekket et selvstændigt, nødvendigt andet lag.
 const CANONICAL_PRODUCTION_HOST = "rejseplaner.uniquetravel.dk";
 
-// Fast konstant — IKKE et dynamisk min() som upload_events' trackingSince
-// (src/lib/usage.ts), fordi trip_visits-rækker selv kan blive slettet af
-// den (endnu ikke aktiverede) 12-måneders retention og derfor ikke duer som
-// kilde til "hvornår startede sporing". Bruges af en FREMTIDIG Fase 1C til
-// at afgøre om "ingen trip_visits-række" kan læses som "aldrig åbnet" eller
-// om trippen/sporingen er ældre end 12-måneders-retention-vinduet — se
+// ✅ FASE 1B RELEASE-CUTOVER-MARKØR, sat 2026-09-18T12:20:18Z (PR #66).
+// Dette ER den faste production tracking-start-markør for Fase 1B — ikke
+// DB-migrationens tidspunkt. Migration 010 (tabel + RPC) blev kørt
+// tidligere, 2026-09-18T11:31:14Z (`iunixfpthdftmkgpugex`, migration
+// `20260918113114_trip_visits_usage_tracking`) — det var kun
+// DB-infrastrukturen. Denne konstant markerer i stedet det faktiske
+// release-cutover-tidspunkt for selve koden (gaten + skrivevejen), bevidst
+// sat i denne separate, sidste commit umiddelbart før merge/deploy.
+//
+// Fast, hardkodet ISO-8601 UTC-streng — aldrig Date.now(), en env-var,
+// migrations-tidspunktet ovenfor, eller et dynamisk databaseopslag (som
+// upload_events' trackingSince i src/lib/usage.ts), fordi trip_visits-rækker
+// selv kan blive slettet af den (endnu ikke aktiverede) 12-måneders
+// retention og derfor ikke duer som kilde til "hvornår startede sporing".
+//
+// Bruges af en FREMTIDIG Fase 1C til at afgøre om "ingen
+// trip_visits-række" kan læses som "aldrig åbnet" eller om trippen/
+// sporingen er ældre end 12-måneders-retention-vinduet — se
 // supabase/010b_trip_visits_retention.sql for den fulde begrundelse. Ikke
 // brugt af shouldRecordTripVisit() eller record_trip_visit() — kun til
 // fremtidig visningslogik.
-//
-// ⚠️ RELEASE-CUTOVER-BLOCKER, stadig bevidst `null` (opdateret 2026-09-18,
-// PR #66). Migration 010 er NU kørt og verificeret i production
-// (`iunixfpthdftmkgpugex`, migration `20260918113114_trip_visits_usage_tracking`,
-// skema-tidspunkt 2026-09-18T11:31:14Z) — men DEN dato er hvornår
-// DB-INFRASTRUKTUREN blev klar, ikke hvornår kundeåbninger faktisk begyndte
-// at blive registreret. Denne kode (gaten + skrivevejen) er endnu ikke
-// merget/deployet til production, så INGEN reel tracking sker endnu selvom
-// tabellen findes. At sætte TRACKING_SINCE til migrations-tidspunktet nu
-// ville derfor være forkert — en fremtidig Fase 1C ville fejlagtigt kunne
-// tro at sporing var aktiv i vinduet mellem migration og faktisk deploy.
-//
-// TRACKING_SINCE forbliver `null` indtil en SEPARAT, sidste
-// release-cutover-commit, umiddelbart før merge/deploy af denne PR, der
-// sætter den til det faktiske UTC-tidspunkt hvor koden går live (+
-// opdaterer testen i trip-visit.test.ts til samme værdi). Se
-// "RELEASE-CUTOVER TJEKLISTE" i supabase/README.md ("Driftsnote:
-// trip_visits (Issue #65)") for den fulde rækkefølge.
-export const TRACKING_SINCE: string | null = null;
+export const TRACKING_SINCE: string | null = "2026-09-18T12:20:18Z";
 
 // Ren regex, transient: strengen læses, matches, og forsvinder med
 // requesten. Logges, hashes og gemmes ALDRIG — heller ikke som kategori.
