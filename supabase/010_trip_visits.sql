@@ -1,12 +1,14 @@
 -- ============================================================================
 -- Migration 010: trip_visits — cookie-fri kundeåbninger (Vision 3.0 Fase 1B, Issue #65)
 -- ============================================================================
--- IKKE kørt live endnu. Idempotent — klar til at køres i SQL Editor når Ricko
--- godkender release-rækkefølgen (se docs/VISION-3.0-EVENT-MODEL.md §12 og
--- PR-beskrivelsen for Issue #65). Denne fil opretter KUN tabel, RLS-policy,
+-- KØRT I PRODUCTION: iunixfpthdftmkgpugex, migration
+-- 20260918113114_trip_visits_usage_tracking, DB-infrastructure-tidspunkt
+-- 2026-09-18T11:31:14Z. Idempotent. Denne fil opretter KUN tabel, RLS-policy,
 -- index og skriv-RPC'en — INGEN retention/pg_cron. Retention-mekanismen er
 -- bevidst versioneret i en SEPARAT fil (010b_trip_visits_retention.sql) der
--- IKKE må køres sammen med denne, og som kræver Rickos særskilte godkendelse.
+-- IKKE må køres sammen med denne, og som fortsat IKKE er kørt — kræver
+-- Rickos særskilte godkendelse. Se PR-beskrivelsen for Issue #65/PR #66 for
+-- den fulde release-historik.
 --
 -- Design- og beslutningsgrundlag: docs/VISION-3.0-EVENT-MODEL.md (revideret
 -- af Issue #63/PR #64, anbefaler Model B) + Issue #65 (Rickos godkendelse af

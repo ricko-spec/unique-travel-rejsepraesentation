@@ -212,14 +212,17 @@ describe("konstanter", () => {
     expect(VISIT_WINDOW_MINUTES).toBe(30);
   });
 
-  // IKKE en påstand om at null er den ønskede endelige production-værdi —
-  // det er en midlertidig pre-release placeholder. Denne test dokumenterer
-  // nuværende state og skal SELV opdateres (sammen med konstanten i
-  // trip-visit.ts) når migration 010 er kørt/verificeret i production og den
-  // faktiske tracking-start-dato er fastlagt. Se MERGE-BLOKERENDE TJEKLISTE
-  // i supabase/README.md ("Driftsnote: trip_visits (Issue #65)") — PR'en må
-  // ikke få endelig merge-godkendelse før dette er gjort.
-  it("TRACKING_SINCE er (endnu) den midlertidige pre-release placeholder null — SKAL opdateres før merge", () => {
+  // IKKE en påstand om at null er den ønskede endelige production-værdi.
+  // DB-fundamentet er live (migration 010 kørt og verificeret i production,
+  // 2026-09-18T11:31:14Z) — den resterende gate er release-cutover: koden er
+  // endnu ikke merget/deployet, så TRACKING_SINCE forbliver midlertidigt
+  // null indtil den sættes til det faktiske UTC-deploy-tidspunkt i en
+  // separat, sidste commit umiddelbart før merge/deploy. Denne test skal
+  // SELV opdateres (sammen med konstanten i trip-visit.ts) i samme commit.
+  // Se release-cutover-tjeklisten i supabase/README.md ("Driftsnote:
+  // trip_visits (Issue #65)") — PR'en må ikke få endelig merge-godkendelse
+  // før dette er gjort.
+  it("TRACKING_SINCE er (endnu) null — release-cutover-værdien sættes i en separat commit før merge", () => {
     expect(TRACKING_SINCE).toBeNull();
   });
 });
