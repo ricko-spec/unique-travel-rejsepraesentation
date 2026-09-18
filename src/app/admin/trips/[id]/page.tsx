@@ -9,6 +9,11 @@ import {
   buildSectionEngagementDisplay,
   type RawSectionEngagementRow,
 } from "@/lib/section-engagement";
+import {
+  computeEligibleChannels,
+  buildContactIntentDisplay,
+  type RawContactIntentRow,
+} from "@/lib/contact-intent";
 import { filterGalleryImages } from "@/lib/progress-nav";
 import { pickDestinationMatch, type DestinationRecord } from "@/lib/destination-match";
 import { TripDetail } from "./TripDetail";
@@ -40,15 +45,16 @@ export default async function TripDetailPage({
 
   const supabase = getSupabaseService();
 
-  // ISSUE-69/#71: trip_visits' og trip_section_engagement's trip_id ER
-  // params.id (FK til trips.id), og destinations er en uafhængig, lille
-  // opslagstabel — alle fire opslag kan derfor køre PARALLELT med
-  // trip-hentningen i stedet for at vente på den. Findes trippen ikke,
-  // kasseres de øvrige resultater blot ubrugt nedenfor. "Ingen række" og
-  // "opslaget fejlede" er bevidst forskellige tilstande begge steder — se
-  // src/lib/trip-engagement.ts og src/lib/section-engagement.ts. En
-  // analytics-fejl må ALDRIG blokere sælgerens adgang til resten af siden.
-  const [tripResult, visitResult, sectionResult, destinationsResult] = await Promise.all([
+  // ISSUE-69/#71/#73: trip_visits', trip_section_engagement's og
+  // trip_contact_intent's trip_id ER params.id (FK til trips.id), og
+  // destinations er en uafhængig, lille opslagstabel — alle fem opslag kan
+  // derfor køre PARALLELT med trip-hentningen i stedet for at vente på den.
+  // Findes trippen ikke, kasseres de øvrige resultater blot ubrugt nedenfor.
+  // "Ingen række" og "opslaget fejlede" er bevidst forskellige tilstande alle
+  // steder — se src/lib/trip-engagement.ts, src/lib/section-engagement.ts og
+  // src/lib/contact-intent.ts. En analytics-fejl må ALDRIG blokere sælgerens
+  // adgang til resten af siden.
+  const [tripResult, visitResult, sectionResult, contactResult, destinationsResult] = await Promise.all([
     supabase
       .from("trips")
       .select("id, booking_no, slug, destination, customer_name, active, data, created_at")
@@ -62,6 +68,11 @@ export default async function TripDetailPage({
     supabase
       .from("trip_section_engagement")
       .select("section, last_seen_at")
+      .eq("trip_id", params.id),
+    // Fase 3 (#73): kun kanal + seneste klik — max 2 rækker pr. trip.
+    supabase
+      .from("trip_contact_intent")
+      .select("channel, last_clicked_at")
       .eq("trip_id", params.id),
     // Samme destinations-opslag som kundesiden selv bruger (getDestination i
     // src/app/[bookingId]/page.tsx) — nødvendigt for at kunne afgøre om
@@ -119,6 +130,23 @@ export default async function TripDetailPage({
     readFailed: !!sectionResult.error || !!destinationsResult.error,
   });
 
+  // Fase 3 (#73): kontakt-intent. Fase 2's "Kontakt set" (sectionEngagement
+  // ovenfor) er en helt anden datakilde og blandes ALDRIG ind her. Email er
+  // kun eligible med advisorEmail (samme betingelse som ContactCTA); phone
+  // altid. Fejler opslaget (fx hvis migration 012 endnu ikke er kørt), vises
+  // "Kontaktaktivitet kunne ikke hentes" — ALDRIG falske "ikke klikket".
+  if (contactResult.error) {
+    console.error(
+      "[admin/trips/[id]] trip_contact_intent-opslag (Kontakt-intent) fejlede",
+      contactResult.error,
+    );
+  }
+  const contactIntent = buildContactIntentDisplay({
+    eligibleChannels: computeEligibleChannels({ advisorEmail: row.data?.advisorEmail }),
+    rows: (contactResult.data as RawContactIntentRow[] | null) ?? null,
+    readFailed: !!contactResult.error,
+  });
+
   return (
     <TripDetail
       id={row.id}
@@ -129,6 +157,7 @@ export default async function TripDetailPage({
       data={row.data}
       engagement={engagement}
       sectionEngagement={sectionEngagement}
+      contactIntent={contactIntent}
     />
   );
 }

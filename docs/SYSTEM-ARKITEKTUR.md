@@ -107,6 +107,7 @@ uniquetravel-rejsepraesentation/
 │   │   │   ├── actions.ts        # Server action unlockTrip: rate-limit → kode-tjek → cookie → redirect (+ audit-log)
 │   │   │   ├── AccessGate.tsx    # Client: adgangskode-formular (vises når cookie mangler)
 │   │   │   ├── engagement/route.ts  # POST sektionsengagement (Issue #71) — nested under slug-path for cookie-scope
+│   │   │   ├── intent/route.ts   # POST kontakt-intent (Issue #73) — nested under slug-path; tynd adapter over handleContactIntent
 │   │   │   ├── loading.tsx       # Skeleton-hero mens data hentes
 │   │   │   └── not-found.tsx     # Brandet fejlside med telefonnummer
 │   │   │
@@ -148,9 +149,10 @@ uniquetravel-rejsepraesentation/
 │   │   ├── DestinationGallery.tsx# Op til 3 destinationsbilleder fra det fælles bibliotek
 │   │   ├── Hotels.tsx            # Hotel-kort inkl. pakke-rejser, værelsesfordeling, alternativ-hotel
 │   │   ├── PriceAndNote.tsx      # Pris-sektion + "God at vide"-note
-│   │   ├── ContactCTA.tsx        # Guld-CTA med mailto/tel til den matchede sælger
+│   │   ├── ContactCTA.tsx        # Guld-CTA med mailto/tel til den matchede sælger (tracked via ContactIntentLink, Issue #73)
 │   │   ├── Footer.tsx            # Wordmark + tagline
-│   │   ├── ActionBar.tsx         # Mobil sticky bund-bar: Ring / Kontakt os
+│   │   ├── ActionBar.tsx         # Mobil sticky bund-bar: Ring (tracked) / Kontakt os (#kontakt, UNTRACKED)
+│   │   ├── ContactIntentLink.tsx # Client: ContactIntentProvider (in-memory dedup) + ContactIntentLink (almindeligt <a>, ingen preventDefault) (Issue #73)
 │   │   ├── SectionHeader.tsx     # Genbrugt sektions-overskrift (guld-label + hairline)
 │   │   └── SectionEngagementTracker.tsx  # Client, renderer intet — IntersectionObserver+dwell (Issue #71)
 │   │
@@ -168,6 +170,10 @@ uniquetravel-rejsepraesentation/
 │       ├── section-engagement-endpoint.ts  # handleSectionEngagement — hele endpoint-beslutningskæden, deps-injiceret + testet (Issue #71)
 │       ├── destination-lookup.ts # getDestination — delt destinationsopslag (kundeside + engagement-endpoint)
 │       ├── tracking-notice.ts    # TRACKING_NOTICE — delt transparenstekst (AccessGate + Footer)
+│       ├── contact-intent.ts     # kanal-enum/strict schema/eligibility/gate/dedup/admin-visning (Issue #73, ingen DB/Next-imports)
+│       ├── contact-intent-client.ts  # trackContactIntent — fire-and-forget fetch med keepalive, ren + testet (Issue #73)
+│       ├── contact-intent-write.ts   # recordContactIntent — best-effort RPC-skrivning, kaster aldrig (Issue #73)
+│       ├── contact-intent-endpoint.ts  # handleContactIntent — hele endpoint-beslutningskæden, deps-injiceret + testet (Issue #73)
 │       └── supabase/
 │           ├── server.ts         # Service-role-klient + nøgle-validering + env-diagnostik
 │           └── auth.ts           # Session-klient (@supabase/ssr) + getSessionUser
@@ -186,6 +192,7 @@ uniquetravel-rejsepraesentation/
     ├── 010_trip_visits.sql       # trip_visits + record_trip_visit RPC (Issue #65 — live i production)
     ├── 010b_trip_visits_retention.sql  # pg_cron-retention, bevidst separat, IKKE aktiveret
     ├── 011_trip_section_engagement.sql  # trip_section_engagement + grants + RPC (Issue #71 — kørt live 2026-09-18, 20260918184105_trip_section_engagement)
+    ├── 012_trip_contact_intent.sql  # trip_contact_intent + grants + RPC (Issue #73 — versioneret, IKKE kørt i production)
     └── schema-baseline.json      # Committet snapshot af live-DDL (opdateres med --update-baseline)
 ```
 
@@ -325,13 +332,13 @@ Verificeret ved gennemlæsning af samtlige 12 `route.ts`-filer under `src/app/` 
 **`PriceAndNote.tsx`** (server) — Grøn pris-sektion med "Samlet pakkerejsepris" i stor guld-Cormorant, pr.-person-linje og pris-note; derunder "God at vide"-boksen hvis `practicalNote` findes.
 *Data:* `trip.price.{total, perPerson, note}`, `trip.practicalNote`.
 
-**`ContactCTA.tsx`** (server) — Guld-kort "Spørgsmål til jeres rejse? Ring eller skriv direkte til {fornavn}". Hele kortet er ét `mailto:`-link med prefilled emne "Spørgsmål til rejse {bookingNo}"; derunder evt. en direkte `tel:`-linje.
+**`ContactCTA.tsx`** (server) — Guld-kort "Spørgsmål til jeres rejse? Ring eller skriv direkte til {fornavn}". Hele kortet er ét `mailto:`-link med prefilled emne "Spørgsmål til rejse {bookingNo}"; derunder evt. en direkte `tel:`-linje. Begge links er `ContactIntentLink` (almindelige anchors + non-blocking kontakt-intent-tracking, Issue #73; kortet = `email`, rådgiver-telefonen = `phone`).
 *Data:* `trip.advisor`, `trip.advisorEmail`, `trip.advisorPhone` (sat af `enrichAdvisorContact`).
 *States:* **Hele sektionen skjules** hvis `advisorEmail` er null (`ContactCTA.tsx:5`) — dvs. hvis sælgeren ikke har en profil med matchende `advisor_match_name`. Telefon-linjen skjules separat hvis `advisorPhone` mangler. Bemærk: hero'ens "Kontakt"-knapper linker til `#kontakt` — mangler CTA'en, peger de på et anker der ikke findes (siden scroller bare i bund).
 
 **`Footer.tsx`** (server) — Statisk wordmark + "Skræddersyede rejser · København".
 
-**`ActionBar.tsx`** (server) — Mobil-only sticky bund-bar (< 760px, skjult ved print) med "Ring" (hardkodet `tel:+4559498630` — hovednummeret, ikke sælgerens) og "Kontakt os" (`#kontakt`).
+**`ActionBar.tsx`** (server) — Mobil-only sticky bund-bar (< 760px, skjult ved print) med "Ring" (hardkodet `tel:+4559498630` — hovednummeret, ikke sælgerens) og "Kontakt os" (`#kontakt`). "Ring" er tracked som kontakt-intent (`phone`, Issue #73); "Kontakt os" er intern navigation og tracker IKKE.
 
 **`ProgressNav.tsx`** (client, tilføjet Issue #40) — Desktop-only fixed nav i højre side (≥1180px, skjult ved print), vertikalt centreret. Én knap pr. synlig sektion: skjult label + 14px streg, aktiv sektion i `--gold-soft` med 30px streg og synlig label; hele nav'en folder alle labels ud ved hover/`:focus-within`.
 *Data:* `sections: NavSection[]` — beregnet server-side i `page.tsx` via `visibleNavSections()` (`src/lib/progress-nav.ts`), som spejler de samme betingelser de faktiske sektions-komponenter bruger til selv at (ikke-)rendere (itinerary/hoteller/galleri-billeder/`advisorEmail`) — nav'en kan derfor aldrig pege på et anker der ikke findes i DOM'en.
@@ -385,7 +392,7 @@ Sælgeren kan redigere **fulde navn**, **telefon** og **rådgivernavn i rejsepla
 
 ## 8. Database-model
 
-Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38) og `trip_visits` (8. tabel, migration 010, kørt og verificeret live 2026-09-18T11:31:14Z, Issue #65/PR #66). **8 tabeller**, alle med RLS aktiveret. En 9. tabel, `trip_section_engagement` (migration 011, Issue #71), er **kørt og read-only verificeret i production 2026-09-18** (`20260918184105_trip_section_engagement`; 0 rækker — koden der skriver til den er endnu ikke merget) — se afsnittet nedenfor.
+Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38) og `trip_visits` (8. tabel, migration 010, kørt og verificeret live 2026-09-18T11:31:14Z, Issue #65/PR #66). **8 tabeller**, alle med RLS aktiveret. En 9. tabel, `trip_section_engagement` (migration 011, Issue #71), er **kørt og read-only verificeret i production 2026-09-18** (`20260918184105_trip_section_engagement`) — se afsnittet nedenfor. En 10. tabel, `trip_contact_intent` (migration 012, Issue #73), er kun **versioneret, IKKE kørt i production** — se `docs/VISION-3.0-PHASE-3.md`.
 
 > **Vigtigt om projekt-referencer:** `.env.example:2` og README peger på `iunixfpthdftmkgpugex` — det er dér de 35 rejser, 7 profiler og al audit-data ligger, altså **den faktiske produktionsdatabase**. To andre refs optræder i repoet og er **misvisende**: `supabase/schema.sql:2` nævner `ocxrvkrggzppyhgyambj` (det er Allotment-værktøjets projekt — copy-paste-fejl), og `supabase/profiles.sql:2-3` kalder `iunixfpthdftmkgpugex` for "dev" og nævner `sujimigwcjkzpekkdpzf` som "production" — om dét projekt overhovedet findes/bruges er ukendt — kræver Ricko-bekræftelse.
 
@@ -603,6 +610,31 @@ ovenfor — `trip_section_engagement` → authenticated admin-server →
 `buildSectionEngagementDisplay()` (`src/lib/section-engagement.ts`) → sælger-UI. Kun
 ELIGIBLE sektioner (beregnet server-side, samme kilde som klientens eligibility) optræder
 nogensinde i visningen; en fejlet forespørgsel giver `unavailable`, aldrig et falsk minus.
+
+### `trip_contact_intent` — kontakt-intent (Issue #73, migration 012 — **versioneret, IKKE kørt i production**)
+
+Aggregeret, højst **to rækker pr. trip** (én pr. kanal, PK `(trip_id, channel)`), `channel` CHECK-
+begrænset til `email` | `phone`, plus `first_clicked_at`/`last_clicked_at`. Ingen `click_count`, ingen
+rå kliklog, ingen source/surface, ingen booking_no/slug/IP/UA/cookie-/session-id. FK → `trips(id)`
+`on delete cascade`. Adgang: kun `service_role` på BÅDE GRANT-laget (`SELECT, INSERT, UPDATE`, intet
+DELETE) og RLS-laget. Skrives udelukkende via `record_trip_contact_intent(p_trip_id uuid, p_channel
+text)` — samme `security invoker`/ét-`clock_timestamp()`/`greatest()`-mønster som
+`record_trip_section_engagement`.
+
+**Skrivevejen:** `POST /[bookingId]/intent` (nested under slug-path, samme cookie-scope-begrundelse
+som `/engagement`). Beslutningskæden lever i `handleContactIntent()`
+(`src/lib/contact-intent-endpoint.ts`), som `route.ts` er en tynd adapter over: strict body → trip via
+slug → adgangscookie → production/host/bot/admin-gate → SERVER-side kanal-eligibility (email kun med
+`advisorEmail`, phone altid; ineligible = `204` no-op) → RPC med server-afledt `trip.id`. Klienten
+(`ContactIntentLink`) er et almindeligt `<a>` med en non-blocking klik-side-effect
+(`fetch(..., { keepalive: true })`, ingen `preventDefault`/`await`/retry); dedup pr. page load i en
+in-memory `Set` ejet af `ContactIntentProvider`. Kun `ContactCTA` (email + rådgiver-tel) og `ActionBar`
+"Ring" er tracked; "Kontakt os" → `#kontakt` er intern navigation og tracker IKKE (SET er Fase 2).
+
+**Læsevejen til admin ("Kontakt-intent"):** `trip_contact_intent` → authenticated admin-server →
+`buildContactIntentDisplay()` (`src/lib/contact-intent.ts`) → sælger-UI. Email vises kun hvis
+trippen har `advisorEmail`; en fejlet forespørgsel giver `unavailable` ("Kontaktaktivitet kunne ikke
+hentes"), aldrig "ikke klikket".
 
 ### Tilføjelses-tidslinje
 

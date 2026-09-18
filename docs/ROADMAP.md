@@ -74,27 +74,27 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
   `trip_visits`-opslag (review-fund: ingen voksende `.in()`-URL), kompakt admin-DTO.
   **Production UI-smoketest er udsat** (Ricko kan ikke teste lige nu) — driftsopfølgning,
   ikke en blocker.
+- **[Issue #71](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/71) —
+  Vision 3.0 Fase 2: sektionsengagement end-to-end.** Merget (PR #72). Ny
+  `trip_section_engagement`-tabel + RPC (migration 011, `20260918184105_trip_section_engagement`,
+  kørt og read-only verificeret i production, schema-baseline opdateret), `POST
+  /[bookingId]/engagement`, klient-tracker, "Set i rejseplanen" i admin, server-side
+  eligibility. **Production UI-smoketest er udsat** — driftsopfølgning, ikke en blocker.
 
 ## Næste
 
-1. **[Issue #71](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/71) —
-   Vision 3.0 Fase 2: sektionsengagement end-to-end** (barn af
-   [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
-   Én samlet work package (design + datamodel + endpoint + tracker + admin-visning + tests
-   + docs i én PR, efter Rickos eget ønske om færre delopgaver). Ny
-   `trip_section_engagement`-tabel (migration 011, race-sikker efter samme mønster som
-   `record_trip_visit`), et sikkert write-endpoint under kundens egen slug-path
-   (`POST /[bookingId]/engagement` — IKKE `/api/…`, fordi adgangscookien er path-scoped),
-   en `SectionEngagementTracker`-klientkomponent (IntersectionObserver + 750 ms dwell,
-   ingen ny cookie/localStorage/sessionStorage), og en minimal "Set i rejseplanen"-visning
-   i admin. Se `docs/VISION-3.0-PHASE-2.md`. **Migration 011 er kørt i production**
-   (`20260918184105_trip_section_engagement`, read-only verificeret, schema-baseline
-   opdateret; 0 syntetiske engagement-events) — koden i PR #72 er endnu ikke merget.
-   Næste: ChatGPT final HEAD-review → Rickos merge-godkendelse.
+1. **[Issue #73](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/73) —
+   Vision 3.0 Fase 3: kontakt-intent end-to-end** (barn af
+   [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)). Én samlet work package: aggregeret
+   `trip_contact_intent` (max 2 rækker pr. trip, email/phone, ingen click_count) + RPC (migration
+   012, **versioneret, IKKE kørt i production**), `POST /[bookingId]/intent` under kundens egen
+   slug-path, `ContactIntentLink` (ingen preventDefault, `keepalive` fire-and-forget) på
+   ContactCTA og ActionBar "Ring" ("Kontakt os" → #kontakt tracker IKKE), "Kontakt-intent" i
+   admin, opdateret transparenstekst. Se `docs/VISION-3.0-PHASE-3.md`.
 2. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
    Vision 3.0: Customer Engagement & Sales Intelligence.** Master-issue — IKKE én stor PR.
-   Fase 3 (kontakt-intent), fase 4 (salgsoversigt/sortering-efter-besøg/-sektion) tages ét
-   PR ad gangen efter Fase 2.
+   Fase 3 (kontakt-intent) er aktiv (#73); fase 4 (salgsoversigt/sortering-efter-besøg/
+   -sektion/-kontakt-intent) tages ét PR ad gangen efter Fase 3.
 3. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
 Herudover intet forudbestemt. Punkter efter dette vælges af Ricko fra backloggen nedenfor
@@ -109,17 +109,17 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Vision 3.0 Fase 2 — merge-godkendelse af Issue #71-PR'en (PR #72).**
-  Migration `011_trip_section_engagement.sql` er godkendt, kørt i production
-  (`20260918184105_trip_section_engagement`) og read-only verificeret; schema-baseline er
-  opdateret. Tilbage (samme mønster som migration 010): checks/Vercel preview grønne →
-  ChatGPT final HEAD-review → Rickos eksplicitte merge-godkendelse → merge/deploy →
-  production-smoketest (kan udskydes; blokerer ikke merge). Se
-  `docs/VISION-3.0-PHASE-2.md` og PR'en for eksakt rækkefølge og rollback.
+- **Vision 3.0 Fase 3 — production-migration af 012 + merge-godkendelse af Issue #73-PR'en.**
+  Migration `012_trip_contact_intent.sql` er versioneret, ikke kørt. Release-rækkefølgen (samme
+  mønster som migration 010/011): ChatGPT architecture/security-review → Ricko godkender
+  migrationen konkret → den køres FØR kode-deploy og verificeres read-only (schema/RLS/grants/
+  RPC) → `--update-baseline` (kun efter live-kørsel) → checks/Vercel → ChatGPT final HEAD-review →
+  Rickos merge-godkendelse → merge/deploy → production-smoketest (kan udskydes). Se
+  `docs/VISION-3.0-PHASE-3.md` for eksakt rækkefølge.
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af
-  `pg_cron`-extensionen). Ingen tidsfrist — hverken `trip_visits` eller
-  `trip_section_engagement` kræver retention for at fungere korrekt.
+  `pg_cron`-extensionen). Ingen tidsfrist — hverken `trip_visits`, `trip_section_engagement`
+  eller `trip_contact_intent` (max 2 rækker/trip) kræver retention for at fungere korrekt.
 - **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning. Designet er færdigt og merget
   (2-3 modeller, trusselsmodel og en konkret anbefaling — Model B, separat hashet
   access_code) i `docs/UNLOCK-CODE-DESIGN.md`

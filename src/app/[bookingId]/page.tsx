@@ -21,6 +21,7 @@ import { shouldRecordTripVisit } from "@/lib/trip-visit";
 import { scheduleTripVisit } from "@/lib/trip-visit-write";
 import { computeEligibleSectionsForTrip } from "@/lib/section-engagement";
 import { SectionEngagementTracker } from "@/components/trip/SectionEngagementTracker";
+import { ContactIntentProvider } from "@/components/trip/ContactIntentLink";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -126,17 +127,22 @@ export default async function TripPage({ params }: { params: { bookingId: string
 
   return (
     <div className="page">
-      <Hero trip={trip} heroPhoto={row.hero_photo ?? destination?.heroUrl ?? null} />
-      <TripDetails trip={trip} />
-      <Timeline itinerary={trip.itinerary} />
-      <DestinationGallery images={galleryImages} destination={trip.destination} />
-      <Hotels hotels={trip.hotels} />
-      <PriceAndNote trip={trip} />
-      <ContactCTA trip={trip} />
-      <Footer />
-      <ProgressNav sections={navSections} />
-      <ActionBar hasContact={hasContact} />
-      <SectionEngagementTracker slug={params.bookingId} sections={eligibleSections} />
+      {/* Vision 3.0 Fase 3 (Issue #73): monteres ÉN gang omkring kundesiden —
+          holder per-page-load-dedup for kontakt-intent (in-memory) og deles af
+          ContactCTA's og ActionBar's tracked links. Renderer ingen DOM. */}
+      <ContactIntentProvider slug={params.bookingId}>
+        <Hero trip={trip} heroPhoto={row.hero_photo ?? destination?.heroUrl ?? null} />
+        <TripDetails trip={trip} />
+        <Timeline itinerary={trip.itinerary} />
+        <DestinationGallery images={galleryImages} destination={trip.destination} />
+        <Hotels hotels={trip.hotels} />
+        <PriceAndNote trip={trip} />
+        <ContactCTA trip={trip} />
+        <Footer />
+        <ProgressNav sections={navSections} />
+        <ActionBar hasContact={hasContact} />
+        <SectionEngagementTracker slug={params.bookingId} sections={eligibleSections} />
+      </ContactIntentProvider>
     </div>
   );
 }

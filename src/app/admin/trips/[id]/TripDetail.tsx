@@ -5,6 +5,7 @@ import type { Trip } from "@/lib/types";
 import { formatDateLongDK, formatVisitTimestampLong, type TripEngagementState } from "@/lib/trip-engagement";
 import { TRACKING_SINCE } from "@/lib/trip-visit";
 import type { SectionEngagementDisplay, SectionId } from "@/lib/section-engagement";
+import type { ContactChannel, ContactIntentDisplay } from "@/lib/contact-intent";
 
 const MAX_INTRO_LEN = 500;
 
@@ -80,6 +81,12 @@ function computeWarnings(text: string, data: Trip): string[] {
   return warnings;
 }
 
+// Fase 3 (#73): "klikket" — bevidst anderledes formuleret end Fase 2's "set".
+const CONTACT_CHANNEL_LABEL: Record<ContactChannel, string> = {
+  phone: "Telefon klikket",
+  email: "Email klikket",
+};
+
 export function TripDetail({
   id,
   slug,
@@ -89,6 +96,7 @@ export function TripDetail({
   data,
   engagement,
   sectionEngagement,
+  contactIntent,
 }: {
   id: string;
   slug: string;
@@ -98,6 +106,7 @@ export function TripDetail({
   data: Trip;
   engagement: TripEngagementState;
   sectionEngagement: SectionEngagementDisplay;
+  contactIntent: ContactIntentDisplay;
 }) {
   const initialIntro = data.intro ?? "";
   const introOriginal = data.introOriginal ?? "";
@@ -259,10 +268,64 @@ export function TripDetail({
             )}
           </div>
 
+          {/* "Kontakt-intent" (Issue #73) — kunden har FORSØGT at tage kontakt
+              (klik på et faktisk mailto:/tel:-link). Helt adskilt fra "Set i
+              rejseplanen" ovenfor: "Kontakt set" (Fase 2) og "Email/Telefon
+              klikket" (Fase 3) er to forskellige signaler og blandes aldrig.
+              Email vises KUN hvis rejseplanen har en rådgiver-email (ellers
+              findes linket ikke, og et "—" ville ligne et negativt signal).
+              Fejler opslaget, vises "Kontaktaktivitet kunne ikke hentes" —
+              ALDRIG falske "ikke klikket". Se src/lib/contact-intent.ts. */}
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--sand)" }}>
+            <div className="admin-label" style={{ marginBottom: 8 }}>
+              Kontakt-intent
+            </div>
+            {contactIntent.kind === "unavailable" ? (
+              <p style={{ fontSize: 13, color: "var(--grey-text)" }}>
+                Kontaktaktivitet kunne ikke hentes.
+              </p>
+            ) : (
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 13 }}>
+                {contactIntent.channels.map(({ channel, clicked, lastClickedAt }) => (
+                  <li
+                    key={channel}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "4px 0",
+                    }}
+                  >
+                    <span>
+                      {CONTACT_CHANNEL_LABEL[channel]}
+                      {clicked && lastClickedAt && (
+                        <span
+                          style={{
+                            display: "block",
+                            fontSize: 12,
+                            color: "var(--grey-text)",
+                          }}
+                        >
+                          Senest klikket {formatVisitTimestampLong(lastClickedAt)}
+                        </span>
+                      )}
+                    </span>
+                    <span style={{ color: clicked ? "var(--rainforest)" : "var(--grey-text)" }}>
+                      {clicked ? "✓" : "—"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <p style={{ fontSize: 12, color: "var(--grey-text)", marginTop: 16 }}>
             Besøg er læseperioder pr. rejseplan, ikke personer eller enheder. Flere åbninger
             inden for 30 minutter kan tælle som ét besøg. &ldquo;Set i rejseplanen&rdquo; viser
-            om et hovedafsnit er nået — ikke hvor mange gange.
+            om et hovedafsnit er nået — ikke hvor mange gange. &ldquo;Kontakt-intent&rdquo; viser
+            om kunden har klikket på email eller telefon — ikke hvor mange gange, og ikke om
+            kontakten blev gennemført. Kontakt-intent registreres kun fra det tidspunkt, funktionen
+            blev sat i drift.
           </p>
           {TRACKING_SINCE && (
             <p style={{ fontSize: 12, color: "var(--grey-text)", marginTop: 4 }}>

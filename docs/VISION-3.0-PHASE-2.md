@@ -190,6 +190,9 @@ Fase 1B's linje i `AccessGate.tsx` dækkede kun selve åbningen. Opdateret til:
 > Vi registrerer, når rejseplanen åbnes, og hvilke hovedafsnit der ses, så din
 > rejserådgiver bedre kan følge op på tilbuddet.
 
+_(Ordlyden er siden udvidet i Fase 3 til også at dække brug af kontaktmuligheder — den aktuelle
+tekst er den delte `TRACKING_NOTICE`, se `docs/VISION-3.0-PHASE-3.md`.)_
+
 **Også på den oplåste kundeside (review-fund, PR #72):** `AccessGate` vises kun når kunden
 IKKE allerede har en gyldig 30-dages adgangscookie. Kunder der låste rejseplanen op før
 Fase 2-deploy går direkte ind og får sektioner registreret uden nogensinde at se

@@ -7,56 +7,44 @@
 ## Nu
 
 - **Production:** Vision 2.0 fase 1-5 + Issue #38 (brugsoverblik/upload-tracking) +
-  **Vision 3.0 Fase 1B (cookie-fri kundeåbninger, Issue #65/PR #66) og Fase 1C
-  ("Kundeaktivitet" i admin, Issue #69/PR #70) live.**
-  Aktuel main/deploy verificeres i GitHub/Vercel (denne fil hardcoder bevidst ikke en SHA —
-  den bliver stale ved næste merge):
+  **Vision 3.0 Fase 1B (cookie-fri kundeåbninger, Issue #65/PR #66), Fase 1C ("Kundeaktivitet"
+  i admin, Issue #69/PR #70) og Fase 2 (sektionsengagement, Issue #71/PR #72, migration 011)
+  live.** Aktuel main/deploy verificeres i GitHub/Vercel (denne fil hardcoder bevidst ikke en
+  SHA — den bliver stale ved næste merge):
   [commits på main](https://github.com/ricko-spec/unique-travel-rejsepraesentation/commits/main) ·
   [Vercel-deploys](https://vercel.com/unique-travel/unique-travel-rejsepraesentation/deployments).
-- **Landet siden sidst:** [Issue #69](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/69)/[PR #70](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/70)
-  — Vision 3.0 Fase 1C er merget og deployet: "Kundeaktivitet"-kolonne i **Alle
-  præsentationer** + detaljekort, drevet af `src/lib/trip-engagement.ts`. **Production
-  UI-smoketest er udsat** (Ricko kan ikke teste lige nu) — det er en driftsopfølgning, ikke
-  en blocker, og har ikke stoppet Fase 2 (se Issue #71 nedenfor).
-- **Aktivt kapitel:** [Issue #71](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/71)
-  — Vision 3.0 Fase 2: sektionsengagement end-to-end (barn af
-  [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
-  Én samlet work package: ny `trip_section_engagement`-tabel (migration 011, **kørt i
-  production**), sikkert write-endpoint under kundens egen slug-path
-  (`POST /[bookingId]/engagement`), klient-tracker med IntersectionObserver + 750 ms dwell
-  for de fem hovedafsnit (rejseplan/billeder/hoteller/pris/kontakt — ALDRIG intro), og en
-  minimal "Set i rejseplanen"-visning i admin. Se `docs/VISION-3.0-PHASE-2.md` og PR for
-  fuld status. **PR #72 er rettet efter ChatGPT's architecture/security-review** (eksplicitte
-  table grants/revokes, server-side sektions-eligibility, transparens i Footer også for
-  returning customers, orkestrerings-tests).
-  - **Production migration 011: kørt** — Supabase-migration
-    `20260918184105_trip_section_engagement` (2026-09-18T18:41:05Z, `iunixfpthdftmkgpugex`),
-    efter Rickos eksplicitte godkendelse. Read-only verificeret: tabel, RLS enabled, PK
-    `(trip_id, section)`, FK → `trips(id)` ON DELETE CASCADE, CHECK (fem sektioner), table
-    privileges (PUBLIC/anon/authenticated: ingen; `service_role`: SELECT/INSERT/UPDATE), RPC
-    `SECURITY INVOKER` med EXECUTE kun for `service_role`. Security Advisor: ingen nye
-    findings for 011.
-  - **`schema-baseline.json` er opdateret EFTER live-migrationen** (kun `trip_section_engagement`-
-    objekter, +84/−0 linjer); drift-tjek = "Ingen drift".
-  - **Production synthetic engagement events: 0** (tabellen har 0 rækker — kun skemaet er
-    skrevet, ingen tracking-data). Koden (endpoint/tracker/admin-visning) er IKKE merget eller
-    deployet til production endnu.
-  - `010b`/`pg_cron`: ikke kørt/aktiveret. Fase 3: ikke startet. Ingen merge.
+- **Aktivt kapitel:** [Issue #73](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/73) — Vision 3.0 Fase 3: kontakt-intent
+  end-to-end (barn af [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)). Branch `feat/contact-intent-73`; PR: se
+  Issue #73/GitHub. Én samlet work package: ny aggregeret `trip_contact_intent`-tabel (max 2
+  rækker pr. trip — email/phone; ingen click_count) + `record_trip_contact_intent`-RPC,
+  `POST /[bookingId]/intent` under kundens egen slug-path, `ContactIntentLink` på ContactCTA
+  (email + rådgiver-tel) og ActionBar "Ring" (**"Kontakt os" → #kontakt tracker IKKE**), en
+  separat "Kontakt-intent"-blok i Kundeaktivitet på admin og opdateret `TRACKING_NOTICE`.
+  Se `docs/VISION-3.0-PHASE-3.md`.
+  - **Migration 012 (`supabase/012_trip_contact_intent.sql`): versioneret, IKKE kørt i
+    production** — kræver Rickos særskilte godkendelse. **`schema-baseline.json` er IKKE
+    opdateret** (opdateres først efter en live-kørsel). `check-schema-drift.mjs` mod production
+    viser "Ingen drift", fordi både production og baseline endnu er uden 012.
+  - **Release-rækkefølge:** migration 012 køres FØR kode-deploy. Uden tabellen fejler intet for
+    kunden (klienten ignorerer 500), men klik registreres ikke, og admin viser "Kontaktaktivitet
+    kunne ikke hentes".
+  - `010b`/`pg_cron`: ikke kørt/aktiveret. Fase 4: ikke startet. Ingen merge.
+- **Kendt driftsopfølgning (ikke en blocker):** production UI-smoketest af Fase 1C og Fase 2 er
+  udsat (Ricko kan ikke teste lige nu).
 
 ## Seneste 3 relevante ændringer
 
-1. **[PR #70](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/70) —
-   Issue #69: Vision 3.0 Fase 1C, "Kundeaktivitet" i admin, 2026-09-18.** Sælgervendt
-   visningslag oven på Fase 1B's data — ingen ny tracking, ingen migration. Ét ufiltreret
-   `trip_visits`-opslag (ingen `.in()`-URL-vækstproblem), kompakt admin-DTO.
-2. **[PR #66](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/66) —
-   Issue #65: Vision 3.0 Fase 1B, cookie-fri kundeåbninger, 2026-09-18.** Ny
-   `trip_visits`-tabel + `record_trip_visit`-RPC (migration 010, kørt/verificeret i
-   production), server-side gate + fail-open skrivevej i `src/app/[bookingId]/page.tsx`,
-   ingen ny cookie, ingen middleware-ændring. Smoketest bestået.
-3. **[PR #68](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/68) —
-   Issue #67: "Oprettet af" i admin-rejsepræsentationslisten, 2026-09-18.** `GET
-   /admin/api/trips` udvidet med `created_by_name` (ét samlet profiles-opslag, ingen N+1).
+1. **[PR #72](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/72) — Issue #71: Vision 3.0 Fase 2, sektionsengagement,
+   2026-09-18.** Ny `trip_section_engagement`-tabel + RPC (migration 011, kørt/verificeret i
+   production, schema-baseline opdateret), `POST /[bookingId]/engagement`, klient-tracker
+   (IntersectionObserver + 750 ms dwell), "Set i rejseplanen" i admin, server-side eligibility,
+   transparens i `Footer`.
+2. **[PR #70](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/70) — Issue #69: Vision 3.0 Fase 1C, "Kundeaktivitet" i admin,
+   2026-09-18.** Sælgervendt visningslag oven på Fase 1B's data — ingen ny tracking, ingen
+   migration.
+3. **[PR #66](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/66) — Issue #65: Vision 3.0 Fase 1B, cookie-fri kundeåbninger,
+   2026-09-18.** Ny `trip_visits`-tabel + `record_trip_visit`-RPC (migration 010), server-side
+   gate + fail-open skrivevej, ingen ny cookie, ingen middleware-ændring.
 
 Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pulls?q=is%3Apr+is%3Amerged).
 
@@ -76,19 +64,13 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Afvent ChatGPT final HEAD-review, dernæst Rickos eksplicitte merge-godkendelse af
-Issue #71-PR'en (PR #72)** (Vision 3.0 Fase 2: sektionsengagement end-to-end). Migration
-011 er allerede kørt og read-only verificeret i production, og schema-baseline er
-opdateret. Release-rækkefølgen (`docs/VISION-3.0-PHASE-2.md`) følger samme mønster som
-Fase 1B: migration køres og verificeres FØR merge; `010b`/pg_cron rører intet af dette.
-Efter merge/deploy: production-smoketest når Ricko har mulighed for det (må ikke blokere
-merge, hvis kode/schema/checks er grønne).
+**ChatGPT architecture/security-review af Fase 3-PR'en (Issue #73)**, dernæst Rickos konkrete
+godkendelse af migration 012 → migration køres + read-only verificeres → `--update-baseline` →
+fulde checks/Vercel → ChatGPT final HEAD-review → Rickos merge-godkendelse → merge/deploy →
+production-smoketest når Ricko har mulighed (blokerer ikke merge). Se
+`docs/VISION-3.0-PHASE-3.md` for eksakt rækkefølge.
 
-Herudover: production-smoketest af Fase 1C's UI (Issue #69/PR #70) er stadig udsat, se
-punktet ovenfor — ingen ny handling krævet, kun en kendt, åben opfølgning.
-
-Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)
-— Vision 3.0: Customer Engagement & Sales Intelligence. Master-issue/produktkapitel, IKKE én
-stor PR. Fase 3 (kontaktklik-intent), fase 4 (salgsoversigt/sortering-efter-besøg/-sektion)
-og fase 5 (HubSpot-kobling, i Marketing Dashboard-projektet, ikke her) er alle stadig
-fremtidige, ikke påbegyndte kapitler.
+Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) — Vision 3.0: Customer Engagement & Sales
+Intelligence. Master-issue/produktkapitel, IKKE én stor PR. Fase 4 (salgsoversigt/
+sortering-efter-besøg/-sektion/-kontakt-intent) og fase 5 (HubSpot-kobling, i Marketing
+Dashboard-projektet, ikke her) er stadig fremtidige, ikke påbegyndte kapitler.

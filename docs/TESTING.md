@@ -174,6 +174,65 @@ migrationsfilen.
    `last_seen_at` opdateres, `first_seen_at` og `visit_count`-lignende semantik ændres ikke.
 6. Ingen synlig fejl eller mærkbar ekstra latens på kundesiden under nogen af trinene.
 
+**Kontakt-intent (Issue #73):** fire nye testfiler, alle uden browser/DB.
+- `src/lib/contact-intent.test.ts` (rene logik): kanal-enum (kun `email`/`phone`; `#kontakt`-
+  navigation, `sms` m.fl. afvises), strict body-schema (ekstra nøgler som `trip_id`/`booking_no`/
+  `source` ⇒ afvist), server-eligibility (email kun med `advisorEmail`, phone altid), gaten
+  (`shouldRecordContactIntent`: preview/ikke-kanonisk host/bot/admin-cookie ⇒ no write), dedup
+  (`shouldSendChannel`: samme kanal højst én gang, email + phone begge, frisk Set sender igen) og
+  admin-visningen (`buildContactIntentDisplay`: phone/email seen/unseen, ineligible email udelades
+  — også med en gammel række, read-fejl ⇒ `unavailable` aldrig "ikke klikket", ukendt/malformed
+  channel ignoreres, ugyldigt tidsstempel crasher ikke, telefon vises før email).
+- `src/lib/contact-intent-endpoint.test.ts` (**security-orkestrering**): `route.ts` er en tynd
+  adapter over `handleContactIntent()`, så testene kører den FAKTISKE kæde med en spion på
+  skrivningen. (A) manglende/inaktiv trip; (B) manglende/forkert adgang — samme svar som manglende
+  trip, og en gyldig cookie til slug A kan ikke skrive for slug B; (C) preview/ikke-kanonisk
+  host; (D) admin auth-cookie; (E) bot/tom UA — alle ⇒ ingen write; (F) email uden `advisorEmail`
+  (null/tom/mangler) og ikke-parsebar trip-data ⇒ `204`, ingen write; (G) phone ⇒ præcis ét write
+  med SERVER-afledt `trip.id` (også uden `advisorEmail`); (H) eligible email ⇒ præcis ét write;
+  (I) ekstra `trip_id` i body / ugyldig body ⇒ `400` uden trip-opslag og uden write; (J) RPC-fejl/
+  timeout ⇒ `500` med præcis ét forsøg (ingen retry).
+- `src/lib/contact-intent-client.test.ts` (klik-logik + komponent-kontrakter):
+  `trackContactIntent()` — email-/phone-klik sender den rigtige kanal (body kun `{ channel }`,
+  POST, same-origin, `keepalive: true`, URL `/<slug>/intent`), dedup pr. page load, begge kanaler
+  kan sendes, frisk Set sender igen, afvist/synkront kastet fetch ⇒ ingen throw og ingen retry,
+  afventer aldrig serversvaret. Dertil en **statisk scan** af de faktiske kildefiler (der er ingen
+  component-test-opsætning, og wrapperen er ekstremt tynd): `ContactIntentLink` har ingen
+  `preventDefault`/`stopPropagation`/`await`/storage/cookie og er et almindeligt `<a href>`;
+  `ContactCTA` har præcis email + phone som tracked links og ingen "rå" `<a>`; `ActionBar` har
+  præcis ét tracked link ("Ring", `tel:+4559498630`), mens "Kontakt os" → `#kontakt` er et
+  UNTRACKED almindeligt `<a>`.
+- `src/lib/contact-intent-write.test.ts`: `describeRecordContactIntentOutcome` (samme mønster som
+  Fase 2).
+Kontrolleret ved mutation (hver ændring fælder tests): server-eligibility fjernet, gate fjernet,
+adgangstjek fjernet, `preventDefault` tilføjet, "Kontakt os" gjort tracked, `.strict()` fjernet,
+dedup-markering fjernet.
+
+**Migration 012 — kørt mod lokal in-memory Postgres (pglite, uden for repoet), ikke kun læst:**
+roller `anon`/`authenticated`/`service_role` + Supabase-lignende default ACL (auto-ALL) oprettes,
+migrationen køres to gange (idempotens), og verificeres: præcis de fire kolonner, ingen
+`click_count`/identifikator-kolonner, PK `(trip_id, channel)`, FK cascade, CHECK (`email`/`phone`),
+PUBLIC/anon/authenticated uden table privileges, `service_role` præcis SELECT/INSERT/UPDATE, RLS +
+én service_role-policy, RPC `SECURITY INVOKER`/`VOLATILE`/`search_path = public, pg_catalog`/ét
+`clock_timestamp()`, EXECUTE kun for `service_role`, `first_clicked_at` uændret over mange kald,
+`last_clicked_at` rykker frem og går aldrig baglæns (`greatest`), mange klik ⇒ stadig præcis 2
+rækker pr. trip, ugyldig channel/`kontakt`/en tredje kanal/dublet/ukendt trip afvist,
+DELETE/TRUNCATE afvist for `service_role`, SELECT/INSERT/UPDATE/RPC afvist for anon/authenticated,
+og cascade uden `service_role` DELETE (45/45). **IKKE en kørsel mod production** — migrationen er
+ikke kørt live, og `schema-baseline.json` er ikke opdateret.
+
+**Manuel smoke-test efter migration 012 + merge/deploy af Issue #73-PR'en (plan, IKKE udført —
+ingen kunstige contact-intent-events må oprettes):**
+1. Åbn en rejseplan med rådgiver-email som kunde med korrekt adgang; klik "Ring" (mobil) og/eller
+   rådgiverens telefonlink og mail-kortet. Telefon-/mailappen åbner som normalt (ingen forsinkelse).
+2. Verificér read-only i `trip_contact_intent`: højst to rækker for trippens `trip_id` (én pr.
+   brugt kanal), `first_clicked_at`/`last_clicked_at` sat.
+3. Klik "Kontakt os" (→ `#kontakt`): INGEN ny række (kun intern navigation).
+4. Admin: trip-detaljesiden viser "Kontakt-intent" med ✓ + "Senest klikket …" for de brugte
+   kanaler, adskilt fra "Set i rejseplanen".
+5. Rejseplan uden `advisorEmail`: "Email klikket" vises slet ikke.
+6. Genindlæs og klik igen: `last_clicked_at` opdateres, `first_clicked_at` er uændret.
+
 ## Efter enhver testrunde
 
 Rapportér resultater ærligt (også røde), opdatér `docs/STATUS.md`, og ryd test-data op.
