@@ -15,8 +15,8 @@ import {
 import { uniqueCreatorIds, resolveCreatedByName, type CreatorProfile } from "@/lib/trip-creator";
 import {
   classifyTripEngagement,
+  toTripEngagementListState,
   type RawTripVisitRow,
-  type TripEngagementState,
 } from "@/lib/trip-engagement";
 
 export const runtime = "nodejs";
@@ -93,43 +93,53 @@ export async function GET() {
       }
     }
 
-    // ISSUE-69: "Kundeaktivitet" — ét samlet trip_visits-opslag for ALLE
-    // trip-id'er (aldrig ét opslag pr. trip). "Ingen række" og "opslaget
-    // fejlede" er bevidst forskellige tilstande (se src/lib/trip-engagement.ts)
-    // — en fejl her må ALDRIG vises som "Ikke åbnet endnu". Kun de fire
-    // kolonner UI'et rent faktisk bruger selectes; trip_id bruges kun til at
-    // matche raden til den rigtige trip herunder, sendes ikke i svaret.
-    const tripIds = rows.map((row) => row.id);
+    // ISSUE-69: "Kundeaktivitet" — ét samlet trip_visits-opslag, IKKE
+    // .in("trip_id", tripIds) (review-fund på PR #70): PostgREST lægger en
+    // .in()-liste i selve request-URL'en, og med ~267+ trips (og voksende)
+    // nærmer den sig Supabase/Cloudflares grænse for URL/header-størrelse
+    // (520-fejl ved lange in-clauses, se Supabases eget troubleshooting-doc).
+    // trip_visits har højst én række pr. trip (FK + cascade til trips), og
+    // dette endpoint henter allerede ALLE trips — derfor er hver
+    // trip_visits-række pr. definition relevant, og et almindeligt,
+    // ufiltreret select er både korrekt og det simpleste: fortsat ét
+    // set-baseret opslag, ingen N+1, intet URL-loft. "Ingen række" og
+    // "opslaget fejlede" er bevidst forskellige tilstande (se
+    // src/lib/trip-engagement.ts) — en fejl her må ALDRIG vises som "Ikke
+    // åbnet endnu". Kun de fire kolonner UI'et rent faktisk bruger selectes;
+    // trip_id bruges kun til at matche raden til den rigtige trip herunder,
+    // sendes ikke i svaret.
     const visitRowsByTripId = new Map<string, RawTripVisitRow>();
     let visitReadFailed = false;
-    if (tripIds.length > 0) {
-      const { data: visitRows, error: visitError } = await supabase
-        .from("trip_visits")
-        .select("trip_id, first_opened_at, last_opened_at, visit_count, open_count")
-        .in("trip_id", tripIds);
+    const { data: visitRows, error: visitError } = await supabase
+      .from("trip_visits")
+      .select("trip_id, first_opened_at, last_opened_at, visit_count, open_count");
 
-      if (visitError) {
-        console.error("[GET /api/trips] trip_visits-opslag (Kundeaktivitet) fejlede", visitError);
-        visitReadFailed = true;
-      } else {
-        for (const row of visitRows ?? []) {
-          if (row.trip_id) visitRowsByTripId.set(row.trip_id, row);
-        }
+    if (visitError) {
+      console.error("[GET /api/trips] trip_visits-opslag (Kundeaktivitet) fejlede", visitError);
+      visitReadFailed = true;
+    } else {
+      for (const row of visitRows ?? []) {
+        if (row.trip_id) visitRowsByTripId.set(row.trip_id, row);
       }
     }
 
     // created_by (den interne uuid) sendes aldrig til klienten — kun det
     // afledte, menneskelæsbare created_by_name. Samme princip for
-    // Kundeaktivitet: kun den afledte visningstilstand (engagement), ikke
-    // trip_visits-raden.
+    // Kundeaktivitet: kun den afledte, KOMPAKTE list-visningstilstand
+    // (review-fund på PR #70) — hverken den rå trip_visits-række,
+    // firstOpenedAt eller openCount forlader serveren her. Den fulde
+    // TripEngagementState er kun til trip-detaljesiden (som henter sin egen
+    // row server-side, se src/app/admin/trips/[id]/page.tsx).
     const trips = rows.map(({ created_by, ...rest }) => ({
       ...rest,
       created_by_name: resolveCreatedByName(created_by, creatorProfiles),
-      engagement: classifyTripEngagement({
-        visitRow: visitRowsByTripId.get(rest.id) ?? null,
-        readFailed: visitReadFailed,
-        tripCreatedAt: rest.created_at,
-      }),
+      engagement: toTripEngagementListState(
+        classifyTripEngagement({
+          visitRow: visitRowsByTripId.get(rest.id) ?? null,
+          readFailed: visitReadFailed,
+          tripCreatedAt: rest.created_at,
+        }),
+      ),
     }));
 
     return NextResponse.json({ trips });

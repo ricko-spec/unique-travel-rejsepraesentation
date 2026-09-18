@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import type { Trip } from "@/lib/types";
 import { formatCustomerPreview } from "@/lib/format";
 import { filterTrips, hasSearchQuery } from "@/lib/trip-search";
-import { formatVisitTimestampShort, type TripEngagementState } from "@/lib/trip-engagement";
+import { formatVisitTimestampShort, type TripEngagementListState } from "@/lib/trip-engagement";
 
 const TRIPS_PREVIEW_COUNT = 5;
 
@@ -28,13 +28,13 @@ type TripListItem = {
   created_by_name: string | null;
   // ISSUE-69: afledt server-side fra trip_visits via classifyTripEngagement
   // (src/lib/trip-engagement.ts) — aldrig den rå visit-række.
-  engagement: TripEngagementState;
+  engagement: TripEngagementListState;
 };
 
 // ISSUE-69: "Kundeaktivitet"-cellen. Ren rendering af en allerede-klassificeret
 // tilstand (se src/lib/trip-engagement.ts for selve klassifikationen/testene)
 // — "unavailable" må ALDRIG vises som "Ikke åbnet endnu".
-function EngagementCell({ engagement }: { engagement: TripEngagementState }) {
+function EngagementCell({ engagement }: { engagement: TripEngagementListState }) {
   if (engagement.kind === "opened") {
     return (
       <div>
