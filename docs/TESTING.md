@@ -208,6 +208,26 @@ Kontrolleret ved mutation (hver ændring fælder tests): server-eligibility fjer
 adgangstjek fjernet, `preventDefault` tilføjet, "Kontakt os" gjort tracked, `.strict()` fjernet,
 dedup-markering fjernet.
 
+**Kontakt-intent — review-rettelser på PR #74 (`src/lib/contact-intent-trip.test.ts`, 39 tests):**
+- (A) `resolveContactChannels` — valid trip + advisorEmail ⇒ email + phone; valid uden advisorEmail (null/
+  undefined/tom/mangler) ⇒ kun phone; malformed trip-data (null, streng, tal, array, itinerary/hotels ikke
+  array, ukendt itinerary-type, ikke-streng advisorEmail) ⇒ `null` — aldrig en tom liste; kaster aldrig.
+- (B) Malformed trip-data + DB-læsning OK ⇒ `unassessable`, ingen phone/email-tilstand overhovedet (heller
+  ikke "—"), også med en klik-række til stede; read-fejl har forrang (`unavailable`).
+- (C) **Paritet:** for valid/malformed data giver admin-eligibility og `handleContactIntent()` (spion på
+  skrivningen) præcis samme svar pr. kanal — én runtime-sandhed.
+- (D) `CONTACT_INTENT_TRACKING_SINCE` er `null` ELLER en fast UTC-streng senere end Fase 1B's
+  `TRACKING_SINCE`, aldrig genbrugt.
+- (E) No-row-semantik: `buildContactIntentTrackingNote` uden dato ⇒ ingen konkret dato/årstal; med dato ⇒
+  "Kontaktklik måles fra …" (dansk format); uparsebar dato ⇒ dato-løs tekst; nævner aldrig Fase 1B's dato.
+- (F) Statisk scan af admin-filerne: `page.tsx` bruger `resolveContactChannels(row.data)` og ikke
+  `computeEligibleChannels`; `TripDetail` label'er Fase 1B's dato "Åbningsmåling fra" (ingen uscopet
+  "Måling fra"); Kontakt-intent-blokken bruger `CONTACT_INTENT_TRACKING_SINCE` og aldrig `TRACKING_SINCE`;
+  "kunne ikke vurderes" og "kunne ikke hentes" er begge til stede.
+Kontrolleret ved mutation (hver ændring fælder tests): parse-fejl ⇒ `[]` i stedet for `null`,
+unassessable-gren fjernet, admin tilbage til rå `row.data`, uscopet "Måling fra", kontakt-blok på Fase 1B's
+dato, falsk dato før cutover, endpoint ignorerer runtime-eligibility.
+
 **Migration 012 — kørt mod lokal in-memory Postgres (pglite, uden for repoet), ikke kun læst:**
 roller `anon`/`authenticated`/`service_role` + Supabase-lignende default ACL (auto-ALL) oprettes,
 migrationen køres to gange (idempotens), og verificeres: præcis de fire kolonner, ingen
@@ -230,7 +250,8 @@ ingen kunstige contact-intent-events må oprettes):**
 3. Klik "Kontakt os" (→ `#kontakt`): INGEN ny række (kun intern navigation).
 4. Admin: trip-detaljesiden viser "Kontakt-intent" med ✓ + "Senest klikket …" for de brugte
    kanaler, adskilt fra "Set i rejseplanen".
-5. Rejseplan uden `advisorEmail`: "Email klikket" vises slet ikke.
+5. Rejseplan uden `advisorEmail`: "Email klikket" vises slet ikke. En trip med malformed data viser
+   "Kontaktaktivitet kunne ikke vurderes" — aldrig "Telefon klikket —".
 6. Genindlæs og klik igen: `last_clicked_at` opdateres, `first_clicked_at` er uændret.
 
 ## Efter enhver testrunde

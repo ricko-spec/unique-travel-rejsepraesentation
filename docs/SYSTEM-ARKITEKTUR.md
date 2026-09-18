@@ -173,6 +173,8 @@ uniquetravel-rejsepraesentation/
 │       ├── contact-intent.ts     # kanal-enum/strict schema/eligibility/gate/dedup/admin-visning (Issue #73, ingen DB/Next-imports)
 │       ├── contact-intent-client.ts  # trackContactIntent — fire-and-forget fetch med keepalive, ren + testet (Issue #73)
 │       ├── contact-intent-write.ts   # recordContactIntent — best-effort RPC-skrivning, kaster aldrig (Issue #73)
+│       ├── contact-intent-trip.ts    # resolveContactChannels — tripSchema+normalizeTrip => eligible kanaler; delt af endpoint OG admin (Issue #73)
+│       ├── contact-intent-tracking.ts  # CONTACT_INTENT_TRACKING_SINCE (null indtil release-cutover) + buildContactIntentTrackingNote — lille zod-fri fil (Issue #73)
 │       ├── contact-intent-endpoint.ts  # handleContactIntent — hele endpoint-beslutningskæden, deps-injiceret + testet (Issue #73)
 │       └── supabase/
 │           ├── server.ts         # Service-role-klient + nøgle-validering + env-diagnostik
@@ -632,9 +634,12 @@ in-memory `Set` ejet af `ContactIntentProvider`. Kun `ContactCTA` (email + rådg
 "Ring" er tracked; "Kontakt os" → `#kontakt` er intern navigation og tracker IKKE (SET er Fase 2).
 
 **Læsevejen til admin ("Kontakt-intent"):** `trip_contact_intent` → authenticated admin-server →
-`buildContactIntentDisplay()` (`src/lib/contact-intent.ts`) → sælger-UI. Email vises kun hvis
-trippen har `advisorEmail`; en fejlet forespørgsel giver `unavailable` ("Kontaktaktivitet kunne ikke
-hentes"), aldrig "ikke klikket".
+`buildContactIntentDisplay()` (`src/lib/contact-intent.ts`) → sælger-UI. Eligibility afledes af
+`resolveContactChannels(row.data)` (`tripSchema` + `normalizeTrip`) — SAMME runtime-sandhed som kundesiden og
+endpointet; email vises kun hvis trippen har `advisorEmail`. En fejlet forespørgsel giver `unavailable`
+("Kontaktaktivitet kunne ikke hentes"), ugyldig trip-data giver `unassessable` ("kunne ikke vurderes") — aldrig
+"ikke klikket". Fase 3 har sin egen tracking-cutover, `CONTACT_INTENT_TRACKING_SINCE` (`src/lib/contact-intent-tracking.ts`, `null` indtil
+release-cutover); Fase 1B's `TRACKING_SINCE` gælder kun åbninger ("Åbningsmåling fra …").
 
 ### Tilføjelses-tidslinje
 

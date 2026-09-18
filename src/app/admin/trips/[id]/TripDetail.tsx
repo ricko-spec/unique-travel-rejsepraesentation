@@ -6,6 +6,10 @@ import { formatDateLongDK, formatVisitTimestampLong, type TripEngagementState } 
 import { TRACKING_SINCE } from "@/lib/trip-visit";
 import type { SectionEngagementDisplay, SectionId } from "@/lib/section-engagement";
 import type { ContactChannel, ContactIntentDisplay } from "@/lib/contact-intent";
+import {
+  CONTACT_INTENT_TRACKING_SINCE,
+  buildContactIntentTrackingNote,
+} from "@/lib/contact-intent-tracking";
 
 const MAX_INTRO_LEN = 500;
 
@@ -274,8 +278,14 @@ export function TripDetail({
               klikket" (Fase 3) er to forskellige signaler og blandes aldrig.
               Email vises KUN hvis rejseplanen har en rådgiver-email (ellers
               findes linket ikke, og et "—" ville ligne et negativt signal).
-              Fejler opslaget, vises "Kontaktaktivitet kunne ikke hentes" —
-              ALDRIG falske "ikke klikket". Se src/lib/contact-intent.ts. */}
+              Fejler opslaget, vises "Kontaktaktivitet kunne ikke hentes";
+              kan trip-data ikke valideres (kundesiden viser så sin fejlside
+              uden kontaktlinks), vises "Kontaktaktivitet kunne ikke vurderes"
+              — ALDRIG falske "ikke klikket". Et "—" betyder KUN "intet
+              registreret klik siden kontakt-intent blev sat i drift"
+              (CONTACT_INTENT_TRACKING_SINCE, IKKE Fase 1B's TRACKING_SINCE, som
+              kun gælder åbninger) — se noten nederst i blokken.
+              Se src/lib/contact-intent.ts. */}
           <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--sand)" }}>
             <div className="admin-label" style={{ marginBottom: 8 }}>
               Kontakt-intent
@@ -284,38 +294,54 @@ export function TripDetail({
               <p style={{ fontSize: 13, color: "var(--grey-text)" }}>
                 Kontaktaktivitet kunne ikke hentes.
               </p>
+            ) : contactIntent.kind === "unassessable" ? (
+              <p style={{ fontSize: 13, color: "var(--grey-text)" }}>
+                Kontaktaktivitet kunne ikke vurderes.
+              </p>
             ) : (
-              <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 13 }}>
-                {contactIntent.channels.map(({ channel, clicked, lastClickedAt }) => (
-                  <li
-                    key={channel}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      padding: "4px 0",
-                    }}
-                  >
-                    <span>
-                      {CONTACT_CHANNEL_LABEL[channel]}
-                      {clicked && lastClickedAt && (
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: 12,
-                            color: "var(--grey-text)",
-                          }}
-                        >
-                          Senest klikket {formatVisitTimestampLong(lastClickedAt)}
-                        </span>
-                      )}
-                    </span>
-                    <span style={{ color: clicked ? "var(--rainforest)" : "var(--grey-text)" }}>
-                      {clicked ? "✓" : "—"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 13 }}>
+                  {contactIntent.channels.map(({ channel, clicked, lastClickedAt }) => (
+                    <li
+                      key={channel}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        padding: "4px 0",
+                      }}
+                    >
+                      <span>
+                        {CONTACT_CHANNEL_LABEL[channel]}
+                        {clicked && lastClickedAt && (
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: 12,
+                              color: "var(--grey-text)",
+                            }}
+                          >
+                            Senest klikket {formatVisitTimestampLong(lastClickedAt)}
+                          </span>
+                        )}
+                      </span>
+                      <span style={{ color: clicked ? "var(--rainforest)" : "var(--grey-text)" }}>
+                        {clicked ? "✓" : "—"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {/* Scoper hvad et "—" betyder: KUN "intet registreret klik siden
+                    kontakt-intent blev sat i drift" — aldrig historisk viden fra før
+                    funktionen fandtes. Uden en fastlagt cutover-dato (før release)
+                    påstås INTET konkret starttidspunkt. */}
+                <p style={{ fontSize: 12, color: "var(--grey-text)", marginTop: 8 }}>
+                  {buildContactIntentTrackingNote(
+                    CONTACT_INTENT_TRACKING_SINCE,
+                    formatDateLongDK,
+                  )}
+                </p>
+              </>
             )}
           </div>
 
@@ -324,12 +350,14 @@ export function TripDetail({
             inden for 30 minutter kan tælle som ét besøg. &ldquo;Set i rejseplanen&rdquo; viser
             om et hovedafsnit er nået — ikke hvor mange gange. &ldquo;Kontakt-intent&rdquo; viser
             om kunden har klikket på email eller telefon — ikke hvor mange gange, og ikke om
-            kontakten blev gennemført. Kontakt-intent registreres kun fra det tidspunkt, funktionen
-            blev sat i drift.
+            kontakten blev gennemført.
           </p>
           {TRACKING_SINCE && (
             <p style={{ fontSize: 12, color: "var(--grey-text)", marginTop: 4 }}>
-              Måling fra {formatDateLongDK(TRACKING_SINCE)}.
+              {/* Fase 1B's TRACKING_SINCE gælder KUN åbninger (trip_visits) — IKKE
+                  sektionsengagement (Fase 2) eller kontakt-intent (Fase 3), som har
+                  deres egne starttidspunkter. */}
+              Åbningsmåling fra {formatDateLongDK(TRACKING_SINCE)}.
             </p>
           )}
         </div>

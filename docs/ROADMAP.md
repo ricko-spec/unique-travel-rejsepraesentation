@@ -113,7 +113,8 @@ eller GitHub Issues.
   Migration `012_trip_contact_intent.sql` er versioneret, ikke kørt. Release-rækkefølgen (samme
   mønster som migration 010/011): ChatGPT architecture/security-review → Ricko godkender
   migrationen konkret → den køres FØR kode-deploy og verificeres read-only (schema/RLS/grants/
-  RPC) → `--update-baseline` (kun efter live-kørsel) → checks/Vercel → ChatGPT final HEAD-review →
+  RPC) → `--update-baseline` (kun efter live-kørsel) → release-cutover commit
+  (`CONTACT_INTENT_TRACKING_SINCE`, `null` indtil da) → checks/Vercel → ChatGPT final HEAD-review →
   Rickos merge-godkendelse → merge/deploy → production-smoketest (kan udskydes). Se
   `docs/VISION-3.0-PHASE-3.md` for eksakt rækkefølge.
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**

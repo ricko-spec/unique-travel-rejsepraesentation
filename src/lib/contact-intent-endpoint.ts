@@ -12,11 +12,10 @@
 import {
   contactIntentBodySchema,
   shouldRecordContactIntent,
-  computeEligibleChannels,
   type ContactChannel,
 } from "./contact-intent";
+import { resolveContactChannels } from "./contact-intent-trip";
 import { hasValidTripAccess } from "./trip-access";
-import { tripSchema, normalizeTrip } from "./types";
 import type { VisitDecisionInput } from "./trip-visit";
 
 /** De kolonner endpointet skal bruge fra `trips` (aldrig `select("*")`). */
@@ -92,10 +91,11 @@ export async function handleContactIntent(
   // eller et lykkedes write, så endpointet ikke kan bruges til at udspørge
   // en rejseplans indhold. Trip-data der ikke kan parses (kundesiden viser så
   // sin fejlside uden ActionBar/ContactCTA) er ligeledes ineligible.
-  const tripData = tripSchema.safeParse(trip.data);
-  if (!tripData.success) return { status: 204, reason: "ineligible" };
-  const eligible = computeEligibleChannels(normalizeTrip(tripData.data));
-  if (!eligible.includes(channel)) return { status: 204, reason: "ineligible" };
+  // Samme funktion (resolveContactChannels) som sælger-visningen bruger, så
+  // endpoint og admin aldrig kan være uenige om hvad der er eligible; null =
+  // trip-data kan ikke valideres ⇒ ineligible for ALLE kanaler.
+  const eligible = resolveContactChannels(trip.data);
+  if (!eligible || !eligible.includes(channel)) return { status: 204, reason: "ineligible" };
 
   // 5. Selve skrivningen — trip.id er SERVER-afledt fra slug-opslaget, aldrig
   // fra klienten; channel er den validerede, parsede værdi.

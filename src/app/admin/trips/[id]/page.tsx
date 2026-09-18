@@ -9,11 +9,8 @@ import {
   buildSectionEngagementDisplay,
   type RawSectionEngagementRow,
 } from "@/lib/section-engagement";
-import {
-  computeEligibleChannels,
-  buildContactIntentDisplay,
-  type RawContactIntentRow,
-} from "@/lib/contact-intent";
+import { buildContactIntentDisplay, type RawContactIntentRow } from "@/lib/contact-intent";
+import { resolveContactChannels } from "@/lib/contact-intent-trip";
 import { filterGalleryImages } from "@/lib/progress-nav";
 import { pickDestinationMatch, type DestinationRecord } from "@/lib/destination-match";
 import { TripDetail } from "./TripDetail";
@@ -131,9 +128,18 @@ export default async function TripDetailPage({
   });
 
   // Fase 3 (#73): kontakt-intent. Fase 2's "Kontakt set" (sectionEngagement
-  // ovenfor) er en helt anden datakilde og blandes ALDRIG ind her. Email er
-  // kun eligible med advisorEmail (samme betingelse som ContactCTA); phone
-  // altid. Fejler opslaget (fx hvis migration 012 endnu ikke er kørt), vises
+  // ovenfor) er en helt anden datakilde og blandes ALDRIG ind her.
+  //
+  // Eligibility afledes af SAMME runtime-sandhed som kundesiden og
+  // engagement-endpointet: tripSchema.safeParse → normalizeTrip
+  // (resolveContactChannels, src/lib/contact-intent-trip.ts). `row.data` er
+  // JSONB og IKKE runtime-valideret her — læst rå ville en malformed/legacy
+  // trip (som kundesiden viser fejlside for, uden kontaktlinks) stadig få
+  // "Telefon klikket —": et falsk negativt signal. Kan trip-data ikke
+  // valideres, er eligibility ukendt (null) ⇒ "kunne ikke vurderes", aldrig
+  // "ikke klikket". Email er kun eligible med advisorEmail; phone altid.
+  //
+  // Fejler selve opslaget (fx hvis migration 012 endnu ikke er kørt), vises
   // "Kontaktaktivitet kunne ikke hentes" — ALDRIG falske "ikke klikket".
   if (contactResult.error) {
     console.error(
@@ -141,8 +147,15 @@ export default async function TripDetailPage({
       contactResult.error,
     );
   }
+  const contactChannels = resolveContactChannels(row.data);
+  if (contactChannels === null) {
+    // Ingen trip-data i loggen — kun at valideringen fejlede.
+    console.warn(
+      "[admin/trips/[id]] trip-data kunne ikke valideres (tripSchema) — kontakt-intent kan ikke vurderes",
+    );
+  }
   const contactIntent = buildContactIntentDisplay({
-    eligibleChannels: computeEligibleChannels({ advisorEmail: row.data?.advisorEmail }),
+    eligibleChannels: contactChannels,
     rows: (contactResult.data as RawContactIntentRow[] | null) ?? null,
     readFailed: !!contactResult.error,
   });
