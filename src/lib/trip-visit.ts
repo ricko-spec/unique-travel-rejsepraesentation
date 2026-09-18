@@ -18,7 +18,7 @@ export type VisitDecisionInput = {
 // 30 minutters rullende inaktivitetsvindue — se 30-min-logikken i
 // record_trip_visit() (supabase/010_trip_visits.sql). Eksporteres KUN til
 // dokumentation/UI-tekst her; vinduet selv beregnes udelukkende i Postgres
-// med now() + en fast interval, aldrig ud fra denne konstant i Node.
+// med clock_timestamp() + en fast interval, aldrig ud fra denne konstant i Node.
 export const VISIT_WINDOW_MINUTES = 30;
 
 // Det eneste produktionsdomæne der tæller — se isProductionHost. Deployet
