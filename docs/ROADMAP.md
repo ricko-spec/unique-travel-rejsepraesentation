@@ -67,24 +67,32 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
   aktiveret — kræver egen, senere godkendelse.
 - **[Issue #67](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/67) —
   Admin: "Oprettet af" i rejsepræsentationslisten.** Merget (PR #68).
+- **[Issue #69](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/69) —
+  Vision 3.0 Fase 1C: vis kundeåbninger i admin.** Merget (PR #70). "Kundeaktivitet"-kolonne
+  i **Alle præsentationer** + detaljekort, ren testet klassifikator
+  (`src/lib/trip-engagement.ts`), retention-safe no-row-semantik. Ét ufiltreret
+  `trip_visits`-opslag (review-fund: ingen voksende `.in()`-URL), kompakt admin-DTO.
+  **Production UI-smoketest er udsat** (Ricko kan ikke teste lige nu) — driftsopfølgning,
+  ikke en blocker.
 
 ## Næste
 
-1. **[Issue #69](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/69) —
-   Vision 3.0 Fase 1C: vis kundeåbninger i admin** (barn af
+1. **[Issue #71](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/71) —
+   Vision 3.0 Fase 2: sektionsengagement end-to-end** (barn af
    [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
-   Rent sælgervendt visningslag oven på Fase 1B's allerede indsamlede data — ingen ny
-   tracking, ingen migration, ingen writes. Ny "Kundeaktivitet"-kolonne i **Alle
-   præsentationer** (`GET /admin/api/trips` udvidet med ét samlet `trip_visits`-opslag,
-   ingen N+1) + et "Kundeaktivitet"-kort på trip-detaljesiden. Ren, testet klassifikator
-   (`src/lib/trip-engagement.ts`) med retention-safe no-row-semantik
-   (`cutoff = max(trip.created_at, TRACKING_SINCE)`) og en eksplicit `unavailable`-tilstand,
-   så en fejlet forespørgsel aldrig vises som "Ikke åbnet endnu". Ingen sortering/filter
-   efter besøg, ingen scores — det er senere sælger-intelligens-scope.
+   Én samlet work package (design + datamodel + endpoint + tracker + admin-visning + tests
+   + docs i én PR, efter Rickos eget ønske om færre delopgaver). Ny
+   `trip_section_engagement`-tabel (migration 011, race-sikker efter samme mønster som
+   `record_trip_visit`), et sikkert write-endpoint under kundens egen slug-path
+   (`POST /[bookingId]/engagement` — IKKE `/api/…`, fordi adgangscookien er path-scoped),
+   en `SectionEngagementTracker`-klientkomponent (IntersectionObserver + 750 ms dwell,
+   ingen ny cookie/localStorage/sessionStorage), og en minimal "Set i rejseplanen"-visning
+   i admin. Se `docs/VISION-3.0-PHASE-2.md`. **Migration 011 er IKKE kørt i production** —
+   kræver Rickos separate godkendelse, samme rækkefølge som migration 010.
 2. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
    Vision 3.0: Customer Engagement & Sales Intelligence.** Master-issue — IKKE én stor PR.
-   Fase 1C (#69) er visningslaget for Fase 1B. Fase 2-4 (sektionsengagement,
-   kontakt-intent, salgsoversigt/sortering-efter-besøg) tages ét PR ad gangen derefter.
+   Fase 3 (kontakt-intent), fase 4 (salgsoversigt/sortering-efter-besøg/-sektion) tages ét
+   PR ad gangen efter Fase 2.
 3. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
 Herudover intet forudbestemt. Punkter efter dette vælges af Ricko fra backloggen nedenfor
@@ -99,11 +107,16 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Vision 3.0 Fase 1C — merge-godkendelse af Issue #69-PR'en.** Rent visningslag, ingen
-  migration/writes — se PR'en for detaljer.
+- **Vision 3.0 Fase 2 — production-migration af 011 + merge-godkendelse af Issue #71-PR'en.**
+  Migration `011_trip_section_engagement.sql` er versioneret, ikke kørt. Release-rækkefølgen
+  (samme mønster som migration 010): Ricko godkender migrationen konkret → den køres og
+  verificeres read-only (schema/RLS/grants) → checks/Vercel preview igen → ChatGPT final
+  HEAD-review → Rickos merge-godkendelse → merge/deploy → production-smoketest. Se
+  `docs/VISION-3.0-PHASE-2.md` og PR'en for eksakt rækkefølge og rollback.
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
-  Separat fra Fase 1B/1C; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af
-  `pg_cron`-extensionen). Ingen tidsfrist — `trip_visits` fungerer fuldt ud uden retention.
+  Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af
+  `pg_cron`-extensionen). Ingen tidsfrist — hverken `trip_visits` eller
+  `trip_section_engagement` kræver retention for at fungere korrekt.
 - **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning. Designet er færdigt og merget
   (2-3 modeller, trusselsmodel og en konkret anbefaling — Model B, separat hashet
   access_code) i `docs/UNLOCK-CODE-DESIGN.md`

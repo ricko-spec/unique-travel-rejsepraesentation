@@ -4,6 +4,13 @@ import { getSessionUser } from "@/lib/supabase/auth";
 import { getSupabaseService } from "@/lib/supabase/server";
 import type { Trip } from "@/lib/types";
 import { classifyTripEngagement, type RawTripVisitRow } from "@/lib/trip-engagement";
+import {
+  computeEligibleSections,
+  buildSectionEngagementDisplay,
+  type RawSectionEngagementRow,
+} from "@/lib/section-engagement";
+import { filterGalleryImages } from "@/lib/progress-nav";
+import { pickDestinationMatch, type DestinationRecord } from "@/lib/destination-match";
 import { TripDetail } from "./TripDetail";
 
 export const dynamic = "force-dynamic";
@@ -33,13 +40,15 @@ export default async function TripDetailPage({
 
   const supabase = getSupabaseService();
 
-  // ISSUE-69: "Kundeaktivitet" — trip_visits' trip_id ER params.id (FK til
-  // trips.id), så opslaget kan køre PARALLELT med trip-hentningen i stedet
-  // for at vente på den. Findes trippen ikke, kasseres visitResult blot
-  // ubrugt nedenfor. "Ingen række" og "opslaget fejlede" er bevidst
-  // forskellige tilstande — se src/lib/trip-engagement.ts. En analytics-fejl
-  // må ALDRIG blokere sælgerens adgang til resten af siden.
-  const [tripResult, visitResult] = await Promise.all([
+  // ISSUE-69/#71: trip_visits' og trip_section_engagement's trip_id ER
+  // params.id (FK til trips.id), og destinations er en uafhængig, lille
+  // opslagstabel — alle fire opslag kan derfor køre PARALLELT med
+  // trip-hentningen i stedet for at vente på den. Findes trippen ikke,
+  // kasseres de øvrige resultater blot ubrugt nedenfor. "Ingen række" og
+  // "opslaget fejlede" er bevidst forskellige tilstande begge steder — se
+  // src/lib/trip-engagement.ts og src/lib/section-engagement.ts. En
+  // analytics-fejl må ALDRIG blokere sælgerens adgang til resten af siden.
+  const [tripResult, visitResult, sectionResult, destinationsResult] = await Promise.all([
     supabase
       .from("trips")
       .select("id, booking_no, slug, destination, customer_name, active, data, created_at")
@@ -50,6 +59,15 @@ export default async function TripDetailPage({
       .select("first_opened_at, last_opened_at, visit_count, open_count")
       .eq("trip_id", params.id)
       .maybeSingle(),
+    supabase
+      .from("trip_section_engagement")
+      .select("section, last_seen_at")
+      .eq("trip_id", params.id),
+    // Samme destinations-opslag som kundesiden selv bruger (getDestination i
+    // src/app/[bookingId]/page.tsx) — nødvendigt for at kunne afgøre om
+    // GALLERI faktisk er eligible for denne trip (billeder hører til
+    // destinationen, ikke til trippens egen data).
+    supabase.from("destinations").select("name, hero_url, gallery"),
   ]);
 
   if (!tripResult.data) notFound();
@@ -68,6 +86,39 @@ export default async function TripDetailPage({
     tripCreatedAt: row.created_at,
   });
 
+  if (sectionResult.error) {
+    console.error(
+      "[admin/trips/[id]] trip_section_engagement-opslag fejlede",
+      sectionResult.error,
+    );
+  }
+  if (destinationsResult.error) {
+    console.error(
+      "[admin/trips/[id]] destinations-opslag (galleri-eligibility) fejlede",
+      destinationsResult.error,
+    );
+  }
+
+  const destinationMatch = pickDestinationMatch(
+    (destinationsResult.data as DestinationRecord[]) ?? [],
+    row.destination,
+  );
+  const eligibleSections = computeEligibleSections({
+    hasItinerary: (row.data?.itinerary?.length ?? 0) > 0,
+    galleryImageCount: filterGalleryImages(destinationMatch?.gallery ?? []).length,
+    hasHotels: (row.data?.hotels?.length ?? 0) > 0,
+    hasContact: !!row.data?.advisorEmail,
+  });
+  // En fejlet destinations-opslag gør galleri-eligibility ubestemmelig, og
+  // dermed hele sektionsvisningen — ikke kun galleri-linjen — usikker at
+  // vise korrekt. Samme fail-open-kontrakt som trip_visits ovenfor: hellere
+  // "kunne ikke hentes" end et forkert eligibility-baseret minus.
+  const sectionEngagement = buildSectionEngagementDisplay({
+    eligibleSections,
+    rows: (sectionResult.data as RawSectionEngagementRow[] | null) ?? null,
+    readFailed: !!sectionResult.error || !!destinationsResult.error,
+  });
+
   return (
     <TripDetail
       id={row.id}
@@ -77,6 +128,7 @@ export default async function TripDetailPage({
       customerName={row.customer_name}
       data={row.data}
       engagement={engagement}
+      sectionEngagement={sectionEngagement}
     />
   );
 }

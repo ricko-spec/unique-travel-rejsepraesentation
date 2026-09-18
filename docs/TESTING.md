@@ -88,8 +88,9 @@ testet separat). Klassifikationen er desuden sanity-tjekket read-only mod den en
 `trip_visits`-række i production (fra smoketesten ovenfor) og gav korrekt "1 besøg" /
 "Senest 18/09 14:33".
 
-**Manuel smoke-test EFTER en eventuel senere merge/deploy af Issue #69-PR'en (plan, IKKE
-udført endnu — ingen kunstige visit-events må oprettes):**
+**Manuel smoke-test efter merge/deploy af Issue #69-PR'en (PR #70 — merget/deployet,
+UI-smoketest UDSAT: Ricko kan ikke teste lige nu, kendt driftsopfølgning, ikke en
+blocker):**
 1. Åbn **Alle præsentationer**: den rejseplan der allerede har en `trip_visits`-række
    viser "1 besøg" + korrekt "Senest …"-tidspunkt (dansk lokal tid).
 2. Åbn dens trip-detaljeside: "Første åbning", "Senest set" og "Besøg" matcher databasen.
@@ -98,6 +99,52 @@ udført endnu — ingen kunstige visit-events må oprettes):**
    åbnet endnu") hvis `trip_visits`-opslaget kunstigt får lov at fejle (fx midlertidig
    RLS-/netværksfejl) — ikke noget der skal fremprovokeres i production, kun noteret som
    forventet adfærd.
+
+**Sektionsengagement (Issue #71):** `src/lib/section-engagement.ts` er dækket af
+unit-tests: section-enum (kun de fem gyldige værdier, inkl. Zod-body-schema'et delt med
+endpointet), eligibility pr. sektion (tom itinerary/galleri/hoteller → ikke eligible,
+price altid eligible, contact uden rådgiver-email → ikke eligible), gaten
+(`shouldRecordSectionEngagement`: preview/ikke-kanonisk-host/bot/admin-cookie → no write,
+canonical production + kundeadgang → allowed), dwell-state-machinen
+(`dwellReducer`: enter+timeout → qualify, leave før dwell → cancel, re-enter → kan
+kvalificere senere, en forsinket timeout efter leave kvalificerer IKKE, "qualified" er et
+slutstadie), dedup (`shouldSendSection`: samme sektion højst én gang, fem forskellige kan
+alle sendes, det eksplicitte femsektioners-loft), og admin-visningen
+(`buildSectionEngagementDisplay`: seen/ikke-seen pr. eligible sektion, ineligible sektioner
+udelades helt, read-fejl → `unavailable`, malformed/ukendt section i en række ignoreres
+uden at gøre hele visningen utilgængelig). `src/lib/section-engagement-write.ts`s
+`describeRecordSectionEngagementOutcome()` er dækket separat (samme mønster som Fase 1B's
+`describeRecordTripVisitOutcome`).
+
+**Ikke unit-testet direkte (dokumenteret, bevidst):**
+- `SectionEngagementTracker.tsx` selv (browser-`IntersectionObserver`/`fetch`) — bevidst
+  holdt tynd, al beslutningslogik er udtrukket til `dwellReducer`/`shouldSendSection`
+  ovenfor, jf. Issue #71's egen anbefaling ("IntersectionObserver er besværlig at
+  unit-teste direkte").
+- `src/app/[bookingId]/engagement/route.ts` selv (Next.js Request/cookies()/headers()) —
+  body-validering er udtrukket til `sectionEngagementBodySchema` (testet), og gate-/
+  access-logikken er udtrukket til allerede-testede helpers
+  (`shouldRecordSectionEngagement`, `hasValidTripAccess` — sidstnævnte fra Issue #56).
+  Ingen eksisterende route-handler i dette repo mockes direkte i tests (samme etablerede
+  mønster som `/admin/api/trips`).
+- `supabase/011_trip_section_engagement.sql` — kun statisk/manuelt gennemgået (samme
+  begrundelse som migration 010: intet lokalt `psql`/`pg_dump` i arbejdsmiljøet). PK, FK
+  cascade, CHECK, RLS, `SECURITY INVOKER`, revoke/grant er alle verificeret ved læsning,
+  ikke ved kørsel mod en levende database.
+
+**Manuel smoke-test efter en eventuel senere migration + merge/deploy af Issue #71-PR'en
+(plan, IKKE udført — ingen kunstige section-engagement-events må oprettes):**
+1. Åbn en rejseplan med alle fem sektioner som kunde med korrekt adgang, scroll roligt
+   hele siden igennem (dvæl et par sekunder pr. sektion).
+2. Verificér read-only i `trip_section_engagement`: op til fem rækker for trippens
+   `trip_id`, én pr. besøgt sektion, `first_seen_at`/`last_seen_at` sat fornuftigt.
+3. Åbn dens trip-detaljeside i admin: "Set i rejseplanen" viser ✓ for de besøgte,
+   eligible sektioner.
+4. Åbn en rejseplan uden galleri/hoteller: "Set i rejseplanen" viser ALDRIG en linje for
+   de ikke-eligible sektioner.
+5. Genindlæs siden: samme sektioner sendes igen (dedup er kun pr. page load) —
+   `last_seen_at` opdateres, `first_seen_at` og `visit_count`-lignende semantik ændres ikke.
+6. Ingen synlig fejl eller mærkbar ekstra latens på kundesiden under nogen af trinene.
 
 ## Efter enhver testrunde
 

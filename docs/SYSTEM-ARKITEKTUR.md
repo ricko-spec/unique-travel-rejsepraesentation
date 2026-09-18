@@ -106,6 +106,7 @@ uniquetravel-rejsepraesentation/
 │   │   │   ├── page.tsx          # Server Component: henter trip via slug, tjekker adgangs-cookie, renderer alle sektioner
 │   │   │   ├── actions.ts        # Server action unlockTrip: rate-limit → kode-tjek → cookie → redirect (+ audit-log)
 │   │   │   ├── AccessGate.tsx    # Client: adgangskode-formular (vises når cookie mangler)
+│   │   │   ├── engagement/route.ts  # POST sektionsengagement (Issue #71) — nested under slug-path for cookie-scope
 │   │   │   ├── loading.tsx       # Skeleton-hero mens data hentes
 │   │   │   └── not-found.tsx     # Brandet fejlside med telefonnummer
 │   │   │
@@ -150,7 +151,8 @@ uniquetravel-rejsepraesentation/
 │   │   ├── ContactCTA.tsx        # Guld-CTA med mailto/tel til den matchede sælger
 │   │   ├── Footer.tsx            # Wordmark + tagline
 │   │   ├── ActionBar.tsx         # Mobil sticky bund-bar: Ring / Kontakt os
-│   │   └── SectionHeader.tsx     # Genbrugt sektions-overskrift (guld-label + hairline)
+│   │   ├── SectionHeader.tsx     # Genbrugt sektions-overskrift (guld-label + hairline)
+│   │   └── SectionEngagementTracker.tsx  # Client, renderer intet — IntersectionObserver+dwell (Issue #71)
 │   │
 │   └── lib/
 │       ├── audit.ts              # Central writeAudit-helper (best-effort) + typed AuditAction-union + requestMeta
@@ -161,6 +163,8 @@ uniquetravel-rejsepraesentation/
 │       ├── trip-visit.ts         # shouldRecordTripVisit — ren gate-logik (Issue #65, ingen DB/Next-imports)
 │       ├── trip-visit-write.ts   # recordTripVisit — best-effort RPC-skrivning, kaster aldrig (Issue #65)
 │       ├── trip-engagement.ts    # classifyTripEngagement + dansk formatering — sælgervendt visning (Issue #69, ingen DB/Next-imports)
+│       ├── section-engagement.ts # enum/eligibility/gate/dwellReducer/admin-visning (Issue #71, ingen DB/Next-imports)
+│       ├── section-engagement-write.ts  # recordSectionEngagement — best-effort RPC-skrivning, kaster aldrig (Issue #71)
 │       └── supabase/
 │           ├── server.ts         # Service-role-klient + nøgle-validering + env-diagnostik
 │           └── auth.ts           # Session-klient (@supabase/ssr) + getSessionUser
@@ -178,6 +182,7 @@ uniquetravel-rejsepraesentation/
     ├── 009_upload_events.sql     # upload_events + usage_period_summary RPC (Issue #38, live)
     ├── 010_trip_visits.sql       # trip_visits + record_trip_visit RPC (Issue #65 — live i production)
     ├── 010b_trip_visits_retention.sql  # pg_cron-retention, bevidst separat, IKKE aktiveret
+    ├── 011_trip_section_engagement.sql  # trip_section_engagement + RPC (Issue #71 — IKKE kørt live endnu)
     └── schema-baseline.json      # Committet snapshot af live-DDL (opdateres med --update-baseline)
 ```
 
@@ -377,7 +382,7 @@ Sælgeren kan redigere **fulde navn**, **telefon** og **rådgivernavn i rejsepla
 
 ## 8. Database-model
 
-Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38) og `trip_visits` (8. tabel, migration 010, kørt og verificeret live 2026-09-18T11:31:14Z, Issue #65/PR #66). **8 tabeller**, alle med RLS aktiveret.
+Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38) og `trip_visits` (8. tabel, migration 010, kørt og verificeret live 2026-09-18T11:31:14Z, Issue #65/PR #66). **8 tabeller**, alle med RLS aktiveret. En 9. tabel, `trip_section_engagement` (migration 011, Issue #71), er versioneret men **ikke kørt i production endnu** — se afsnittet nedenfor.
 
 > **Vigtigt om projekt-referencer:** `.env.example:2` og README peger på `iunixfpthdftmkgpugex` — det er dér de 35 rejser, 7 profiler og al audit-data ligger, altså **den faktiske produktionsdatabase**. To andre refs optræder i repoet og er **misvisende**: `supabase/schema.sql:2` nævner `ocxrvkrggzppyhgyambj` (det er Allotment-værktøjets projekt — copy-paste-fejl), og `supabase/profiles.sql:2-3` kalder `iunixfpthdftmkgpugex` for "dev" og nævner `sujimigwcjkzpekkdpzf` som "production" — om dét projekt overhovedet findes/bruges er ukendt — kræver Ricko-bekræftelse.
 
@@ -535,17 +540,60 @@ lever rækker indtil videre — dokumenteret i `010b_trip_visits_retention.sql` 
 
 **Læsevejen til admin ("Kundeaktivitet", Issue #69):**
 `trip_visits` → authenticated admin-server → sælger-UI. `GET /admin/api/trips` henter
-alle relevante `trip_visits`-rækker i ÉT samlet `in("trip_id", ...)`-opslag (ingen N+1,
-samme mønster som `created_by_name`/§7), og `/admin/trips/[id]/page.tsx` henter sin
+`trip_visits` med ét ufiltreret `select(...)` (bevidst UDEN `.in("trip_id", ...)` —
+review-fund på PR #70: PostgREST lægger en `in()`-liste i selve request-URL'en, og med
+267+ trips i production nærmede den sig Supabase/Cloudflares URL/header-grænse; da
+endpointet allerede henter ALLE trips, er hver `trip_visits`-række pr. definition
+relevant, så et ufiltreret select er både korrekt og undgår problemet — fortsat ét
+set-baseret opslag, ingen N+1), og `/admin/trips/[id]/page.tsx` henter sin
 `trip_visits`-række parallelt med selve trip-opslaget (`Promise.all`, samme `trip_id` som
 route-parameteren). Begge steder mappes den rå række gennem
 `classifyTripEngagement()` (`src/lib/trip-engagement.ts`) til en af fire tilstande —
 `opened` / `not-opened` / `no-recent-data` / `unavailable` — FØR noget sendes til
-klienten; den rå `trip_visits`-række forlader aldrig serveren. `no-recent-data`
-implementerer den retention-safe visningsregel (`cutoff = max(trip.created_at,
-TRACKING_SINCE)`, ≥12 mdr. gammel) fra `010b_trip_visits_retention.sql`, selvom
-retention-jobbet selv ikke er aktiveret. `unavailable` bruges udelukkende ved en fejlet
-forespørgsel — vises ALDRIG som `not-opened`.
+klienten; den rå `trip_visits`-række forlader aldrig serveren. Adminlistens response
+bruger desuden en KOMPAKT variant (`TripEngagementListState`, kun `kind`/`lastOpenedAt`/
+`visitCount`) — `firstOpenedAt`/`openCount` sendes kun til trip-detaljesiden, som er den
+eneste der viser dem. `no-recent-data` implementerer den retention-safe visningsregel
+(`cutoff = max(trip.created_at, TRACKING_SINCE)`, ≥12 mdr. gammel) fra
+`010b_trip_visits_retention.sql`, selvom retention-jobbet selv ikke er aktiveret.
+`unavailable` bruges udelukkende ved en fejlet forespørgsel — vises ALDRIG som `not-opened`.
+
+### `trip_section_engagement` — sektionsengagement (Issue #71, migration 011 — **ikke kørt i production endnu**)
+
+Aggregeret milestone-tabel, højst fem rækker pr. trip (én pr. hovedafsnit) — ikke en rå
+eventlog, samme Model B-præmis som `trip_visits`.
+
+| Kolonne | Type | Betydning |
+|---|---|---|
+| `trip_id` | uuid, del af **PK**, FK → `trips`, `on delete cascade` | Op til 5 rækker pr. rejse |
+| `section` | text, del af **PK**, CHECK-begrænset | `itinerary`/`gallery`/`hotels`/`price`/`contact` — IKKE `intro` |
+| `first_seen_at` | timestamptz | Sat ved insert, ændres aldrig sidenhen |
+| `last_seen_at` | timestamptz | Opdateres ved hver kvalificeret registrering |
+
+RLS: kun `service_role`. Skrives udelukkende via `record_trip_section_engagement(p_trip_id
+uuid, p_section text)` — samme PL/pgSQL/`security invoker`/ét-`clock_timestamp()`-mønster
+som `record_trip_visit` (§ ovenfor), uden 30-minutters-vinduet (denne tabel har intet
+"besøg"-begreb, kun "set"/"ikke set"). Se `supabase/011_trip_section_engagement.sql` for
+det fulde race-bevis (identisk ræsonnement, blot uden det rullende vindue) og
+`docs/VISION-3.0-PHASE-2.md` for den fulde designbeskrivelse.
+
+**Skrivevejen:** `POST /[bookingId]/engagement` — bevidst nested under kundens egen
+slug-path, IKKE under `/api/…`, fordi adgangscookien (`trip_access_<slug>`) er
+path-scoped og derfor aldrig ville nå et `/api/…`-endpoint. Samme fire-punkts gate som
+Fase 1B (production/kanonisk host/ikke-bot/ingen admin-cookie), men en ny,
+selvstændig funktion (`shouldRecordSectionEngagement`, `src/lib/section-engagement.ts`) —
+Fase 1B's egen gate-funktion røres ikke. Klienten (`SectionEngagementTracker.tsx`)
+observerer de fem sektioner med `IntersectionObserver`s egne defaults (fuldt viewport,
+`threshold: 0`) og kræver 750 ms sammenhængende synlighed før en sektion sendes — se
+`docs/VISION-3.0-PHASE-2.md` for den fulde begrundelse for hvorfor dette (og ikke
+`ProgressNav`s smalle trigger-bånd) er den robuste regel for både meget høje og
+nær-bunden-korte sektioner.
+
+**Læsevejen til admin ("Set i rejseplanen", Issue #71):** samme mønster som `trip_visits`
+ovenfor — `trip_section_engagement` → authenticated admin-server →
+`buildSectionEngagementDisplay()` (`src/lib/section-engagement.ts`) → sælger-UI. Kun
+ELIGIBLE sektioner (beregnet server-side, samme kilde som klientens eligibility) optræder
+nogensinde i visningen; en fejlet forespørgsel giver `unavailable`, aldrig et falsk minus.
 
 ### Tilføjelses-tidslinje
 
