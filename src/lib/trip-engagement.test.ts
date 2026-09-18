@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   classifyTripEngagement,
+  toTripEngagementListState,
   formatVisitTimestampShort,
   formatVisitTimestampLong,
   formatDateLongDK,
@@ -223,6 +224,83 @@ describe("classifyTripEngagement", () => {
     });
   });
 
+  describe("I2. logisk umulige tællere → unavailable (record_trip_visit() starter altid på 1/1 og kan kun inkrementere)", () => {
+    it("visit_count = 0 → unavailable", () => {
+      const result = classifyTripEngagement({
+        visitRow: {
+          first_opened_at: "2026-09-18T14:33:00Z",
+          last_opened_at: "2026-09-18T14:34:00Z",
+          visit_count: 0,
+          open_count: 1,
+        },
+        readFailed: false,
+        tripCreatedAt: "2026-09-01T00:00:00Z",
+        now: NOW,
+      });
+      expect(result).toEqual({ kind: "unavailable" });
+    });
+
+    it("open_count = 0 → unavailable", () => {
+      const result = classifyTripEngagement({
+        visitRow: {
+          first_opened_at: "2026-09-18T14:33:00Z",
+          last_opened_at: "2026-09-18T14:34:00Z",
+          visit_count: 1,
+          open_count: 0,
+        },
+        readFailed: false,
+        tripCreatedAt: "2026-09-01T00:00:00Z",
+        now: NOW,
+      });
+      expect(result).toEqual({ kind: "unavailable" });
+    });
+
+    it("open_count < visit_count → unavailable", () => {
+      const result = classifyTripEngagement({
+        visitRow: {
+          first_opened_at: "2026-09-18T14:33:00Z",
+          last_opened_at: "2026-09-18T14:34:00Z",
+          visit_count: 3,
+          open_count: 2,
+        },
+        readFailed: false,
+        tripCreatedAt: "2026-09-01T00:00:00Z",
+        now: NOW,
+      });
+      expect(result).toEqual({ kind: "unavailable" });
+    });
+
+    it("1/1 (mindste gyldige kombination) → opened", () => {
+      const result = classifyTripEngagement({
+        visitRow: {
+          first_opened_at: "2026-09-18T14:33:00Z",
+          last_opened_at: "2026-09-18T14:33:00Z",
+          visit_count: 1,
+          open_count: 1,
+        },
+        readFailed: false,
+        tripCreatedAt: "2026-09-01T00:00:00Z",
+        now: NOW,
+      });
+      expect(result.kind).toBe("opened");
+    });
+
+    it("3/7 (gyldig, open_count > visit_count) → opened", () => {
+      const result = classifyTripEngagement({
+        visitRow: {
+          first_opened_at: "2026-09-18T14:33:00Z",
+          last_opened_at: "2026-10-01T09:00:00Z",
+          visit_count: 3,
+          open_count: 7,
+        },
+        readFailed: false,
+        tripCreatedAt: "2026-09-01T00:00:00Z",
+        now: NOW,
+      });
+      expect(result.kind).toBe("opened");
+    });
+  });
+
   it("J. TRACKING_SINCE er fortsat den faste production-værdi 2026-09-18T12:20:18Z", () => {
     expect(TRACKING_SINCE).toBe("2026-09-18T12:20:18Z");
   });
@@ -264,5 +342,32 @@ describe("K. dansk formatering, eksplicit Europe/Copenhagen", () => {
 
   it("formatDateLongDK: kun dato, bruges bl.a. til 'Måling fra'-teksten (TRACKING_SINCE)", () => {
     expect(formatDateLongDK(TRACKING_SINCE!)).toBe("18. september 2026");
+  });
+});
+
+describe("toTripEngagementListState", () => {
+  it("opened: beskærer firstOpenedAt og openCount væk — kun kind/lastOpenedAt/visitCount tilbage", () => {
+    const compact = toTripEngagementListState({
+      kind: "opened",
+      firstOpenedAt: "2026-09-18T14:33:00.000Z",
+      lastOpenedAt: "2026-09-18T14:34:00.000Z",
+      visitCount: 3,
+      openCount: 7,
+    });
+    expect(compact).toEqual({
+      kind: "opened",
+      lastOpenedAt: "2026-09-18T14:34:00.000Z",
+      visitCount: 3,
+    });
+    expect(compact).not.toHaveProperty("firstOpenedAt");
+    expect(compact).not.toHaveProperty("openCount");
+  });
+
+  it("not-opened/no-recent-data/unavailable går uændret igennem", () => {
+    expect(toTripEngagementListState({ kind: "not-opened" })).toEqual({ kind: "not-opened" });
+    expect(toTripEngagementListState({ kind: "no-recent-data" })).toEqual({
+      kind: "no-recent-data",
+    });
+    expect(toTripEngagementListState({ kind: "unavailable" })).toEqual({ kind: "unavailable" });
   });
 });

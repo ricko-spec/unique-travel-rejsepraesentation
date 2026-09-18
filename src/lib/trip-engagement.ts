@@ -21,6 +21,24 @@ export type TripEngagementState =
   | { kind: "no-recent-data" }
   | { kind: "unavailable" };
 
+// Kompakt variant til adminlistens response (review-fund på PR #70): listens
+// UI bruger kun `kind`, `visitCount` og `lastOpenedAt` — hverken
+// `firstOpenedAt` (kun trip-detaljesiden) eller `openCount` (vises bevidst
+// slet ikke i sælger-UI'et, se TripDetail.tsx). "Send ikke unødvendige rå
+// analytics-/interne DB-felter, hvis UI'et ikke bruger dem" (Issue #69).
+// Trip-detaljesiden bruger fortsat den fulde TripEngagementState server-side.
+export type TripEngagementListState =
+  | { kind: "opened"; lastOpenedAt: string; visitCount: number }
+  | { kind: "not-opened" }
+  | { kind: "no-recent-data" }
+  | { kind: "unavailable" };
+
+/** Beskærer en fuld TripEngagementState til den kompakte list-variant. */
+export function toTripEngagementListState(state: TripEngagementState): TripEngagementListState {
+  if (state.kind !== "opened") return state;
+  return { kind: "opened", lastOpenedAt: state.lastOpenedAt, visitCount: state.visitCount };
+}
+
 // Formen af en trip_visits-række som den kommer retur fra Supabase — bevidst
 // løs (alle felter optional/nullable), fordi klassifikationen selv skal
 // kunne afvise malformed data ("hellere unavailable end falsk not-opened",
@@ -40,8 +58,14 @@ function parseDate(value: string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function isFiniteNonNegativeInteger(n: number | null | undefined): n is number {
-  return typeof n === "number" && Number.isFinite(n) && n >= 0 && Number.isInteger(n);
+// Skærpet validering (review-fund på PR #70): en EKSISTERENDE trip_visits-
+// række kan pr. konstruktion aldrig have visit_count/open_count = 0 —
+// record_trip_visit() (supabase/010_trip_visits.sql) sætter begge til 1 ved
+// insert og inkrementerer kun derfra. Et positivt heltal er derfor det
+// eneste gyldige — 0 (eller derunder) er i sig selv et tegn på malformed
+// data, ikke en legitim "besøgt men talt 0 gange"-tilstand.
+function isPositiveInteger(n: number | null | undefined): n is number {
+  return typeof n === "number" && Number.isFinite(n) && Number.isInteger(n) && n >= 1;
 }
 
 // cutoff = max(trip.created_at, TRACKING_SINCE) — se
@@ -98,8 +122,12 @@ export function classifyTripEngagement(input: {
     if (
       !firstOpenedAt ||
       !lastOpenedAt ||
-      !isFiniteNonNegativeInteger(visitCount) ||
-      !isFiniteNonNegativeInteger(openCount)
+      !isPositiveInteger(visitCount) ||
+      !isPositiveInteger(openCount) ||
+      // open_count tælles op ved HVER kvalificeret render, visit_count kun
+      // ved en NY besøgsperiode (010_trip_visits.sql) — open_count kan derfor
+      // aldrig være lavere end visit_count. Et brud er malformed data.
+      openCount < visitCount
     ) {
       // Raden findes, men er malformed — vis ALDRIG en påstået tilstand ud
       // fra ugyldige data.
