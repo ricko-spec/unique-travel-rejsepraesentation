@@ -28,6 +28,11 @@
   - **Release-rækkefølge:** migration 012 køres FØR kode-deploy. Uden tabellen fejler intet for
     kunden (klienten ignorerer 500), men klik registreres ikke, og admin viser "Kontaktaktivitet
     kunne ikke hentes".
+  - **Fase 3 tracking-cutover:** `CONTACT_INTENT_TRACKING_SINCE` (`src/lib/contact-intent-tracking.ts`) er
+    **`null`** indtil den afsluttende release-cutover commit (efter migration 012 er live, lige før
+    merge/deploy). Fase 1B's `TRACKING_SINCE` gælder kun åbninger og vises som "Åbningsmåling fra …".
+  - Admin-eligibility for kontakt-intent afledes via `tripSchema` + `normalizeTrip` (samme som kunde +
+    endpoint); ugyldig trip-data ⇒ "Kontaktaktivitet kunne ikke vurderes", aldrig et falsk "—".
   - `010b`/`pg_cron`: ikke kørt/aktiveret. Fase 4: ikke startet. Ingen merge.
 - **Kendt driftsopfølgning (ikke en blocker):** production UI-smoketest af Fase 1C og Fase 2 er
   udsat (Ricko kan ikke teste lige nu).
@@ -66,7 +71,7 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 **ChatGPT architecture/security-review af Fase 3-PR'en (Issue #73)**, dernæst Rickos konkrete
 godkendelse af migration 012 → migration køres + read-only verificeres → `--update-baseline` →
-fulde checks/Vercel → ChatGPT final HEAD-review → Rickos merge-godkendelse → merge/deploy →
+release-cutover commit (`CONTACT_INTENT_TRACKING_SINCE`) → fulde checks/Vercel → ChatGPT final HEAD-review → Rickos merge-godkendelse → merge/deploy →
 production-smoketest når Ricko har mulighed (blokerer ikke merge). Se
 `docs/VISION-3.0-PHASE-3.md` for eksakt rækkefølge.
 

@@ -126,29 +126,50 @@ export type ContactChannelState = {
 
 export type ContactIntentDisplay =
   | { kind: "available"; channels: ContactChannelState[] }
-  | { kind: "unavailable" };
+  /** DB-læsningen fejlede. */
+  | { kind: "unavailable" }
+  /**
+   * Trip-data kunne ikke valideres (tripSchema/normalizeTrip), så vi ved ikke
+   * hvilke kanaler der overhovedet fandtes som links — og kan derfor hverken
+   * påstå "klikket" eller "ikke klikket".
+   */
+  | { kind: "unassessable" };
 
 // Visningsrækkefølge: telefon først, så email (som i Issue #73).
 const DISPLAY_ORDER: readonly ContactChannel[] = ["phone", "email"];
 
 /**
  * Bygger sælger-visningen for ÉN trips kontakt-intent. `eligibleChannels` er
- * allerede beregnet (computeEligibleChannels) — kun eligible kanaler optræder
- * nogensinde. En ineligible email ("denne trip har ingen rådgiver-email")
- * vises ALDRIG som et minus — det ville ligne et negativt kundesignal.
+ * beregnet af resolveContactChannels() (src/lib/contact-intent-trip.ts — SAMME
+ * runtime-sandhed som kundesiden og endpointet: tripSchema + normalizeTrip) —
+ * kun eligible kanaler optræder nogensinde. En ineligible email ("denne trip
+ * har ingen rådgiver-email") vises ALDRIG som et minus — det ville ligne et
+ * negativt kundesignal.
  *
- * `readFailed: true` giver ALTID "unavailable" — uafhængigt af `rows` — samme
- * fail-open-kontrakt som Fase 1C/2: en fejlet forespørgsel må aldrig vises
- * som "ikke klikket".
+ * `eligibleChannels: null` betyder at trip-data ikke kunne valideres. Så vises
+ * ALDRIG "Telefon/Email klikket —" (kundesiden viser i så fald sin fejlside
+ * uden kontaktlinks, så et "—" ville være et falsk negativt signal), men
+ * "unassessable".
+ *
+ * `readFailed: true` giver ALTID "unavailable" — uafhængigt af `rows` og
+ * eligibility — samme fail-open-kontrakt som Fase 1C/2: en fejlet forespørgsel
+ * må aldrig vises som "ikke klikket".
+ *
+ * Betydningen af et "—" (`clicked: false`): KUN "ingen registreret klik siden
+ * kontakt-intent-tracking blev sat i drift" (CONTACT_INTENT_TRACKING_SINCE i
+ * src/lib/contact-intent-tracking.ts) — aldrig historisk viden fra før
+ * funktionen fandtes. UI'et scoper det med buildContactIntentTrackingNote().
  *
  * Fase 2's "Kontakt set" er en HELT anden datakilde og blandes aldrig ind her.
  */
 export function buildContactIntentDisplay(input: {
-  eligibleChannels: ContactChannel[];
+  eligibleChannels: ContactChannel[] | null;
   rows: RawContactIntentRow[] | null;
   readFailed: boolean;
 }): ContactIntentDisplay {
   if (input.readFailed) return { kind: "unavailable" };
+  if (input.eligibleChannels === null) return { kind: "unassessable" };
+  const eligibleChannels = input.eligibleChannels;
 
   const clickedByChannel = new Map<ContactChannel, string | null>();
   for (const row of input.rows ?? []) {
@@ -162,7 +183,7 @@ export function buildContactIntentDisplay(input: {
   }
 
   const channels: ContactChannelState[] = DISPLAY_ORDER.filter((channel) =>
-    input.eligibleChannels.includes(channel),
+    eligibleChannels.includes(channel),
   ).map((channel) => {
     const clicked = clickedByChannel.has(channel);
     return {

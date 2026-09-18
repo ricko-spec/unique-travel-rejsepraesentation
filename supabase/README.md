@@ -122,7 +122,10 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
   (`node scripts/check-schema-drift.mjs` viser "Ingen drift" indtil da, fordi både production og
   baseline er uden 012).
 - **Release-rækkefølge:** migrationen køres FØR kode-deploy (ellers fejler skrivning/visning
-  stille: klienten ignorerer 500, admin viser "Kontaktaktivitet kunne ikke hentes").
+  stille: klienten ignorerer 500, admin viser "Kontaktaktivitet kunne ikke hentes"). Derefter
+  `--update-baseline`, og i den afsluttende release-cutover commit sættes
+  `CONTACT_INTENT_TRACKING_SINCE` (`src/lib/contact-intent-tracking.ts`, `null` indtil da) — Fase 3's egen
+  starttidspunkt, adskilt fra Fase 1B's `TRACKING_SINCE`, som kun gælder åbninger.
 - **Data:** højst to rækker pr. trip (`email`/`phone`), kun `trip_id` + kanal + to tidsstempler.
   Ingen click_count, booking_no, slug, kundenavn, IP, User-Agent, cookie-/session-id eller
   source/surface. Se kommentarerne i `012_trip_contact_intent.sql`.
