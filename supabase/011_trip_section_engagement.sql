@@ -2,9 +2,11 @@
 -- Migration 011: trip_section_engagement — sektionsengagement (Vision 3.0
 -- Fase 2, Issue #71)
 -- ============================================================================
--- IKKE kørt live endnu. Idempotent — klar til at køres i SQL Editor når
--- Ricko godkender release-rækkefølgen (se PR-beskrivelsen for Issue #71).
--- Denne fil opretter KUN tabel, RLS-policy, CHECK-constraint og skriv-RPC'en.
+-- IKKE kørt live endnu. Idempotent — klar til godkendt production migration
+-- workflow (samme kontrollerede release-flow som migration 010; kræver
+-- Rickos eksplicitte godkendelse, se PR-beskrivelsen for Issue #71).
+-- Denne fil opretter KUN tabel, eksplicitte table grants/revokes, RLS-policy,
+-- CHECK-constraint og skriv-RPC'en.
 -- Ingen retention-mekanisme i denne omgang — se "RETENTION" nederst i denne
 -- fil for hvorfor det er en bevidst, separat senere beslutning, ikke en
 -- stiltiende "gem for evigt".
@@ -60,7 +62,7 @@ create table if not exists public.trip_section_engagement (
 );
 
 comment on table public.trip_section_engagement is
-  'Sektionsengagement pr. rejseplan (Vision 3.0 Fase 2, Issue #71). Højst 5 rækker pr. trip_id — én pr. hovedafsnit, aldrig én pr. visning. Ingen identifikator af nogen art: ingen cookie, ingen IP, ingen user-agent, intet bookingnummer, intet navn. Skrives kun via record_trip_section_engagement(). Service-role-only. Retention er endnu IKKE aktiveret (bevidst, separat release-/policy-beslutning) — se driftsnoten i supabase/README.md.';
+  'Sektionsengagement pr. rejseplan (Vision 3.0 Fase 2, Issue #71). Højst 5 rækker pr. trip_id — én pr. hovedafsnit, aldrig én pr. visning. Ingen identifikator af nogen art: ingen cookie, ingen IP, ingen user-agent, intet bookingnummer, intet navn. Skrives kun via record_trip_section_engagement(). Service-role-only på BÅDE Postgres GRANT-laget (kun service_role har table privileges: SELECT/INSERT/UPDATE) og RLS-laget. Retention er endnu IKKE aktiveret (bevidst, separat release-/policy-beslutning) — se driftsnoten i supabase/README.md.';
 comment on column public.trip_section_engagement.trip_id is
   'FK til trips.id, on delete cascade — en slettet rejseplan tager sit sektionsengagement med sig.';
 comment on column public.trip_section_engagement.section is
@@ -78,6 +80,47 @@ create policy "service_role full access trip_section_engagement"
   to service_role
   using (true)
   with check (true);
+
+-- ----------------------------------------------------------------------------
+-- TABLE GRANTS — mindste privilegium, eksplicit (Postgres' GRANT-lag)
+-- ----------------------------------------------------------------------------
+-- GRANT og RLS er to SEPARATE adgangslag. RLS + service_role-policyen ovenfor
+-- alene gør IKKE tabellen "service-role-only": projektets nuværende default
+-- ACL for nye public-tabeller (Supabase-standard) giver automatisk table
+-- privileges til anon, authenticated OG service_role (ALL). RLS ville i dag
+-- blokere anon/authenticated rækkerne, men selve privilegierne ville stadig
+-- være uddelt — og en fremtidig fejlkonfigureret policy ville så være den
+-- eneste barriere. Derfor håndhæves least privilege eksplicit her, i
+-- migrationen, uafhængigt af hvad default ACL'en måtte være på det tidspunkt
+-- den køres:
+--
+--   1) REVOKE ALL fra PUBLIC, anon og authenticated — ingen af dem skal
+--      kunne røre tabellen direkte.
+--   2) REVOKE ALL fra service_role og GRANT derefter KUN det, der reelt
+--      bruges (så slutresultatet er præcist og uafhængigt af default ACL —
+--      ellers ville default-ACL'ens DELETE/TRUNCATE/REFERENCES/TRIGGER blive
+--      hængende hos service_role):
+--        SELECT — admin-detaljesiden læser sektionsengagement
+--                 (src/app/admin/trips/[id]/page.tsx); ON CONFLICT DO UPDATE
+--                 i RPC'en læser desuden den eksisterende række
+--        INSERT — record_trip_section_engagement() (første registrering)
+--        UPDATE — record_trip_section_engagement() (konfliktgrenen:
+--                 last_seen_at)
+--      DELETE gives BEVIDST IKKE: intet direkte app-use-case sletter fra
+--      tabellen. FK'ens ON DELETE CASCADE (trips.id) kræver ikke, at
+--      service_role har DELETE her — kaskaden udføres af Postgres' interne
+--      RI-triggere med tabel-ejerens rettigheder, ikke som service_role.
+--      Retention (en evt. senere sletning) er en separat beslutning, se
+--      "RETENTION" nederst, og skal i givet fald selv tilføje sit privilegium.
+--
+-- Idempotent: REVOKE/GRANT kan køres igen uden at ændre slutresultatet.
+-- RLS-policyen ovenfor bevares som defense in depth (service_role har i øvrigt
+-- BYPASSRLS, så policyen er ikke det, der giver den adgang — det er GRANT'et).
+revoke all on table public.trip_section_engagement from public;
+revoke all on table public.trip_section_engagement from anon;
+revoke all on table public.trip_section_engagement from authenticated;
+revoke all on table public.trip_section_engagement from service_role;
+grant select, insert, update on table public.trip_section_engagement to service_role;
 
 -- Intet ekstra index: primærnøglen (trip_id, section) er allerede en btree
 -- med trip_id som ledende kolonne, så "alle sektioner for denne trip"
@@ -113,10 +156,10 @@ create policy "service_role full access trip_section_engagement"
 -- SECURITY INVOKER, IKKE SECURITY DEFINER: funktionen kaldes udelukkende via
 -- getSupabaseService() (src/lib/section-engagement-write.ts), som
 -- autentificerer som Postgres-rollen `service_role` — samme rolle EXECUTE er
--- grantet til nedenfor. `service_role` har allerede fuld adgang til
--- trip_section_engagement via RLS-policyen ovenfor (og har, som Supabases
--- konvention, BYPASSRLS), så der er intet behov for definer-ejerens forhøjede
--- rettigheder. Samme begrundelse og samme valg som record_trip_visit
+-- grantet til nedenfor. `service_role` har allerede de nødvendige table
+-- privileges (SELECT/INSERT/UPDATE, se TABLE GRANTS ovenfor) og RLS-policy
+-- (og har, som Supabases konvention, BYPASSRLS), så der er intet behov for
+-- definer-ejerens forhøjede rettigheder. Samme begrundelse og samme valg som record_trip_visit
 -- (review-fund på PR #66).
 -- ============================================================================
 

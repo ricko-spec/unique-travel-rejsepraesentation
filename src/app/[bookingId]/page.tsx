@@ -5,7 +5,7 @@ import { DestinationGallery } from "@/components/trip/DestinationGallery";
 import type { Metadata } from "next";
 import { getSupabaseService } from "@/lib/supabase/server";
 import { tripSchema, normalizeTrip, type TripRow } from "@/lib/types";
-import { pickDestinationMatch, type DestinationRecord } from "@/lib/destination-match";
+import { getDestination } from "@/lib/destination-lookup";
 import { Hero } from "@/components/trip/Hero";
 import { TripDetails } from "@/components/trip/TripDetails";
 import { Timeline } from "@/components/trip/Timeline";
@@ -19,7 +19,7 @@ import { filterGalleryImages, visibleNavSections } from "@/lib/progress-nav";
 import { hasValidTripAccess, tripAccessCookieName, TRIP_PAGE_ROBOTS } from "@/lib/trip-access";
 import { shouldRecordTripVisit } from "@/lib/trip-visit";
 import { scheduleTripVisit } from "@/lib/trip-visit-write";
-import { computeEligibleSections } from "@/lib/section-engagement";
+import { computeEligibleSectionsForTrip } from "@/lib/section-engagement";
 import { SectionEngagementTracker } from "@/components/trip/SectionEngagementTracker";
 
 export const dynamic = "force-dynamic";
@@ -52,16 +52,6 @@ export async function generateMetadata({
     title: `Unique Travel — Jeres rejse til ${dest}`,
     robots: TRIP_PAGE_ROBOTS,
   };
-}
-
-async function getDestination(name: string) {
-  const supabase = getSupabaseService();
-  // Hent alle destinationer (få rækker) og match i prioritetsrækkefølge — hele
-  // navnet først, ellers hvert land-segment af en kombi-destination. Et eksakt
-  // .eq-match fejler for "Sri Lanka & Maldiverne" o.l., hvor tabellen kun har
-  // landene enkeltvis; det gav flad fallback-hero selv om landets billede fandtes.
-  const { data } = await supabase.from("destinations").select("name, hero_url, gallery");
-  return pickDestinationMatch((data as DestinationRecord[]) ?? [], name);
 }
 
 export default async function TripPage({ params }: { params: { bookingId: string } }) {
@@ -130,12 +120,9 @@ export default async function TripPage({ params }: { params: { bookingId: string
   // ovenfor, men begrænset til de fem Fase 2-sektioner (ALDRIG "intro" — en
   // kvalificeret åbning er allerede Fase 1B's ansvar). Trackeren observerer
   // udelukkende sektioner der faktisk findes i DOM'en for DENNE rejseplan.
-  const eligibleSections = computeEligibleSections({
-    hasItinerary: trip.itinerary.length > 0,
-    galleryImageCount: filterGalleryImages(galleryImages).length,
-    hasHotels: trip.hotels.length > 0,
-    hasContact,
-  });
+  // Samme funktion håndhæver eligibility SERVER-side i engagement-endpointet
+  // (src/lib/section-engagement-endpoint.ts) — klientens liste er kun UX/dedup.
+  const eligibleSections = computeEligibleSectionsForTrip(trip, galleryImages);
 
   return (
     <div className="page">
