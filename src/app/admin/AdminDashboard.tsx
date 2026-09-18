@@ -21,6 +21,10 @@ type TripListItem = {
   hero_photo: string | null;
   active: boolean;
   created_at: string;
+  // ISSUE-67: afledt server-side (GET /admin/api/trips) fra trips.created_by
+  // + profiles — aldrig den rå uuid. null for ældre trips eller en creator
+  // uden (længere) en profil-række.
+  created_by_name: string | null;
 };
 
 export function AdminDashboard({ userEmail }: { userEmail?: string }) {
@@ -482,6 +486,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                     <th>Destination</th>
                     <th>Kunde</th>
                     <th>Oprettet</th>
+                    <th>Oprettet af</th>
                     <th>Status</th>
                     <th>Handlinger</th>
                   </tr>
@@ -497,6 +502,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                       <td style={{ color: "var(--grey-text)" }}>
                         {new Date(t.created_at).toLocaleDateString("da-DK")}
                       </td>
+                      <td style={{ color: "var(--grey-text)" }}>{t.created_by_name ?? "—"}</td>
                       <td>
                         {t.active ? (
                           <span className="admin-status-active">Aktiv</span>
