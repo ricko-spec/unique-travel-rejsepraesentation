@@ -160,6 +160,7 @@ uniquetravel-rejsepraesentation/
 │       ├── rate-limit.ts         # checkRateLimit → increment_rate_limit RPC (fail-open)
 │       ├── trip-visit.ts         # shouldRecordTripVisit — ren gate-logik (Issue #65, ingen DB/Next-imports)
 │       ├── trip-visit-write.ts   # recordTripVisit — best-effort RPC-skrivning, kaster aldrig (Issue #65)
+│       ├── trip-engagement.ts    # classifyTripEngagement + dansk formatering — sælgervendt visning (Issue #69, ingen DB/Next-imports)
 │       └── supabase/
 │           ├── server.ts         # Service-role-klient + nøgle-validering + env-diagnostik
 │           └── auth.ts           # Session-klient (@supabase/ssr) + getSessionUser
@@ -175,7 +176,7 @@ uniquetravel-rejsepraesentation/
     ├── 007_parse_failures.sql    # parse_failures dead-letter (ikke koblet til koden endnu)
     ├── 008_schema_snapshot.sql   # schema_snapshot() RPC — leverer DDL-metadata til drift-tjekket
     ├── 009_upload_events.sql     # upload_events + usage_period_summary RPC (Issue #38, live)
-    ├── 010_trip_visits.sql       # trip_visits + record_trip_visit RPC (Issue #65 — IKKE kørt live endnu)
+    ├── 010_trip_visits.sql       # trip_visits + record_trip_visit RPC (Issue #65 — live i production)
     ├── 010b_trip_visits_retention.sql  # pg_cron-retention, bevidst separat, IKKE aktiveret
     └── schema-baseline.json      # Committet snapshot af live-DDL (opdateres med --update-baseline)
 ```
@@ -376,7 +377,7 @@ Sælgeren kan redigere **fulde navn**, **telefon** og **rådgivernavn i rejsepla
 
 ## 8. Database-model
 
-Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38). **7 tabeller**, alle med RLS aktiveret. En 8. tabel, `trip_visits` (migration 010, Issue #65), er versioneret men **ikke kørt i production endnu** — se afsnittet nedenfor.
+Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38) og `trip_visits` (8. tabel, migration 010, kørt og verificeret live 2026-09-18T11:31:14Z, Issue #65/PR #66). **8 tabeller**, alle med RLS aktiveret.
 
 > **Vigtigt om projekt-referencer:** `.env.example:2` og README peger på `iunixfpthdftmkgpugex` — det er dér de 35 rejser, 7 profiler og al audit-data ligger, altså **den faktiske produktionsdatabase**. To andre refs optræder i repoet og er **misvisende**: `supabase/schema.sql:2` nævner `ocxrvkrggzppyhgyambj` (det er Allotment-værktøjets projekt — copy-paste-fejl), og `supabase/profiles.sql:2-3` kalder `iunixfpthdftmkgpugex` for "dev" og nævner `sujimigwcjkzpekkdpzf` som "production" — om dét projekt overhovedet findes/bruges er ukendt — kræver Ricko-bekræftelse.
 
@@ -485,7 +486,7 @@ Indexes: `received_at DESC`, `user_id`, `status`, `trip_id`. RLS: kun service_ro
 
 **Læsning til `/admin/brug` (reviewfund rettet i PR #39, to iterationer):** `GET /admin/api/usage` henter ALDRIG `upload_events` med et enkelt `.select()` — PostgREST/Supabase har en standard max-rows-grænse (typisk 1000), som ville trunkere resultatet stille (ingen fejl, bare for lave tal) så snart tabellen passerer den grænse. En første rettelse forsøgte keyset-paginering på `id`, men blev selv underkendt i review: `id` er en TILFÆLDIG `gen_random_uuid()`, ikke en monoton nøgle, så et event indsat midt i pagineringen med en uuid der sorterer FØR en allerede passeret cursor kan blive stille misset (regressionstest der beviser dette: `src/lib/usage.test.ts` → "fetchAllUsageEvents brugt med en TILFÆLDIG (ikke-monoton) id"). Den endelige løsning er RPC'en `usage_period_summary` (`supabase/009_upload_events.sql`): ét SQL-statement der aggregerer ALT (pr.-bruger-tal, `trackingSince`, `stalledEvents`, `historicalActorEvents`) i samme Postgres-snapshot — et event indsat efter kaldets start er simpelthen usynligt for det snapshot, uanset dets uuid, og resultatet er desuden bundet af antal aktive sælgere (ikke antal events), så det aldrig kan ramme en rækkegrænse. `fetchUsagePeriodSummary()` kalder RPC'en; `mergeUsageSummary()` (begge i `src/lib/usage.ts`) fletter resultatet med den fulde profiles-liste for 0-upload-sælgere. Den ældre, event-baserede `summarizeUsage()`/`periodStart()`-aggregering ligger fortsat i filen (ren, testet funktion — `periodStart()` genbruges til at beregne RPC'ens `period_start`-parameter), men `summarizeUsage()` selv indgår ikke længere i den rigtige aggregeringsvej.
 
-### `trip_visits` — kundeåbninger, cookie-fri (Issue #65, migration 010 — **IKKE kørt live endnu**)
+### `trip_visits` — kundeåbninger, cookie-fri (Issue #65, migration 010 — live i production siden 2026-09-18)
 
 Rolling 30-min. visit-aggregation **pr. rejseplan** (ikke pr. person/enhed/session). Egen
 tabel frem for kolonner på `trips`, bevidst: `trips_set_updated_at`-triggeren ville ellers
@@ -531,6 +532,20 @@ booking_no, slug, kundenavn, IP eller User-Agent gemmes. **Retention:** 12 måne
 `last_opened_at`, håndhæves af en bevidst SEPARAT, endnu ikke aktiveret fil
 (`supabase/010b_trip_visits_retention.sql`, pg_cron) — kræver egen godkendelse. Uden den
 lever rækker indtil videre — dokumenteret i `010b_trip_visits_retention.sql` som en gyldig, sikker tilstand.
+
+**Læsevejen til admin ("Kundeaktivitet", Issue #69):**
+`trip_visits` → authenticated admin-server → sælger-UI. `GET /admin/api/trips` henter
+alle relevante `trip_visits`-rækker i ÉT samlet `in("trip_id", ...)`-opslag (ingen N+1,
+samme mønster som `created_by_name`/§7), og `/admin/trips/[id]/page.tsx` henter sin
+`trip_visits`-række parallelt med selve trip-opslaget (`Promise.all`, samme `trip_id` som
+route-parameteren). Begge steder mappes den rå række gennem
+`classifyTripEngagement()` (`src/lib/trip-engagement.ts`) til en af fire tilstande —
+`opened` / `not-opened` / `no-recent-data` / `unavailable` — FØR noget sendes til
+klienten; den rå `trip_visits`-række forlader aldrig serveren. `no-recent-data`
+implementerer den retention-safe visningsregel (`cutoff = max(trip.created_at,
+TRACKING_SINCE)`, ≥12 mdr. gammel) fra `010b_trip_visits_retention.sql`, selvom
+retention-jobbet selv ikke er aktiveret. `unavailable` bruges udelukkende ved en fejlet
+forespørgsel — vises ALDRIG som `not-opened`.
 
 ### Tilføjelses-tidslinje
 

@@ -12,7 +12,12 @@ import {
   markUploadEventSaveFailed,
   verifyUploadEventForPublish,
 } from "@/lib/upload-events";
-import { uniqueCreatorIds, withCreatedByName, type CreatorProfile } from "@/lib/trip-creator";
+import { uniqueCreatorIds, resolveCreatedByName, type CreatorProfile } from "@/lib/trip-creator";
+import {
+  classifyTripEngagement,
+  type RawTripVisitRow,
+  type TripEngagementState,
+} from "@/lib/trip-engagement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,9 +93,46 @@ export async function GET() {
       }
     }
 
+    // ISSUE-69: "Kundeaktivitet" — ét samlet trip_visits-opslag for ALLE
+    // trip-id'er (aldrig ét opslag pr. trip). "Ingen række" og "opslaget
+    // fejlede" er bevidst forskellige tilstande (se src/lib/trip-engagement.ts)
+    // — en fejl her må ALDRIG vises som "Ikke åbnet endnu". Kun de fire
+    // kolonner UI'et rent faktisk bruger selectes; trip_id bruges kun til at
+    // matche raden til den rigtige trip herunder, sendes ikke i svaret.
+    const tripIds = rows.map((row) => row.id);
+    const visitRowsByTripId = new Map<string, RawTripVisitRow>();
+    let visitReadFailed = false;
+    if (tripIds.length > 0) {
+      const { data: visitRows, error: visitError } = await supabase
+        .from("trip_visits")
+        .select("trip_id, first_opened_at, last_opened_at, visit_count, open_count")
+        .in("trip_id", tripIds);
+
+      if (visitError) {
+        console.error("[GET /api/trips] trip_visits-opslag (Kundeaktivitet) fejlede", visitError);
+        visitReadFailed = true;
+      } else {
+        for (const row of visitRows ?? []) {
+          if (row.trip_id) visitRowsByTripId.set(row.trip_id, row);
+        }
+      }
+    }
+
     // created_by (den interne uuid) sendes aldrig til klienten — kun det
-    // afledte, menneskelæsbare created_by_name.
-    return NextResponse.json({ trips: withCreatedByName(rows, creatorProfiles) });
+    // afledte, menneskelæsbare created_by_name. Samme princip for
+    // Kundeaktivitet: kun den afledte visningstilstand (engagement), ikke
+    // trip_visits-raden.
+    const trips = rows.map(({ created_by, ...rest }) => ({
+      ...rest,
+      created_by_name: resolveCreatedByName(created_by, creatorProfiles),
+      engagement: classifyTripEngagement({
+        visitRow: visitRowsByTripId.get(rest.id) ?? null,
+        readFailed: visitReadFailed,
+        tripCreatedAt: rest.created_at,
+      }),
+    }));
+
+    return NextResponse.json({ trips });
   } catch (e) {
     const detail = describeFetchError(e);
     console.error("[GET /api/trips] Threw", e);
