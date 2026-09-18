@@ -80,11 +80,14 @@ export function AccessGate({ slug, destination }: Props) {
           </button>
         </form>
 
-        {/* Issue #65: diskret transparens-info, ikke et consent-banner — ingen
-            checkbox, ingen ny cookie, blokerer aldrig unlock-flowet. */}
+        {/* Issue #65/#71: diskret transparens-info, ikke et consent-banner —
+            ingen checkbox, ingen ny cookie, blokerer aldrig unlock-flowet.
+            Opdateret i Fase 2 (Issue #71) til også at nævne sete hovedafsnit,
+            så teksten forbliver dækkende for hvad der rent faktisk
+            registreres. */}
         <p className="mt-6 text-center text-xs text-grey-text/70">
-          Vi registrerer, når rejseplanen åbnes, så din rejserådgiver bedre kan følge op på
-          tilbuddet.
+          Vi registrerer, når rejseplanen åbnes, og hvilke hovedafsnit der ses, så din
+          rejserådgiver bedre kan følge op på tilbuddet.
         </p>
 
         <p className="mt-2 text-center text-xs text-grey-text">

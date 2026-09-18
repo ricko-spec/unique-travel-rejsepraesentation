@@ -19,6 +19,8 @@ import { filterGalleryImages, visibleNavSections } from "@/lib/progress-nav";
 import { hasValidTripAccess, tripAccessCookieName, TRIP_PAGE_ROBOTS } from "@/lib/trip-access";
 import { shouldRecordTripVisit } from "@/lib/trip-visit";
 import { scheduleTripVisit } from "@/lib/trip-visit-write";
+import { computeEligibleSections } from "@/lib/section-engagement";
+import { SectionEngagementTracker } from "@/components/trip/SectionEngagementTracker";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -124,6 +126,17 @@ export default async function TripPage({ params }: { params: { bookingId: string
     hasContact,
   });
 
+  // Vision 3.0 Fase 2 (Issue #71): samme render-sandhed som navSections
+  // ovenfor, men begrænset til de fem Fase 2-sektioner (ALDRIG "intro" — en
+  // kvalificeret åbning er allerede Fase 1B's ansvar). Trackeren observerer
+  // udelukkende sektioner der faktisk findes i DOM'en for DENNE rejseplan.
+  const eligibleSections = computeEligibleSections({
+    hasItinerary: trip.itinerary.length > 0,
+    galleryImageCount: filterGalleryImages(galleryImages).length,
+    hasHotels: trip.hotels.length > 0,
+    hasContact,
+  });
+
   return (
     <div className="page">
       <Hero trip={trip} heroPhoto={row.hero_photo ?? destination?.heroUrl ?? null} />
@@ -136,6 +149,7 @@ export default async function TripPage({ params }: { params: { bookingId: string
       <Footer />
       <ProgressNav sections={navSections} />
       <ActionBar hasContact={hasContact} />
+      <SectionEngagementTracker slug={params.bookingId} sections={eligibleSections} />
     </div>
   );
 }

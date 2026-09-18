@@ -4,8 +4,19 @@ import { useMemo, useState } from "react";
 import type { Trip } from "@/lib/types";
 import { formatDateLongDK, formatVisitTimestampLong, type TripEngagementState } from "@/lib/trip-engagement";
 import { TRACKING_SINCE } from "@/lib/trip-visit";
+import type { SectionEngagementDisplay, SectionId } from "@/lib/section-engagement";
 
 const MAX_INTRO_LEN = 500;
+
+// Danske labels — matcher src/lib/progress-nav.ts's ALL_SECTIONS-labels for
+// de samme fem sektioner (kun "Intro" udelades, jf. Issue #71).
+const SECTION_LABEL: Record<SectionId, string> = {
+  itinerary: "Rejseplan",
+  gallery: "Billeder",
+  hotels: "Hoteller",
+  price: "Pris",
+  contact: "Kontakt",
+};
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -77,6 +88,7 @@ export function TripDetail({
   customerName,
   data,
   engagement,
+  sectionEngagement,
 }: {
   id: string;
   slug: string;
@@ -85,6 +97,7 @@ export function TripDetail({
   customerName: string | null;
   data: Trip;
   engagement: TripEngagementState;
+  sectionEngagement: SectionEngagementDisplay;
 }) {
   const initialIntro = data.intro ?? "";
   const introOriginal = data.introOriginal ?? "";
@@ -199,9 +212,57 @@ export function TripDetail({
             </p>
           )}
 
-          <p style={{ fontSize: 12, color: "var(--grey-text)" }}>
+          {/* "Set i rejseplanen" (Issue #71) — kun ELIGIBLE sektioner vises
+              nogensinde. En trip uden galleri viser ALDRIG en "Billeder —"-
+              linje, fordi det ville ligne et negativt kundesignal. Fejler
+              opslaget (eller det destinations-opslag eligibility afhænger
+              af), vises "Sektionsaktivitet kunne ikke hentes" — ALDRIG
+              falske minusser. Se src/lib/section-engagement.ts. */}
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--sand)" }}>
+            <div className="admin-label" style={{ marginBottom: 8 }}>
+              Set i rejseplanen
+            </div>
+            {sectionEngagement.kind === "unavailable" ? (
+              <p style={{ fontSize: 13, color: "var(--grey-text)" }}>
+                Sektionsaktivitet kunne ikke hentes.
+              </p>
+            ) : sectionEngagement.sections.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--grey-text)" }}>
+                Ingen sporbare hovedafsnit på denne rejseplan.
+              </p>
+            ) : (
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 13 }}>
+                {sectionEngagement.sections.map(({ section, seen, lastSeenAt }) => (
+                  <li
+                    key={section}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "4px 0",
+                    }}
+                  >
+                    <span>{SECTION_LABEL[section]}</span>
+                    <span
+                      style={{ color: seen ? "var(--rainforest)" : "var(--grey-text)" }}
+                      title={
+                        seen && lastSeenAt
+                          ? `Senest set ${formatVisitTimestampLong(lastSeenAt)}`
+                          : undefined
+                      }
+                    >
+                      {seen ? "✓" : "—"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <p style={{ fontSize: 12, color: "var(--grey-text)", marginTop: 16 }}>
             Besøg er læseperioder pr. rejseplan, ikke personer eller enheder. Flere åbninger
-            inden for 30 minutter kan tælle som ét besøg.
+            inden for 30 minutter kan tælle som ét besøg. &ldquo;Set i rejseplanen&rdquo; viser
+            om et hovedafsnit er nået — ikke hvor mange gange.
           </p>
           {TRACKING_SINCE && (
             <p style={{ fontSize: 12, color: "var(--grey-text)", marginTop: 4 }}>
