@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import type { Trip } from "@/lib/types";
+import { formatDateLongDK, formatVisitTimestampLong, type TripEngagementState } from "@/lib/trip-engagement";
+import { TRACKING_SINCE } from "@/lib/trip-visit";
 
 const MAX_INTRO_LEN = 500;
 
@@ -74,6 +76,7 @@ export function TripDetail({
   destination,
   customerName,
   data,
+  engagement,
 }: {
   id: string;
   slug: string;
@@ -81,6 +84,7 @@ export function TripDetail({
   destination: string;
   customerName: string | null;
   data: Trip;
+  engagement: TripEngagementState;
 }) {
   const initialIntro = data.intro ?? "";
   const introOriginal = data.introOriginal ?? "";
@@ -152,6 +156,58 @@ export function TripDetail({
           <p style={{ fontSize: 13, color: "var(--grey-text)" }}>
             Adgangskode til kunden: <strong style={{ fontFamily: "ui-monospace, monospace" }}>{bookingNo}</strong>
           </p>
+        </div>
+
+        {/* Kundeaktivitet (Issue #69) — sælgervendt visning af Fase 1B's
+            trip_visits-data. "unavailable" vises ALDRIG som "Ikke åbnet
+            endnu" — se src/lib/trip-engagement.ts. */}
+        <div className="admin-card">
+          <h2>Kundeaktivitet</h2>
+
+          {engagement.kind === "opened" ? (
+            <div style={{ display: "flex", gap: 28, flexWrap: "wrap", marginBottom: 12 }}>
+              <div>
+                <div className="admin-label" style={{ marginBottom: 2 }}>
+                  Første åbning
+                </div>
+                <div>{formatVisitTimestampLong(engagement.firstOpenedAt)}</div>
+              </div>
+              <div>
+                <div className="admin-label" style={{ marginBottom: 2 }}>
+                  Senest set
+                </div>
+                <div>{formatVisitTimestampLong(engagement.lastOpenedAt)}</div>
+              </div>
+              <div>
+                <div className="admin-label" style={{ marginBottom: 2 }}>
+                  Besøg
+                </div>
+                <div>{engagement.visitCount}</div>
+              </div>
+            </div>
+          ) : engagement.kind === "not-opened" ? (
+            <p style={{ fontSize: 13, color: "var(--grey-text)", marginBottom: 12 }}>
+              Ikke åbnet endnu.
+            </p>
+          ) : engagement.kind === "no-recent-data" ? (
+            <p style={{ fontSize: 13, color: "var(--grey-text)", marginBottom: 12 }}>
+              Ingen registrerede åbninger de seneste 12 måneder.
+            </p>
+          ) : (
+            <p style={{ fontSize: 13, color: "var(--grey-text)", marginBottom: 12 }}>
+              Aktivitet kunne ikke hentes.
+            </p>
+          )}
+
+          <p style={{ fontSize: 12, color: "var(--grey-text)" }}>
+            Besøg er læseperioder pr. rejseplan, ikke personer eller enheder. Flere åbninger
+            inden for 30 minutter kan tælle som ét besøg.
+          </p>
+          {TRACKING_SINCE && (
+            <p style={{ fontSize: 12, color: "var(--grey-text)", marginTop: 4 }}>
+              Måling fra {formatDateLongDK(TRACKING_SINCE)}.
+            </p>
+          )}
         </div>
 
         {/* Intro-editor */}

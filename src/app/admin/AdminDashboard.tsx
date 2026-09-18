@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import type { Trip } from "@/lib/types";
 import { formatCustomerPreview } from "@/lib/format";
 import { filterTrips, hasSearchQuery } from "@/lib/trip-search";
+import { formatVisitTimestampShort, type TripEngagementState } from "@/lib/trip-engagement";
 
 const TRIPS_PREVIEW_COUNT = 5;
 
@@ -25,7 +26,37 @@ type TripListItem = {
   // + profiles — aldrig den rå uuid. null for ældre trips eller en creator
   // uden (længere) en profil-række.
   created_by_name: string | null;
+  // ISSUE-69: afledt server-side fra trip_visits via classifyTripEngagement
+  // (src/lib/trip-engagement.ts) — aldrig den rå visit-række.
+  engagement: TripEngagementState;
 };
+
+// ISSUE-69: "Kundeaktivitet"-cellen. Ren rendering af en allerede-klassificeret
+// tilstand (se src/lib/trip-engagement.ts for selve klassifikationen/testene)
+// — "unavailable" må ALDRIG vises som "Ikke åbnet endnu".
+function EngagementCell({ engagement }: { engagement: TripEngagementState }) {
+  if (engagement.kind === "opened") {
+    return (
+      <div>
+        <div>{engagement.visitCount === 1 ? "1 besøg" : `${engagement.visitCount} besøg`}</div>
+        <div style={{ fontSize: 11, color: "var(--grey-text)", marginTop: 2 }}>
+          Senest {formatVisitTimestampShort(engagement.lastOpenedAt)}
+        </div>
+      </div>
+    );
+  }
+  if (engagement.kind === "not-opened") {
+    return <span style={{ color: "var(--grey-text)" }}>Ikke åbnet endnu</span>;
+  }
+  if (engagement.kind === "no-recent-data") {
+    return (
+      <span style={{ color: "var(--grey-text)" }}>
+        Ingen registrerede åbninger de seneste 12 måneder
+      </span>
+    );
+  }
+  return <span style={{ color: "var(--grey-text)" }}>Aktivitet kunne ikke hentes</span>;
+}
 
 export function AdminDashboard({ userEmail }: { userEmail?: string }) {
   const router = useRouter();
@@ -487,6 +518,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                     <th>Kunde</th>
                     <th>Oprettet</th>
                     <th>Oprettet af</th>
+                    <th>Kundeaktivitet</th>
                     <th>Status</th>
                     <th>Handlinger</th>
                   </tr>
@@ -503,6 +535,9 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
                         {new Date(t.created_at).toLocaleDateString("da-DK")}
                       </td>
                       <td style={{ color: "var(--grey-text)" }}>{t.created_by_name ?? "—"}</td>
+                      <td style={{ fontSize: 12 }}>
+                        <EngagementCell engagement={t.engagement} />
+                      </td>
                       <td>
                         {t.active ? (
                           <span className="admin-status-active">Aktiv</span>

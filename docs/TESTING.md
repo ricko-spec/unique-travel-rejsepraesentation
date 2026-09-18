@@ -68,13 +68,36 @@ policy (`service_role full access trip_visits`, `cmd=ALL`), index
 0 (ingen kunstige testevents oprettet, ingen reel trafik endnu da koden ikke er
 deployet). Selve RPC'en er stadig ALDRIG kaldt — hverken lokalt eller i production.
 
-**Manuel smoke-test EFTER release-cutover + deploy (plan, IKKE udført endnu):**
+**Manuel smoke-test EFTER release-cutover + deploy — BESTÅET (2026-09-18):**
 1. Åbn en eksisterende rejseplan som kunde med korrekt adgang.
 2. Vent 1-2 minutter.
 3. Verificér read-only i `trip_visits`: rækken findes for trippens `trip_id`,
    `first_opened_at`/`last_opened_at` er sat, `visit_count = 1`, `open_count >= 1`.
 4. Genindlæs siden inden for 30 minutter: `visit_count` forbliver 1, `open_count` stiger.
 5. Ingen synlig fejl eller ekstra latens på kundesiden under nogen af trinene.
+
+En rigtig kundeåbning oprettede én `trip_visits`-række, og et refresh inden for
+30-minutters-vinduet øgede `open_count` uden at øge `visit_count`, som forventet.
+
+**Kundeaktivitet i admin (Issue #69):** `src/lib/trip-engagement.ts` er dækket af
+unit-tests (klassifikation: visit-row → opened, ingen row + ung cutoff → not-opened,
+ingen row + cutoff ≥ 12 mdr. → no-recent-data inkl. eksplicit grænsetest, read-fejl →
+altid `unavailable` uanset øvrige felter, malformed visit-data → `unavailable` frem for
+en falsk kundeadfærd-påstand) samt dansk Europe/Copenhagen-formatering (sommer-/vintertid
+testet separat). Klassifikationen er desuden sanity-tjekket read-only mod den ene rigtige
+`trip_visits`-række i production (fra smoketesten ovenfor) og gav korrekt "1 besøg" /
+"Senest 18/09 14:33".
+
+**Manuel smoke-test EFTER en eventuel senere merge/deploy af Issue #69-PR'en (plan, IKKE
+udført endnu — ingen kunstige visit-events må oprettes):**
+1. Åbn **Alle præsentationer**: den rejseplan der allerede har en `trip_visits`-række
+   viser "1 besøg" + korrekt "Senest …"-tidspunkt (dansk lokal tid).
+2. Åbn dens trip-detaljeside: "Første åbning", "Senest set" og "Besøg" matcher databasen.
+3. Åbn en anden, aldrig-besøgt rejseplan: adminlisten/detaljesiden viser "Ikke åbnet endnu".
+4. Bekræft at admin fortsat fungerer og viser "Aktivitet kunne ikke hentes" (ikke "Ikke
+   åbnet endnu") hvis `trip_visits`-opslaget kunstigt får lov at fejle (fx midlertidig
+   RLS-/netværksfejl) — ikke noget der skal fremprovokeres i production, kun noteret som
+   forventet adfærd.
 
 ## Efter enhver testrunde
 
