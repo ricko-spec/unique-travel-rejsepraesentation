@@ -36,15 +36,23 @@ const CANONICAL_PRODUCTION_HOST = "rejseplaner.uniquetravel.dk";
 // brugt af shouldRecordTripVisit() eller record_trip_visit() — kun til
 // fremtidig visningslogik.
 //
-// ⚠️ MIDLERTIDIG PRE-RELEASE PLACEHOLDER, IKKE den ønskede endelige
-// production-værdi (review-fund på PR #66). `null` her betyder blot at
-// denne PR endnu ikke har en kørt production-migration at datere sig fra —
-// det er IKKE en gyldig sluttilstand for den mergede release. Se
-// MERGE-BLOKERENDE TJEKLISTE i supabase/README.md ("Driftsnote: trip_visits
-// (Issue #65)"): migration 010 skal køres og verificeres i production, den
-// faktiske tracking-start-timestamp skal fastlægges, og DENNE konstant
-// (+ testen i trip-visit.test.ts) skal opdateres til den faste værdi på
-// denne PR-branch, FØR PR'en kan få endelig merge-godkendelse.
+// ⚠️ RELEASE-CUTOVER-BLOCKER, stadig bevidst `null` (opdateret 2026-09-18,
+// PR #66). Migration 010 er NU kørt og verificeret i production
+// (`iunixfpthdftmkgpugex`, migration `20260918113114_trip_visits_usage_tracking`,
+// skema-tidspunkt 2026-09-18T11:31:14Z) — men DEN dato er hvornår
+// DB-INFRASTRUKTUREN blev klar, ikke hvornår kundeåbninger faktisk begyndte
+// at blive registreret. Denne kode (gaten + skrivevejen) er endnu ikke
+// merget/deployet til production, så INGEN reel tracking sker endnu selvom
+// tabellen findes. At sætte TRACKING_SINCE til migrations-tidspunktet nu
+// ville derfor være forkert — en fremtidig Fase 1C ville fejlagtigt kunne
+// tro at sporing var aktiv i vinduet mellem migration og faktisk deploy.
+//
+// TRACKING_SINCE forbliver `null` indtil en SEPARAT, sidste
+// release-cutover-commit, umiddelbart før merge/deploy af denne PR, der
+// sætter den til det faktiske UTC-tidspunkt hvor koden går live (+
+// opdaterer testen i trip-visit.test.ts til samme værdi). Se
+// "MERGE-BLOKERENDE TJEKLISTE" i supabase/README.md ("Driftsnote:
+// trip_visits (Issue #65)") for den fulde rækkefølge.
 export const TRACKING_SINCE: string | null = null;
 
 // Ren regex, transient: strengen læses, matches, og forsvinder med

@@ -55,13 +55,26 @@ audit `password_changed` uden kode-værdier.
 original-JPEG (8-15 MB) → "Behandler billede..." → WebP vises · galleri-slot · ikke-billede
 afvises med klar fejl · `_staging/` er tom bagefter.
 **Kundeåbning/trip_visits (Issue #65):** `src/lib/trip-visit.ts` er dækket af unit-tests
-(gate-logik: env, host, bot-UA, admin-cookie). RPC'en `record_trip_visit` og selve
-race-sikkerheden (`supabase/010_trip_visits.sql`) er kun statisk/manuelt gennemgået —
-IKKE kørt mod nogen database, hverken lokalt eller i production (intet lokalt
-`psql`/`pg_dump` i arbejdsmiljøet). Når migration 010 er kørt i production, bør Ricko/en
-udvikler smoke-teste: åbn en rejseplan → `trip_visits`-rækken oprettes med `visit_count=1,
-open_count=1` → genindlæs inden for 30 min → kun `open_count` stiger → genindlæs efter 30
-min (eller nulstil `last_opened_at` manuelt i test) → `visit_count` stiger også.
+(gate-logik: env, host, bot-UA, admin-cookie).
+
+**Production-schema-verifikation efter migration 010 (2026-09-18, read-only, ingen
+writes/RPC-kald):** `public.trip_visits` findes med de seks forventede kolonner (typer,
+nullability og defaults matcher migrationen), primærnøgle `trip_id`, FK til
+`trips(id) on delete cascade`, RLS aktiveret (`pg_class.relrowsecurity = true`), én
+policy (`service_role full access trip_visits`, `cmd=ALL`), index
+`trip_visits_last_opened_idx` + PK-index, `record_trip_visit(uuid)` findes med
+`prosecdef = false` (bekræfter `SECURITY INVOKER`) og `EXECUTE` kun grantet til
+`service_role` (+ ejeren `postgres` — ingen `anon`/`authenticated`/`PUBLIC`). Row count:
+0 (ingen kunstige testevents oprettet, ingen reel trafik endnu da koden ikke er
+deployet). Selve RPC'en er stadig ALDRIG kaldt — hverken lokalt eller i production.
+
+**Manuel smoke-test EFTER release-cutover + deploy (plan, IKKE udført endnu):**
+1. Åbn en eksisterende rejseplan som kunde med korrekt adgang.
+2. Vent 1-2 minutter.
+3. Verificér read-only i `trip_visits`: rækken findes for trippens `trip_id`,
+   `first_opened_at`/`last_opened_at` er sat, `visit_count = 1`, `open_count >= 1`.
+4. Genindlæs siden inden for 30 minutter: `visit_count` forbliver 1, `open_count` stiger.
+5. Ingen synlig fejl eller ekstra latens på kundesiden under nogen af trinene.
 
 ## Efter enhver testrunde
 
