@@ -116,21 +116,43 @@ uden at gøre hele visningen utilgængelig). `src/lib/section-engagement-write.t
 `describeRecordSectionEngagementOutcome()` er dækket separat (samme mønster som Fase 1B's
 `describeRecordTripVisitOutcome`).
 
+**Endpoint-orkestreringen (`src/lib/section-engagement-endpoint.test.ts`, review-fund PR
+#72):** `route.ts` er en tynd adapter over `handleSectionEngagement()`, så testene kører den
+FAKTISKE sikkerhedskæde (body → trip + adgang → gate → server-side eligibility → skrivning)
+med en spion på skrivningen. Cases: (A) manglende trip → ingen write; (B) manglende/forkert
+adgangscookie → ingen write, og samme svar som manglende trip (ingen oracle); (C) preview/
+ikke-kanonisk host → ingen write; (D) admin auth-cookie → ingen write; (E) bot/tom UA →
+ingen write; (F) gyldig adgang + gyldig enum men ineligible sektion (contact uden
+advisorEmail, itinerary/hotels uden indhold, gallery tomt eller kun tomme URL'er, ikke-
+parsebar trip-data) → `204`, ingen write, og gate-afvisning sker før galleri-opslaget; (G)
+gyldigt kald → præcis ét write med SERVER-afledt `trip.id` + valideret section (alle fem
+sektioner), `price` altid eligible, et ekstra `trip_id` i body → 400 og intet skrives,
+DB-fejl → 500 med ét forsøg. Dertil `computeEligibleSectionsForTrip` (samme funktion som
+kundesiden). Kontrolleret ved mutation: fjernes eligibility-tjekket, fejler 6 tests.
+
+**Migration 011 — grants/RLS/RPC kørt mod lokal in-memory Postgres (pglite, uden for
+repoet), ikke kun læst:** roller `anon`/`authenticated`/`service_role` + Supabase-lignende
+default ACL (auto-ALL på nye public-tabeller) oprettes, migrationen køres to gange
+(idempotens), og bagefter verificeres: PUBLIC/anon/authenticated har INGEN table privileges,
+`service_role` har præcis SELECT/INSERT/UPDATE, RLS enabled + policy bevaret, RPC
+`SECURITY INVOKER` med EXECUTE kun til `service_role`, RPC-INSERT + ON CONFLICT-UPDATE
+virker som `service_role` (`first_seen_at` uændret, `last_seen_at` rykker frem), DELETE/
+TRUNCATE afvist for `service_role`, SELECT/INSERT/RPC afvist for anon/authenticated, og
+`ON DELETE CASCADE` fjerner rækken uden at `service_role` har DELETE (24/24). Det er
+IKKE en kørsel mod production — migrationen er ikke kørt live.
+
 **Ikke unit-testet direkte (dokumenteret, bevidst):**
 - `SectionEngagementTracker.tsx` selv (browser-`IntersectionObserver`/`fetch`) — bevidst
   holdt tynd, al beslutningslogik er udtrukket til `dwellReducer`/`shouldSendSection`
   ovenfor, jf. Issue #71's egen anbefaling ("IntersectionObserver er besværlig at
   unit-teste direkte").
 - `src/app/[bookingId]/engagement/route.ts` selv (Next.js Request/cookies()/headers()) —
-  body-validering er udtrukket til `sectionEngagementBodySchema` (testet), og gate-/
-  access-logikken er udtrukket til allerede-testede helpers
-  (`shouldRecordSectionEngagement`, `hasValidTripAccess` — sidstnævnte fra Issue #56).
-  Ingen eksisterende route-handler i dette repo mockes direkte i tests (samme etablerede
-  mønster som `/admin/api/trips`).
-- `supabase/011_trip_section_engagement.sql` — kun statisk/manuelt gennemgået (samme
-  begrundelse som migration 010: intet lokalt `psql`/`pg_dump` i arbejdsmiljøet). PK, FK
-  cascade, CHECK, RLS, `SECURITY INVOKER`, revoke/grant er alle verificeret ved læsning,
-  ikke ved kørsel mod en levende database.
+  route-filen er ren I/O-adapter (læs request, lever deps, oversæt status). Al
+  beslutningslogik lever i `handleSectionEngagement()`, som route.ts kalder og som er
+  testet ovenfor. Ingen eksisterende route-handler i dette repo mockes direkte i tests, og
+  vitest har ingen `@/`-alias-opsætning (samme etablerede mønster som `/admin/api/trips`).
+- `supabase/011_trip_section_engagement.sql` mod en LEVENDE database — kun kørt lokalt
+  (pglite, se ovenfor), ikke i production/Supabase.
 
 **Manuel smoke-test efter en eventuel senere migration + merge/deploy af Issue #71-PR'en
 (plan, IKKE udført — ingen kunstige section-engagement-events må oprettes):**

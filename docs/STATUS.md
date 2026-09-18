@@ -26,7 +26,10 @@
   (`POST /[bookingId]/engagement`), klient-tracker med IntersectionObserver + 750 ms dwell
   for de fem hovedafsnit (rejseplan/billeder/hoteller/pris/kontakt — ALDRIG intro), og en
   minimal "Set i rejseplanen"-visning i admin. Se `docs/VISION-3.0-PHASE-2.md` og PR for
-  fuld status.
+  fuld status. **PR #72 er rettet efter ChatGPT's architecture/security-review** (eksplicitte
+  table grants/revokes, server-side sektions-eligibility, transparens i Footer også for
+  returning customers, orkestrerings-tests) og afventer ChatGPT re-review. **Migration 011
+  er IKKE kørt i production; production-writes = 0; ingen merge.**
 
 ## Seneste 3 relevante ændringer
 

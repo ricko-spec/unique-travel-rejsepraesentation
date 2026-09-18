@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
 import { getSupabaseService } from "@/lib/supabase/server";
-import { hasValidTripAccess, tripAccessCookieName } from "@/lib/trip-access";
-import {
-  sectionEngagementBodySchema,
-  shouldRecordSectionEngagement,
-} from "@/lib/section-engagement";
+import { tripAccessCookieName } from "@/lib/trip-access";
+import { getDestination } from "@/lib/destination-lookup";
 import { recordSectionEngagement } from "@/lib/section-engagement-write";
+import {
+  handleSectionEngagement,
+  type EngagementTripRow,
+} from "@/lib/section-engagement-endpoint";
 
 // Vision 3.0 Fase 2 (Issue #71) — write-endpoint for sektionsengagement.
 //
@@ -21,82 +22,65 @@ import { recordSectionEngagement } from "@/lib/section-engagement-write";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// Denne route er en TYND ADAPTER. Hele den sikkerhedskritiske beslutningskæde
+// (body → trip + adgang → production/host/bot/admin-gate → server-side
+// sektions-eligibility → skrivning) lever i handleSectionEngagement()
+// (src/lib/section-engagement-endpoint.ts), hvor den er dækket af tests
+// (src/lib/section-engagement-endpoint.test.ts) — route.ts har ingen egen
+// kopi af rækkefølgen, kun I/O:
+//   - læser request (body, cookie, headers) og sender det ind som data
+//   - leverer de tre afhængigheder (trip-opslag, galleri-opslag, skrivning)
+//   - oversætter det returnerede udfald til en HTTP-status
+//
+// Svarene: 400 (ugyldig body), 404 (trip findes ikke/er inaktiv ELLER
+// adgangscookien mangler/er forkert — BEVIDST samme svar, ingen slug-/
+// adgangs-oracle), 204 (skrevet, gate-afvist ELLER sektionen findes ikke på
+// denne rejseplan — klienten må aldrig kunne skelne, og retry'er aldrig), 500
+// (DB-skrivningen fejlede; kun synlig server-side — klienten ignorerer
+// statuskoden, se SectionEngagementTracker.tsx).
 export async function POST(
   req: Request,
   { params }: { params: { bookingId: string } },
 ) {
-  // 1. Body — kun de fem kendte sections er gyldige, ingen ekstra nøgler
-  // (sectionEngagementBodySchema, src/lib/section-engagement.ts). Alt andet
-  // er 400.
-  const json = await req.json().catch(() => null);
-  const parsed = sectionEngagementBodySchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ ok: false }, { status: 400 });
-  }
+  const body = await req.json().catch(() => null);
 
-  // 2-4. Slå trippen op via slug'en fra URL'en og kræv en AKTIV trip — samme
-  // opslag som page.tsx's loadTrip(), men kun de to kolonner vi rent
-  // faktisk skal bruge (id til RPC'en, booking_no til adgangstjekket).
-  const supabase = getSupabaseService();
-  const { data: trip, error: tripError } = await supabase
-    .from("trips")
-    .select("id, booking_no")
-    .eq("slug", params.bookingId)
-    .eq("active", true)
-    .maybeSingle();
+  const result = await handleSectionEngagement(
+    {
+      slug: params.bookingId,
+      body,
+      accessCookieValue: cookies().get(tripAccessCookieName(params.bookingId))?.value,
+      gate: {
+        vercelEnv: process.env.VERCEL_ENV,
+        host: headers().get("host"),
+        userAgent: headers().get("user-agent"),
+        cookieNames: cookies()
+          .getAll()
+          .map((cookie) => cookie.name),
+      },
+    },
+    {
+      // Kun de kolonner endpointet skal bruge (id til RPC'en, booking_no til
+      // adgangstjekket, destination + data til server-side eligibility) — samme
+      // filter (slug + aktiv) som kundesidens loadTrip(). Fejl og "ikke fundet"
+      // er bevidst det samme (null) → samme 404.
+      loadTrip: async (slug) => {
+        const { data, error } = await getSupabaseService()
+          .from("trips")
+          .select("id, booking_no, destination, data")
+          .eq("slug", slug)
+          .eq("active", true)
+          .maybeSingle();
+        if (error || !data) return null;
+        return data as EngagementTripRow;
+      },
+      // Samme opslag som kundesiden (src/lib/destination-lookup.ts).
+      loadGalleryImages: async (destination) => (await getDestination(destination))?.gallery ?? [],
+      // Kaster aldrig og logger allerede sanitiseret (kun tripId + section +
+      // Postgres' error.code/message — se src/lib/section-engagement-write.ts).
+      recordSection: recordSectionEngagement,
+    },
+  );
 
-  // 5. Adgangscookie — samme helper som kundesiden selv bruger
-  // (hasValidTripAccess, src/lib/trip-access.ts). "Trip findes ikke/er
-  // inaktiv" og "adgangscookien er forkert/mangler" giver BEVIDST samme
-  // 404-svar (i stedet for hhv. 404 og 401/403): dette er et
-  // maskine-endpoint uden nogen UX-grund til at lade en klient skelne
-  // "dette slug findes slet ikke" fra "dette slug findes, men koden er
-  // forkert" — begge cases giver et helt tomt sikkerhedsmæssigt signal at
-  // opnå ved at kunne skelne dem, så vi undgår at gøre endpointet til en
-  // slug-/adgangs-oracle. Kundens page.tsx skal derimod skelne (den skal
-  // vise AccessGate-formularen for en reel, aktiv trip) — det er en helt
-  // anden, menneskevendt kontekst end dette fire-and-forget-kald.
-  const accessCookie = cookies().get(tripAccessCookieName(params.bookingId));
-  if (tripError || !trip || !hasValidTripAccess(accessCookie?.value, trip.booking_no)) {
-    return NextResponse.json({ ok: false }, { status: 404 });
-  }
-
-  // 6. Samme production/host/bot/admin-gate-princip som Fase 1B (Issue #65)
-  // — se src/lib/section-engagement.ts for hvorfor dette er en ny,
-  // selvstændig funktion og ikke et genbrug af selve trip-visit.ts-koden.
-  // Afviser gaten (preview, ikke-kanonisk host, bot, eller en sælger med
-  // gyldig admin-session), returneres et harmless no-op-svar — INGEN
-  // DB-skrivning. Preview deler production-DB'en og må derfor ALDRIG kunne
-  // skrive til den, og en admin-browser der (fx via QA-siden) også har en
-  // gyldig kunde-adgangscookie må heller aldrig kunne forurene
-  // sektionsdataen.
-  const shouldRecord = shouldRecordSectionEngagement({
-    vercelEnv: process.env.VERCEL_ENV,
-    host: headers().get("host"),
-    userAgent: headers().get("user-agent"),
-    cookieNames: cookies()
-      .getAll()
-      .map((cookie) => cookie.name),
-  });
-  if (!shouldRecord) {
-    // Bevidst identisk statuskode (204) som et vellykket write nedenfor —
-    // klienten skal ALDRIG kunne skelne "gaten afviste" fra "skrivningen
-    // lykkedes", og skal under ingen omstændigheder retry'e på baggrund af
-    // svaret her.
-    return new NextResponse(null, { status: 204 });
-  }
-
-  // 7-9. Selve skrivningen: service-role server-side, aldrig client Supabase.
-  // recordSectionEngagement() kaster aldrig og logger allerede sanitiseret
-  // (kun tripId + section + Postgres' error.code/message — se
-  // src/lib/section-engagement-write.ts).
-  const outcome = await recordSectionEngagement(trip.id, parsed.data.section);
-  if (outcome.kind !== "ok") {
-    // Fail-open for KUNDEN: client tracker ignorerer denne statuskode helt
-    // og retry'er aldrig (se SectionEngagementTracker.tsx) — non-2xx er kun
-    // synligt server-side/i observability.
-    return NextResponse.json({ ok: false }, { status: 500 });
-  }
-
-  return new NextResponse(null, { status: 204 });
+  if (result.status === 204) return new NextResponse(null, { status: 204 });
+  return NextResponse.json({ ok: false }, { status: result.status });
 }

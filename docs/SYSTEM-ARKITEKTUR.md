@@ -165,6 +165,9 @@ uniquetravel-rejsepraesentation/
 │       ├── trip-engagement.ts    # classifyTripEngagement + dansk formatering — sælgervendt visning (Issue #69, ingen DB/Next-imports)
 │       ├── section-engagement.ts # enum/eligibility/gate/dwellReducer/admin-visning (Issue #71, ingen DB/Next-imports)
 │       ├── section-engagement-write.ts  # recordSectionEngagement — best-effort RPC-skrivning, kaster aldrig (Issue #71)
+│       ├── section-engagement-endpoint.ts  # handleSectionEngagement — hele endpoint-beslutningskæden, deps-injiceret + testet (Issue #71)
+│       ├── destination-lookup.ts # getDestination — delt destinationsopslag (kundeside + engagement-endpoint)
+│       ├── tracking-notice.ts    # TRACKING_NOTICE — delt transparenstekst (AccessGate + Footer)
 │       └── supabase/
 │           ├── server.ts         # Service-role-klient + nøgle-validering + env-diagnostik
 │           └── auth.ts           # Session-klient (@supabase/ssr) + getSessionUser
@@ -570,7 +573,9 @@ eventlog, samme Model B-præmis som `trip_visits`.
 | `first_seen_at` | timestamptz | Sat ved insert, ændres aldrig sidenhen |
 | `last_seen_at` | timestamptz | Opdateres ved hver kvalificeret registrering |
 
-RLS: kun `service_role`. Skrives udelukkende via `record_trip_section_engagement(p_trip_id
+Adgang: kun `service_role` på BÅDE GRANT-laget (`REVOKE ALL` fra PUBLIC/anon/authenticated/
+service_role, dernæst `GRANT SELECT, INSERT, UPDATE` til `service_role` — intet DELETE) og
+RLS-laget (enabled + service_role-policy). Skrives udelukkende via `record_trip_section_engagement(p_trip_id
 uuid, p_section text)` — samme PL/pgSQL/`security invoker`/ét-`clock_timestamp()`-mønster
 som `record_trip_visit` (§ ovenfor), uden 30-minutters-vinduet (denne tabel har intet
 "besøg"-begreb, kun "set"/"ikke set"). Se `supabase/011_trip_section_engagement.sql` for
@@ -582,7 +587,11 @@ slug-path, IKKE under `/api/…`, fordi adgangscookien (`trip_access_<slug>`) er
 path-scoped og derfor aldrig ville nå et `/api/…`-endpoint. Samme fire-punkts gate som
 Fase 1B (production/kanonisk host/ikke-bot/ingen admin-cookie), men en ny,
 selvstændig funktion (`shouldRecordSectionEngagement`, `src/lib/section-engagement.ts`) —
-Fase 1B's egen gate-funktion røres ikke. Klienten (`SectionEngagementTracker.tsx`)
+Fase 1B's egen gate-funktion røres ikke. Endpointet håndhæver desuden SERVER-side, at den
+anmodede sektion faktisk findes på den konkrete trip (`computeEligibleSectionsForTrip` —
+samme funktion som kundesiden) FØR RPC'en; ineligible = `204` no-op uden skrivning. Hele
+kæden lever i `handleSectionEngagement()` (`src/lib/section-engagement-endpoint.ts`), som
+`route.ts` er en tynd adapter over. Klienten (`SectionEngagementTracker.tsx`)
 observerer de fem sektioner med `IntersectionObserver`s egne defaults (fuldt viewport,
 `threshold: 0`) og kræver 750 ms sammenhængende synlighed før en sektion sendes — se
 `docs/VISION-3.0-PHASE-2.md` for den fulde begrundelse for hvorfor dette (og ikke

@@ -1263,6 +1263,14 @@ section { width: 100%; }
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+.footer-notice {
+  max-width: 460px;
+  margin: 28px auto 0;
+  color: var(--grey-text);
+  opacity: 0.75;
+  font-size: 11px;
+  line-height: 1.6;
+}
 
 /* ===== Skeleton loader ===== */
 @keyframes pulse {

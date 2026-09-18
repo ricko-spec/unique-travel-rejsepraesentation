@@ -3,6 +3,8 @@
 // uden browser eller DB — samme mønster som trip-visit.ts/trip-engagement.ts.
 
 import { z } from "zod";
+import { filterGalleryImages } from "./progress-nav";
+import type { Trip } from "./types";
 import {
   isProductionHost,
   isBotUserAgent,
@@ -83,6 +85,31 @@ export function computeEligibleSections(input: SectionEligibilityInput): Section
       case "contact":
         return input.hasContact;
     }
+  });
+}
+
+/**
+ * Eligibility for en konkret, allerede normaliseret rejseplan + dens
+ * destinationsgalleri. ÉN funktion, brugt af BÅDE kundesiden (page.tsx, til
+ * hvilke sektioner klient-trackeren observerer) og engagement-endpointet
+ * (server-side, FØR skrivning) — så de to aldrig kan divergere. Betingelserne
+ * er de samme som selve sektionskomponenterne bruger til at (ikke-)rendere
+ * sig selv: itinerary/hotels ud fra trip-arrays, gallery ud fra
+ * filterGalleryImages() (samme filter som DestinationGallery), contact ud fra
+ * advisorEmail (samme som ContactCTA), price altid.
+ *
+ * `trip` skal være output af normalizeTrip() (samme input som kundesiden
+ * render'er ud fra).
+ */
+export function computeEligibleSectionsForTrip(
+  trip: Pick<Trip, "itinerary" | "hotels" | "advisorEmail">,
+  galleryImages: string[],
+): SectionId[] {
+  return computeEligibleSections({
+    hasItinerary: trip.itinerary.length > 0,
+    galleryImageCount: filterGalleryImages(galleryImages).length,
+    hasHotels: trip.hotels.length > 0,
+    hasContact: !!trip.advisorEmail,
   });
 }
 

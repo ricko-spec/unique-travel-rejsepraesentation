@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { unlockTrip } from "./actions";
+import { TRACKING_NOTICE } from "@/lib/tracking-notice";
 
 type Props = {
   slug: string;
@@ -84,11 +85,10 @@ export function AccessGate({ slug, destination }: Props) {
             ingen checkbox, ingen ny cookie, blokerer aldrig unlock-flowet.
             Opdateret i Fase 2 (Issue #71) til også at nævne sete hovedafsnit,
             så teksten forbliver dækkende for hvad der rent faktisk
-            registreres. */}
-        <p className="mt-6 text-center text-xs text-grey-text/70">
-          Vi registrerer, når rejseplanen åbnes, og hvilke hovedafsnit der ses, så din
-          rejserådgiver bedre kan følge op på tilbuddet.
-        </p>
+            registreres. Delt konstant (TRACKING_NOTICE) med Footer, som viser
+            den samme tekst på den oplåste side — kunder med en eksisterende
+            adgangscookie ser aldrig denne gate. */}
+        <p className="mt-6 text-center text-xs text-grey-text/70">{TRACKING_NOTICE}</p>
 
         <p className="mt-2 text-center text-xs text-grey-text">
           Spørgsmål? Kontakt jeres rejserådgiver hos Unique Travel.

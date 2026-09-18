@@ -45,6 +45,23 @@ Skrives udelukkende via `record_trip_section_engagement(p_trip_id uuid, p_sectio
 `record_trip_visit` (migration 010, to gange reviewet på PR #66) — se den fulde
 begrundelse i `supabase/011_trip_section_engagement.sql`. `EXECUTE`: kun `service_role`.
 
+**Adgangslag (review-fund, PR #72): "service-role-only" er sandt på BEGGE lag.** GRANT og
+RLS er to separate adgangslag i Postgres/Supabase. Projektets default ACL for nye
+`public`-tabeller uddeler automatisk table privileges til `anon`, `authenticated` og
+`service_role` — RLS alene gør derfor ikke tabellen service-role-only, kun rækkerne
+utilgængelige. Migrationen håndhæver derfor least privilege eksplicit:
+
+| Lag | Håndhævelse |
+|---|---|
+| Table GRANT | `REVOKE ALL` fra `PUBLIC`, `anon`, `authenticated` og `service_role`, dernæst `GRANT SELECT, INSERT, UPDATE` til `service_role` (slutresultat uafhængigt af default ACL) |
+| RLS | Enabled + policy kun for `service_role` — bevaret som defense in depth |
+| RPC | `SECURITY INVOKER`; `EXECUTE` revoket fra PUBLIC/anon/authenticated, grantet kun til `service_role` |
+
+`service_role` får **ikke** DELETE (eller TRUNCATE/REFERENCES/TRIGGER): intet direkte
+app-use-case sletter fra tabellen, og FK'ens `ON DELETE CASCADE` kører som tabel-ejer, ikke
+som `service_role`. SELECT bruges af admin-læsevejen (og af RPC'ens `ON CONFLICT DO UPDATE`),
+INSERT + UPDATE af RPC'en.
+
 ## Hvorfor `supabase/011_trip_section_engagement.sql`, ikke `supabase migration new`
 
 Overvejet og forkastet: Supabase CLI'et er installeret og virker teknisk i dette repo
@@ -68,7 +85,8 @@ Kontrakt:
 | Ugyldig/ukendt body (`section` uden for de fem, ekstra nøgler, malformed JSON) | `400` |
 | Trip findes ikke/er inaktiv, ELLER adgangscookien er forkert/mangler | `404` (bevidst samme svar for begge — se nedenfor) |
 | Gate afviser (ikke production, ikke kanonisk host, bot, eller admin-auth-cookie) | `204`, ingen DB-skrivning |
-| Gyldigt, gate godkender, skrivning lykkes | `204` |
+| Gyldig enum-værdi, men sektionen findes IKKE på denne konkrete rejseplan (**ineligible**) | `204`, ingen DB-skrivning |
+| Gyldigt, gate godkender, sektionen er eligible, skrivning lykkes | `204` |
 | Gyldigt, gate godkender, DB-skrivning fejler | `500` (klienten ignorerer dette fuldstændigt) |
 
 **Hvorfor 404 for både "trip findes ikke" og "forkert/manglende adgang":** dette er et
@@ -87,6 +105,34 @@ guardrail i Issue #71: "ændring af Fase 1B's ... logik" er ikke i denne PR).
 **Body:** `{ section: SectionId }`, `.strict()` — en ekstra nøgle som et forsøgt `trip_id`
 afvises frem for at blive ignoreret. `trip_id` kan strukturelt aldrig sendes af klienten;
 det udledes udelukkende server-side fra slug'en i URL'en.
+
+**Server-side eligibility (review-fund, PR #72):** klientens eligibility-liste er UX/dedup,
+IKKE en trust boundary — en kunde med gyldig adgangscookie kan manuelt POSTe
+`{ "section": "contact" }` for en rejseplan uden kontaktsektion, og uden et server-tjek
+ville databasen få "umulige" milestones. Endpointet afgør derfor selv, FØR RPC'en, om den
+anmodede sektion faktisk findes på DEN konkrete trip — med samme funktion som kundesiden
+bruger til at vælge hvad trackeren observerer (`computeEligibleSectionsForTrip`,
+`src/lib/section-engagement.ts`), på trippens normaliserede data (`tripSchema` +
+`normalizeTrip`, ikke løs læsning af rå JSON):
+
+| Sektion | Eligible når |
+|---|---|
+| `itinerary` | `trip.itinerary.length > 0` |
+| `gallery` | `filterGalleryImages(destinationens galleri).length > 0` (samme destinationsopslag som kundesiden: `src/lib/destination-lookup.ts`) |
+| `hotels` | `trip.hotels.length > 0` |
+| `price` | altid |
+| `contact` | `trip.advisorEmail` findes (samme betingelse som `ContactCTA`) |
+
+**Valg: ineligible = harmløst `204` no-op, ingen RPC-skrivning** (ikke 4xx). Samme svar som
+et vellykket write og en gate-afvisning, så endpointet hverken kan bruges til at udspørge
+en rejseplans indhold eller give klienten noget at retry'e på. Trip-data der ikke kan
+parses (kundesiden viser så sin fejlside uden sektioner) er ligeledes ineligible. Gate-
+afvisning sker FØR eligibility-opslaget (ingen unødigt destinations-læsning for preview/bots).
+
+**Route er en tynd adapter.** Hele beslutningskæden (body → trip + adgang → gate →
+eligibility → skrivning) lever i `handleSectionEngagement()`
+(`src/lib/section-engagement-endpoint.ts`, afhængigheds-injiceret), som `route.ts`
+kalder — så den sikkerhedskritiske rækkefølge er testet uden at mocke Next.js.
 
 ## Klient: `SectionEngagementTracker`
 
@@ -143,7 +189,15 @@ Fase 1B's linje i `AccessGate.tsx` dækkede kun selve åbningen. Opdateret til:
 > Vi registrerer, når rejseplanen åbnes, og hvilke hovedafsnit der ses, så din
 > rejserådgiver bedre kan følge op på tilbuddet.
 
-Ingen cookie-banner, ingen ny cookie, ingen ny checkbox. Faktuel dokumentation her, ingen
+**Også på den oplåste kundeside (review-fund, PR #72):** `AccessGate` vises kun når kunden
+IKKE allerede har en gyldig 30-dages adgangscookie. Kunder der låste rejseplanen op før
+Fase 2-deploy går direkte ind og får sektioner registreret uden nogensinde at se
+gate-teksten. Samme tekst står derfor diskret i `Footer` (`src/components/trip/Footer.tsx`)
+på selve rejseplanen. Teksten er ÉN delt konstant (`TRACKING_NOTICE`,
+`src/lib/tracking-notice.ts`), brugt af både `AccessGate` og `Footer`, så de aldrig
+divergerer.
+
+Ingen cookie-banner, ingen consent-modal, ingen ny cookie, ingen ny checkbox. Faktuel dokumentation her, ingen
 juridisk konklusion: formålet er salgsopfølgning, dataen er trip-baseret (ikke
 person-/enhedsbaseret), og der tilføjes ingen ny klient-identifikator af nogen art.
 
@@ -160,7 +214,9 @@ Ingen ny `010c`/pg_cron-fil er oprettet i denne PR.
 1. Implementér branch + migration + kode + tests + docs — **denne PR**.
 2. ChatGPT architecture/security-review af PR'en.
 3. Ricko godkender KONKRET production-migration af `011_trip_section_engagement.sql`.
-4. Migrationen køres, og tabel/RLS/policy/CHECK/RPC-grants verificeres read-only.
+4. Migrationen køres (godkendt production migration workflow), og tabel/RLS/policy/CHECK/
+   **table grants**/RPC-grants verificeres read-only — forventet: `anon`/`authenticated`/
+   PUBLIC har INGEN table privileges, `service_role` har præcis SELECT/INSERT/UPDATE.
 5. `node scripts/check-schema-drift.mjs --update-baseline` køres, og den opdaterede
    `schema-baseline.json` committes — **kun efter** migrationen faktisk er kørt.
 6. Alle checks + Vercel preview køres igen.
