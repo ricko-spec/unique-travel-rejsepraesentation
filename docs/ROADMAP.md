@@ -59,17 +59,20 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
    Merget (PR #64). Model B (cookie-fri, server-side rolling visit-aggregation) er
    sidenhen **valgt** af Ricko via Issue #65 — se punkt 2.
 2. **[Issue #65](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/65) —
-   Fase 1B: selve opsamlingen.** Implementeret i PR:
-   `supabase/010_trip_visits.sql` (tabel + RLS + index + `record_trip_visit`-RPC,
+   Fase 1B: selve opsamlingen. Teknisk klar, DB-fundamentet er live.** Implementeret i
+   PR #66: `supabase/010_trip_visits.sql` (tabel + RLS + index + `record_trip_visit`-RPC,
    race-sikker efter mønsteret fra `increment_rate_limit`), separat
    `010b_trip_visits_retention.sql` (12 mdr. retention, pg_cron IKKE aktiveret — kræver
    egen godkendelse), `src/lib/trip-visit.ts` + `trip-visit-write.ts` + tests, ét
-   best-effort `waitUntil`-kald i `src/app/[bookingId]/page.tsx`, diskret
-   transparens-linje i `AccessGate`. Ingen middleware-udvidelse. Fail-open: kode og
-   migration kan deployes i vilkårlig rækkefølge (modsat #38). **Migrationen er
-   versioneret men ikke kørt i production** — afventer Rickos release-godkendelse (se
-   PR-beskrivelsen for eksakt rækkefølge og rollback). Visning i admin er fase 1C/4,
-   ikke en del af denne PR.
+   best-effort `scheduleTripVisit()`-kald (waitUntil indeni) i
+   `src/app/[bookingId]/page.tsx`, diskret transparens-linje i `AccessGate`. Ingen
+   middleware-udvidelse. **Migration 010 er kørt og verificeret i production
+   2026-09-18T11:31:14Z** (`20260918113114_trip_visits_usage_tracking`) —
+   DB-infrastrukturen er klar, men koden er endnu ikke merget/deployet, så ingen reel
+   tracking sker endnu. Næste gate: release-cutover (`TRACKING_SINCE` sættes til det
+   faktiske deploy-tidspunkt i én separat commit) + Rickos endelige
+   merge-godkendelse — se PR #66 for eksakt rækkefølge og rollback. Visning i admin er
+   fase 1C/4 og starter IKKE automatisk her.
 3. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
    Vision 3.0: Customer Engagement & Sales Intelligence.** Master-issue — IKKE én stor PR.
    Fase 2-4 (sektionsengagement, kontakt-intent, salgsoversigt) tages ét PR ad gangen efter
@@ -88,14 +91,15 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Vision 3.0 Fase 1B — production-release af migration 010.** Model B, transparens og
-  12 mdr. retention er besluttet (se `docs/DECISIONS.md` 2026-09-17). Det resterende:
-  køre `supabase/010_trip_visits.sql` i production, **derefter** fastlægge
-  `TRACKING_SINCE` (`src/lib/trip-visit.ts`) til den faktiske tracking-start-timestamp og
-  opdatere testen i samme ombæring — merge-blokerende tjekliste i `supabase/README.md`
-  ("Driftsnote: trip_visits") — og evt. senere, særskilt, aktivere
-  `010b_trip_visits_retention.sql`/pg_cron. Se PR'en for Issue #65 for eksakt
-  rækkefølge og rollback.
+- **Vision 3.0 Fase 1B — release-cutover + merge-godkendelse af PR #66.** Model B,
+  transparens og 12 mdr. retention er besluttet (se `docs/DECISIONS.md`). Migration 010
+  er kørt og verificeret i production (2026-09-18T11:31:14Z) — det resterende er
+  release-cutover: fastlægge `TRACKING_SINCE` (`src/lib/trip-visit.ts`) til det faktiske
+  deploy-tidspunkt i én separat commit umiddelbart før merge, opdatere testen i samme
+  ombæring, køre checks igen, én sidste review, derefter Rickos merge-godkendelse —
+  merge-blokerende tjekliste i `supabase/README.md` ("Driftsnote: trip_visits"). Retention
+  (`010b_trip_visits_retention.sql`/pg_cron) kræver en separat, senere godkendelse og er
+  IKKE en del af denne release. Se PR #66 for eksakt rækkefølge og rollback.
 - **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning. Designet er færdigt og merget
   (2-3 modeller, trusselsmodel og en konkret anbefaling — Model B, separat hashet
   access_code) i `docs/UNLOCK-CODE-DESIGN.md`

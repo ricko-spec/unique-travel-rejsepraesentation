@@ -19,7 +19,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `007_parse_failures.sql` | parse_failures dead-letter (koblet til parse-routen siden 2026-08-04) | 2026-07-04 |
 | `008_schema_snapshot.sql` | `schema_snapshot()` RPC — grundlag for drift-tjekket | 2026-07-20 |
 | `009_upload_events.sql` | upload_events — adoption/usage-log pr. sælger (Issue #38) | 2026-09-16 |
-| `010_trip_visits.sql` | trip_visits + RLS + `record_trip_visit` RPC — cookie-fri visit-aggregation (Issue #65) | **Nej — versioneret, afventer Rickos godkendelse** |
+| `010_trip_visits.sql` | trip_visits + RLS + `record_trip_visit` RPC — cookie-fri visit-aggregation (Issue #65) | 2026-09-18T11:31:14Z (`20260918113114_trip_visits_usage_tracking`) — DB kun, koden er endnu ikke merget/deployet |
 | `010b_trip_visits_retention.sql` | pg_cron-retention for trip_visits (12 mdr.) — bevidst separat fil | **Nej — separat, senere godkendelse (kræver evt. pg_cron-aktivering)** |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
@@ -79,40 +79,46 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 
 ## Driftsnote: trip_visits (Issue #65)
 
-- **MERGE-BLOKERENDE TJEKLISTE (review-fund på PR #66) — `TRACKING_SINCE`.**
-  `src/lib/trip-visit.ts` eksporterer `TRACKING_SINCE: string | null = null`. `null` er en
-  midlertidig pre-release placeholder, **ikke** en gyldig sluttilstand for den mergede
-  release — en fremtidig Fase 1C-UI kan ikke skelne "aldrig åbnet" fra "sporing startede
-  senere end trippens alder" uden en fast tracking-start-dato (se
-  `supabase/010b_trip_visits_retention.sql`). Før PR'en for Issue #65 kan få **endelig**
-  merge-godkendelse, skal følgende ske, i denne rækkefølge, på PR-branchen:
-  1. Migration 010 køres og verificeres i production (se rækkefølgen nedenfor).
-  2. Den faktiske production tracking-start-timestamp fastlægges (tidspunktet for
-     migrationskørslen, UTC).
-  3. `TRACKING_SINCE` i `src/lib/trip-visit.ts` sættes til denne faste timestamp (aldrig
-     en dynamisk `min()` — se konstantens egen kommentar for hvorfor).
-  4. `src/lib/trip-visit.test.ts`s test af `TRACKING_SINCE` opdateres til at afspejle den
-     nye, faste værdi i stedet for `null`.
+- **Migration 010 ER KØRT og verificeret i production** — `iunixfpthdftmkgpugex`,
+  migration `20260918113114_trip_visits_usage_tracking`, DB-skema-tidspunkt
+  `2026-09-18T11:31:14Z`. Read-only verificeret direkte mod live-DB'en (2026-09-18):
+  `trip_visits` med de seks forventede kolonner, PK `trip_id`, FK til
+  `trips(id) on delete cascade`, RLS aktiveret, policy
+  `service_role full access trip_visits` (`cmd=ALL`), index
+  `trip_visits_last_opened_idx`, `record_trip_visit(uuid)` med `SECURITY INVOKER`
+  (`prosecdef=false`) og `EXECUTE` kun til `service_role` (+ ejeren `postgres` —
+  ingen `anon`/`authenticated`/`PUBLIC`). Row count: 0 — ingen kunstige testevents,
+  ingen reel trafik endnu (koden er ikke merget/deployet). `schema-baseline.json` er
+  opdateret til at matche (`node scripts/check-schema-drift.mjs` viser "ingen drift").
+  `010b_trip_visits_retention.sql` er **ikke** kørt, og `pg_cron` er **ikke** aktiveret.
+- **VIGTIG DISTINKTION:** `2026-09-18T11:31:14Z` er hvornår DB-INFRASTRUKTUREN blev
+  klar — det er IKKE `TRACKING_SINCE`. PR #66-koden er endnu ikke merget/deployet, så
+  ingen kundeåbning bliver rent faktisk registreret endnu, selvom tabellen findes.
+- **RELEASE-CUTOVER TJEKLISTE (erstatter den tidligere "merge-blokerende
+  tjekliste" nu migration 010 er kørt) — `TRACKING_SINCE`.** `src/lib/trip-visit.ts`
+  eksporterer fortsat `TRACKING_SINCE: string | null = null`, bevidst uændret. Før PR'en
+  for Issue #65 kan få **endelig** merge-godkendelse, skal følgende ske, i denne
+  rækkefølge, i én separat, sidste commit på PR-branchen, umiddelbart før
+  merge/deploy:
+  1. `TRACKING_SINCE` i `src/lib/trip-visit.ts` sættes til det faktiske UTC-tidspunkt
+     koden går live (aldrig migrations-tidspunktet ovenfor, og aldrig en dynamisk
+     `min()` — se konstantens egen kommentar for hvorfor).
+  2. `src/lib/trip-visit.test.ts`s test af `TRACKING_SINCE` opdateres til at afspejle
+     den nye, faste værdi i stedet for `null`.
+  3. Alle checks køres igen (`npm test`, `npm run typecheck`, `npm run lint`,
+     `npm run build`, `git diff --check`).
+  4. Én sidste ChatGPT-review af HEAD.
   5. Først **derefter** kan Ricko give endelig merge-godkendelse af PR'en.
-- **Release-rækkefølge (planlagt, IKKE udført):** migration 010 skal køres og verificeres
-  i production **FØR** kode-deploy. Modsat `upload_events` (#38, fail-closed) er
-  skrive-kaldet i `src/lib/trip-visit-write.ts` fail-open — koden ville ikke fejle uden
-  tabellen, men rækkefølgen holdes alligevel, så første kundeåbning efter deploy rent
-  faktisk bliver registreret i stedet for stille tabt.
-- **`schema-baseline.json` er bevidst IKKE opdateret i denne PR** — production har endnu
-  ikke migration 010's objekter (`node scripts/check-schema-drift.mjs` bekræftede "ingen
-  drift" mod den nuværende baseline). Ricko skal køre
-  `node scripts/check-schema-drift.mjs --update-baseline` **efter** migrationen er kørt
-  live, som separat commit eller i samme ombæring som migrationskørslen.
 - **Retention er en separat fil** (`010b_trip_visits_retention.sql`), ikke en del af 010 —
   kræver egen godkendelse (og evt. aktivering af `pg_cron`-extensionen). `010_trip_visits.sql`
   fungerer fuldt ud uden den; rækker lever blot indtil retention aktiveres.
 - **Data:** ingen booking_no, slug, kundenavn, IP eller User-Agent. Kun `trip_id` (uuid,
   FK til `trips`) + tidsstempler/tællere. Se kommentarerne i `010_trip_visits.sql` for den
   fulde never-store-liste.
-- **Ingen lokal Postgres-kørsel:** migrationsfilerne er kun statisk/manuelt gennemgået i
-  denne PR — der er ikke `psql`/`pg_dump` tilgængeligt i arbejdsmiljøet, og de er ikke
-  kørt mod nogen database (hverken lokal eller production).
+- **Ingen lokal Postgres-kørsel foretaget af Claude:** migrationen blev kørt manuelt af
+  Ricko i Supabase SQL Editor efter hans eksplicitte godkendelse — Claude har hverken nu
+  eller tidligere kørt migrationen, skrevet til production, eller kaldt
+  `record_trip_visit()`. Al verifikation ovenfor er read-only.
 
 ## Drift-tjek
 

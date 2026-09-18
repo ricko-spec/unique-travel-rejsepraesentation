@@ -2,7 +2,7 @@
 
 > Læs denne før hver arbejdsrunde. Kort og operationel — fuld PR-historik står i GitHub
 > (lukkede PR'er, commits, diffs), ikke her. Opdatér ved hvert milepæl.
-> Sidst opdateret: **2026-09-16**
+> Sidst opdateret: **2026-09-18**
 
 ## Nu
 
@@ -21,10 +21,18 @@
   er ikke længere gældende.
 - **Aktivt kapitel:** [Issue #65](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/65)
   — Vision 3.0 Fase 1B: cookie-fri kundeåbninger (Model B, valgt via Issue #63/PR #64).
-  Implementeret i PR — `supabase/010_trip_visits.sql` (tabel + `record_trip_visit`-RPC),
-  `src/lib/trip-visit*.ts`, `scheduleTripVisit()`-kald (waitUntil indeni) i
-  `src/app/[bookingId]/page.tsx`, diskret transparens-linje i `AccessGate`. Migration
-  **ikke** kørt i production endnu — afventer Rickos release-godkendelse.
+  Kode implementeret i PR #66 — `supabase/010_trip_visits.sql` (tabel +
+  `record_trip_visit`-RPC), `src/lib/trip-visit*.ts`, `scheduleTripVisit()`-kald
+  (waitUntil indeni) i `src/app/[bookingId]/page.tsx`, diskret transparens-linje i
+  `AccessGate`. **Migration 010 er kørt og verificeret i production 2026-09-18T11:31:14Z**
+  (migration `20260918113114_trip_visits_usage_tracking`, `iunixfpthdftmkgpugex`) —
+  `schema-baseline.json` opdateret til at matche. Dét tidspunkt er kun
+  DB-infrastrukturen; PR #66 er endnu ikke merget/deployet, så `TRACKING_SINCE`
+  (`src/lib/trip-visit.ts`) forbliver bevidst `null` indtil en separat
+  release-cutover-commit umiddelbart før merge. PR #66 afventer nu kun
+  release-cutover + Rickos endelige merge-godkendelse. Retention
+  (`010b_trip_visits_retention.sql`, pg_cron) er fortsat IKKE aktiveret og er ikke en
+  del af denne release.
   [Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45)
   (Analytics Bridge API) er uafhængigt afsluttet, se punkt herunder.
 
@@ -62,10 +70,11 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Afvent Rickos review af Issue #65-PR'en** (Vision 3.0 Fase 1B, cookie-fri
-kundeåbninger). Migration `010_trip_visits.sql` er versioneret men **ikke** kørt i
-production — release-rækkefølgen (migration først, så merge/deploy — modsat #38, da
-denne løsning er fail-open) og rollback-trin står i PR-beskrivelsen. Retention
+**PR #66 (Vision 3.0 Fase 1B) afventer release-cutover + Rickos endelige
+merge-godkendelse.** Migration `010_trip_visits.sql` er kørt og verificeret i production
+(2026-09-18T11:31:14Z) — resterende trin: sæt `TRACKING_SINCE` til det faktiske
+release-tidspunkt i én separat commit umiddelbart før merge, kør alle checks igen, én
+sidste ChatGPT-review, derefter Rickos merge-godkendelse. Retention
 (`010b_trip_visits_retention.sql`, pg_cron) kræver en separat, senere godkendelse og er
 bevidst IKKE en del af denne release.
 

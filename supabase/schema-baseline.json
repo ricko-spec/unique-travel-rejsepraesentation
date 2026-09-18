@@ -211,6 +211,48 @@
       "type": "timestamp with time zone"
     },
     {
+      "column": "trip_id",
+      "default": null,
+      "nullable": "NO",
+      "table": "trip_visits",
+      "type": "uuid"
+    },
+    {
+      "column": "first_opened_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "trip_visits",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "last_visit_started_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "trip_visits",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "last_opened_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "trip_visits",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "visit_count",
+      "default": "1",
+      "nullable": "NO",
+      "table": "trip_visits",
+      "type": "integer"
+    },
+    {
+      "column": "open_count",
+      "default": "1",
+      "nullable": "NO",
+      "table": "trip_visits",
+      "type": "integer"
+    },
+    {
       "column": "id",
       "default": "gen_random_uuid()",
       "nullable": "NO",
@@ -436,6 +478,41 @@
       "table": "rate_limits"
     },
     {
+      "column": null,
+      "comment": "Kundeåbninger pr. rejseplan (Vision 3.0 Fase 1B, Issue #65). Én række pr. trip — aldrig pr. person, enhed eller session. Ingen identifikator af nogen art: ingen cookie, ingen IP, ingen user-agent, intet bookingnummer, intet navn. Skrives kun via record_trip_visit(). Service-role-only. Retention: 12 måneder efter last_opened_at, se 010b_trip_visits_retention.sql (IKKE aktiveret).",
+      "table": "trip_visits"
+    },
+    {
+      "column": "first_opened_at",
+      "comment": "Første kvalificerede kundeåbning. Sættes på insert-grenen i record_trip_visit() og opdateres ALDRIG efterfølgende.",
+      "table": "trip_visits"
+    },
+    {
+      "column": "last_opened_at",
+      "comment": "Tidspunkt for seneste kvalificerede render, uanset om det var et nyt besøg eller en fortsættelse af det aktuelle. Opdateres ved HVER kvalificeret skrivning.",
+      "table": "trip_visits"
+    },
+    {
+      "column": "last_visit_started_at",
+      "comment": "Starttidspunkt for den seneste besøgsperiode (opdateres kun når et NYT besøg starter, dvs. når last_opened_at var mere end 30 minutter gammel).",
+      "table": "trip_visits"
+    },
+    {
+      "column": "open_count",
+      "comment": "Samlet antal kvalificerede sidevisninger. Blødt signal: refresh og flere enheder inden for samme 30-minutters besøg tæller her, men rører aldrig visit_count.",
+      "table": "trip_visits"
+    },
+    {
+      "column": "trip_id",
+      "comment": "FK til trips.id, on delete cascade — en slettet rejseplan tager sine besøgsdata med sig. Ingen anden identifikator er nødvendig eller gemt.",
+      "table": "trip_visits"
+    },
+    {
+      "column": "visit_count",
+      "comment": "Antal besøgsperioder. Et nyt besøg tælles kun når der er gået mere end 30 minutter siden last_opened_at — på tværs af alle enheder, jf. Model B (Issue #63/#65). Kan ikke manipuleres af klienten: håndhævet udelukkende mod serverens eget ur og den låste rækkes tilstand i record_trip_visit().",
+      "table": "trip_visits"
+    },
+    {
       "column": "created_by",
       "comment": "Sælgeren der oprettede rejsen. NULL for rækker oprettet før 2026-07. Fylder fra auth session ved POST /admin/api/trips.",
       "table": "trips"
@@ -518,6 +595,16 @@
       "table": "rate_limits"
     },
     {
+      "def": "PRIMARY KEY (trip_id)",
+      "name": "trip_visits_pkey",
+      "table": "trip_visits"
+    },
+    {
+      "def": "FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE",
+      "name": "trip_visits_trip_id_fkey",
+      "table": "trip_visits"
+    },
+    {
       "def": "UNIQUE (booking_no)",
       "name": "trips_booking_no_key",
       "table": "trips"
@@ -576,6 +663,10 @@
     {
       "def": "CREATE OR REPLACE FUNCTION public.increment_rate_limit(p_key text, p_new_reset_at timestamp with time zone)\n RETURNS TABLE(count integer, reset_at timestamp with time zone)\n LANGUAGE plpgsql\n SECURITY DEFINER\nAS $function$\nbegin\n  return query\n  insert into public.rate_limits (key, count, reset_at)\n  values (p_key, 1, p_new_reset_at)\n  on conflict (key) do update set\n    count = case\n      when public.rate_limits.reset_at < now() then 1\n      else public.rate_limits.count + 1\n    end,\n    reset_at = case\n      when public.rate_limits.reset_at < now() then excluded.reset_at\n      else public.rate_limits.reset_at\n    end\n  returning public.rate_limits.count, public.rate_limits.reset_at;\nend;\n$function$\n",
       "name": "increment_rate_limit"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.record_trip_visit(p_trip_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\ndeclare\n  v_now timestamptz := clock_timestamp();\nbegin\n  insert into public.trip_visits as tv\n    (trip_id, first_opened_at, last_visit_started_at, last_opened_at, visit_count, open_count)\n  values\n    (p_trip_id, v_now, v_now, v_now, 1, 1)\n  on conflict (trip_id) do update\n    set last_opened_at        = greatest(tv.last_opened_at, v_now),\n        open_count            = tv.open_count + 1,\n        visit_count           = tv.visit_count\n                                  + (case when tv.last_opened_at < v_now - interval '30 minutes'\n                                          then 1 else 0 end),\n        last_visit_started_at = case when tv.last_opened_at < v_now - interval '30 minutes'\n                                     then greatest(tv.last_visit_started_at, v_now)\n                                     else tv.last_visit_started_at end;\nend;\n$function$\n",
+      "name": "record_trip_visit"
     },
     {
       "def": "CREATE OR REPLACE FUNCTION public.schema_snapshot()\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\nselect jsonb_build_object(\n  'columns', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', table_name,\n      'column', column_name,\n      'type', data_type,\n      'nullable', is_nullable,\n      'default', column_default\n    ) order by table_name, ordinal_position)\n    from information_schema.columns\n    where table_schema = 'public'\n  ), '[]'::jsonb),\n\n  'policies', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', tablename,\n      'policy', policyname,\n      'cmd', cmd,\n      'roles', roles::text,\n      'using', qual,\n      'with_check', with_check\n    ) order by tablename, policyname)\n    from pg_policies\n    where schemaname = 'public'\n  ), '[]'::jsonb),\n\n  'indexes', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'name', indexname,\n      'def', indexdef\n    ) order by indexname)\n    from pg_indexes\n    where schemaname = 'public'\n  ), '[]'::jsonb),\n\n  'constraints', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', conrelid::regclass::text,\n      'name', conname,\n      'def', pg_get_constraintdef(oid)\n    ) order by conrelid::regclass::text, conname)\n    from pg_constraint\n    where connamespace = 'public'::regnamespace\n  ), '[]'::jsonb),\n\n  'functions', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'name', p.proname,\n      'def', pg_get_functiondef(p.oid)\n    ) order by p.proname)\n    from pg_proc p\n    where p.pronamespace = 'public'::regnamespace\n  ), '[]'::jsonb),\n\n  'triggers', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', c.relname,\n      'name', t.tgname,\n      'def', pg_get_triggerdef(t.oid)\n    ) order by c.relname, t.tgname)\n    from pg_trigger t\n    join pg_class c on c.oid = t.tgrelid\n    where c.relnamespace = 'public'::regnamespace\n      and not t.tgisinternal\n  ), '[]'::jsonb),\n\n  'comments', coalesce((\n    select jsonb_agg(jsonb_build_object(\n      'table', relname,\n      'column', attname,\n      'comment', cmt\n    ) order by relname, attname nulls first)\n    from (\n      select c.relname, null::text as attname, obj_description(c.oid) as cmt\n      from pg_class c\n      where c.relnamespace = 'public'::regnamespace\n        and c.relkind = 'r'\n        and obj_description(c.oid) is not null\n      union all\n      select c.relname, a.attname, col_description(c.oid, a.attnum)\n      from pg_class c\n      join pg_attribute a on a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped\n      where c.relnamespace = 'public'::regnamespace\n        and c.relkind = 'r'\n        and col_description(c.oid, a.attnum) is not null\n    ) x\n  ), '[]'::jsonb)\n);\n$function$\n",
@@ -638,6 +729,14 @@
     {
       "def": "CREATE INDEX rate_limits_reset_at_idx ON public.rate_limits USING btree (reset_at)",
       "name": "rate_limits_reset_at_idx"
+    },
+    {
+      "def": "CREATE INDEX trip_visits_last_opened_idx ON public.trip_visits USING btree (last_opened_at DESC)",
+      "name": "trip_visits_last_opened_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX trip_visits_pkey ON public.trip_visits USING btree (trip_id)",
+      "name": "trip_visits_pkey"
     },
     {
       "def": "CREATE INDEX trips_active_idx ON public.trips USING btree (active)",
@@ -738,6 +837,14 @@
       "policy": "service_role full access",
       "roles": "{service_role}",
       "table": "rate_limits",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access trip_visits",
+      "roles": "{service_role}",
+      "table": "trip_visits",
       "using": "true",
       "with_check": "true"
     },
