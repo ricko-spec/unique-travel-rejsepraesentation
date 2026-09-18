@@ -92,23 +92,14 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
   opdateret til at matche (`node scripts/check-schema-drift.mjs` viser "ingen drift").
   `010b_trip_visits_retention.sql` er **ikke** kørt, og `pg_cron` er **ikke** aktiveret.
 - **VIGTIG DISTINKTION:** `2026-09-18T11:31:14Z` er hvornår DB-INFRASTRUKTUREN blev
-  klar — det er IKKE `TRACKING_SINCE`. PR #66-koden er endnu ikke merget/deployet, så
-  ingen kundeåbning bliver rent faktisk registreret endnu, selvom tabellen findes.
-- **RELEASE-CUTOVER TJEKLISTE (erstatter den tidligere "merge-blokerende
-  tjekliste" nu migration 010 er kørt) — `TRACKING_SINCE`.** `src/lib/trip-visit.ts`
-  eksporterer fortsat `TRACKING_SINCE: string | null = null`, bevidst uændret. Før PR'en
-  for Issue #65 kan få **endelig** merge-godkendelse, skal følgende ske, i denne
-  rækkefølge, i én separat, sidste commit på PR-branchen, umiddelbart før
-  merge/deploy:
-  1. `TRACKING_SINCE` i `src/lib/trip-visit.ts` sættes til det faktiske UTC-tidspunkt
-     koden går live (aldrig migrations-tidspunktet ovenfor, og aldrig en dynamisk
-     `min()` — se konstantens egen kommentar for hvorfor).
-  2. `src/lib/trip-visit.test.ts`s test af `TRACKING_SINCE` opdateres til at afspejle
-     den nye, faste værdi i stedet for `null`.
-  3. Alle checks køres igen (`npm test`, `npm run typecheck`, `npm run lint`,
-     `npm run build`, `git diff --check`).
-  4. Én sidste ChatGPT-review af HEAD.
-  5. Først **derefter** kan Ricko give endelig merge-godkendelse af PR'en.
+  klar — det er IKKE `TRACKING_SINCE`.
+- **FASE 1B RELEASE-CUTOVER TIMESTAMP FASTLAGT.** `src/lib/trip-visit.ts`s
+  `TRACKING_SINCE` er sat til `2026-09-18T12:20:18Z` (fast, hardkodet ISO-8601 UTC,
+  ikke migrations-tidspunktet ovenfor) i en separat, sidste commit på PR-branchen.
+  `src/lib/trip-visit.test.ts`s test er opdateret tilsvarende. **PR #66 er endnu ikke
+  merget/deployet til production** — ingen live `trip_visits`-rækker forventet endnu.
+  Næste gate: ChatGPT final HEAD-review, derefter Rickos endelige
+  merge-godkendelse — ikke gjort endnu.
 - **Retention er en separat fil** (`010b_trip_visits_retention.sql`), ikke en del af 010 —
   kræver egen godkendelse (og evt. aktivering af `pg_cron`-extensionen). `010_trip_visits.sql`
   fungerer fuldt ud uden den; rækker lever blot indtil retention aktiveres.

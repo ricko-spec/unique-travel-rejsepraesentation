@@ -212,17 +212,12 @@ describe("konstanter", () => {
     expect(VISIT_WINDOW_MINUTES).toBe(30);
   });
 
-  // IKKE en påstand om at null er den ønskede endelige production-værdi.
-  // DB-fundamentet er live (migration 010 kørt og verificeret i production,
-  // 2026-09-18T11:31:14Z) — den resterende gate er release-cutover: koden er
-  // endnu ikke merget/deployet, så TRACKING_SINCE forbliver midlertidigt
-  // null indtil den sættes til det faktiske UTC-deploy-tidspunkt i en
-  // separat, sidste commit umiddelbart før merge/deploy. Denne test skal
-  // SELV opdateres (sammen med konstanten i trip-visit.ts) i samme commit.
-  // Se release-cutover-tjeklisten i supabase/README.md ("Driftsnote:
-  // trip_visits (Issue #65)") — PR'en må ikke få endelig merge-godkendelse
-  // før dette er gjort.
-  it("TRACKING_SINCE er (endnu) null — release-cutover-værdien sættes i en separat commit før merge", () => {
-    expect(TRACKING_SINCE).toBeNull();
+  // Fase 1B release-cutover-markøren (PR #66, 2026-09-18T12:20:18Z) — den
+  // faste production tracking-start for selve koden, sat i en separat,
+  // sidste commit umiddelbart før merge/deploy. IKKE migration 010's
+  // DB-infrastruktur-tidspunkt (2026-09-18T11:31:14Z) — se konstantens egen
+  // kommentar i trip-visit.ts for distinktionen.
+  it("TRACKING_SINCE er Fase 1B release-cutover-markøren (2026-09-18T12:20:18Z)", () => {
+    expect(TRACKING_SINCE).toBe("2026-09-18T12:20:18Z");
   });
 });

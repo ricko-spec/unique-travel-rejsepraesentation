@@ -24,15 +24,14 @@
   Kode implementeret i PR #66 — `supabase/010_trip_visits.sql` (tabel +
   `record_trip_visit`-RPC), `src/lib/trip-visit*.ts`, `scheduleTripVisit()`-kald
   (waitUntil indeni) i `src/app/[bookingId]/page.tsx`, diskret transparens-linje i
-  `AccessGate`. **Migration 010 er kørt og verificeret i production 2026-09-18T11:31:14Z**
-  (migration `20260918113114_trip_visits_usage_tracking`, `iunixfpthdftmkgpugex`) —
-  `schema-baseline.json` opdateret til at matche. Dét tidspunkt er kun
-  DB-infrastrukturen; PR #66 er endnu ikke merget/deployet, så `TRACKING_SINCE`
-  (`src/lib/trip-visit.ts`) forbliver bevidst `null` indtil en separat
-  release-cutover-commit umiddelbart før merge. PR #66 afventer nu kun
-  release-cutover + Rickos endelige merge-godkendelse. Retention
-  (`010b_trip_visits_retention.sql`, pg_cron) er fortsat IKKE aktiveret og er ikke en
-  del af denne release.
+  `AccessGate`. Migration 010 er kørt og verificeret i production 2026-09-18T11:31:14Z
+  (migration `20260918113114_trip_visits_usage_tracking`, `iunixfpthdftmkgpugex`,
+  kun DB-infrastrukturen) — `schema-baseline.json` opdateret til at matche.
+  **Fase 1B release-cutover-markøren (`TRACKING_SINCE`, `src/lib/trip-visit.ts`) er
+  nu fastlagt: `2026-09-18T12:20:18Z`.** PR #66 er endnu ikke merget/deployet, og der
+  er endnu ingen live `trip_visits`-rækker. Næste gate: ChatGPT final HEAD-review +
+  Rickos endelige merge-godkendelse. Retention (`010b_trip_visits_retention.sql`,
+  pg_cron) er fortsat IKKE aktiveret og er ikke en del af denne release.
   [Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45)
   (Analytics Bridge API) er uafhængigt afsluttet, se punkt herunder.
 
@@ -70,11 +69,13 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**PR #66 (Vision 3.0 Fase 1B) afventer release-cutover + Rickos endelige
-merge-godkendelse.** Migration `010_trip_visits.sql` er kørt og verificeret i production
-(2026-09-18T11:31:14Z) — resterende trin: sæt `TRACKING_SINCE` til det faktiske
-release-tidspunkt i én separat commit umiddelbart før merge, kør alle checks igen, én
-sidste ChatGPT-review, derefter Rickos merge-godkendelse. Retention
+**PR #66 (Vision 3.0 Fase 1B) — Fase 1B cutover timestamp fastlagt, afventer nu kun
+ChatGPT final HEAD-review + Rickos endelige merge-godkendelse.** Migration
+`010_trip_visits.sql` er kørt og verificeret i production (2026-09-18T11:31:14Z,
+DB-infrastruktur). `TRACKING_SINCE` (`src/lib/trip-visit.ts`) er sat til
+`2026-09-18T12:20:18Z` i en separat, sidste release-cutover-commit. Ingen deploy
+endnu — ingen live `trip_visits`-rækker forventet før merge (medmindre en uventet
+kunderækkes er dukket op, hvilket i så fald skal undersøges særskilt). Retention
 (`010b_trip_visits_retention.sql`, pg_cron) kræver en separat, senere godkendelse og er
 bevidst IKKE en del af denne release.
 
