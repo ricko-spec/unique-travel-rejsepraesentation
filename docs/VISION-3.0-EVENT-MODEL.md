@@ -305,22 +305,28 @@ selve rækken — Fase 1C/4 læser med et almindeligt `select`/`left join`, ikke
 ```sql
 create or replace function public.record_trip_visit(p_trip_id uuid)
 returns void
-language sql
+language plpgsql
 volatile
-security definer
+security invoker
 set search_path = public, pg_catalog
 as $function$
-  insert into public.trip_visits as tv (trip_id)
-  values (p_trip_id)
+declare
+  v_now timestamptz := clock_timestamp();
+begin
+  insert into public.trip_visits as tv
+    (trip_id, first_opened_at, last_visit_started_at, last_opened_at, visit_count, open_count)
+  values
+    (p_trip_id, v_now, v_now, v_now, 1, 1)
   on conflict (trip_id) do update
-    set last_opened_at        = greatest(tv.last_opened_at, clock_timestamp()),
+    set last_opened_at        = greatest(tv.last_opened_at, v_now),
         open_count            = tv.open_count + 1,
         visit_count           = tv.visit_count
-                                  + (case when tv.last_opened_at < clock_timestamp() - interval '30 minutes'
+                                  + (case when tv.last_opened_at < v_now - interval '30 minutes'
                                           then 1 else 0 end),
-        last_visit_started_at = case when tv.last_opened_at < clock_timestamp() - interval '30 minutes'
-                                     then greatest(tv.last_visit_started_at, clock_timestamp())
+        last_visit_started_at = case when tv.last_opened_at < v_now - interval '30 minutes'
+                                     then greatest(tv.last_visit_started_at, v_now)
                                      else tv.last_visit_started_at end;
+end;
 $function$;
 
 revoke execute on function public.record_trip_visit(uuid) from public;
@@ -339,60 +345,81 @@ selv. Samme begrundelse for RPC frem for `supabase.from().upsert()` som
 ikke ved det tidspunkt `SET`-udtrykkene faktisk evalueres. En transaktion der må vente
 på rækkelåsen (fordi en anden transaktion nåede konfliktgrenen først) kunne derfor skrive
 `last_opened_at` med sit eget, ældre `now()`-tidspunkt — selvom en anden transaktion i
-mellemtiden allerede har committet en nyere værdi. En transaktion der startede før en
-anden, men låser efter den, kunne dermed i princippet skrive `last_opened_at` **baglæns**
-i tid. `clock_timestamp()` er ikke fast — den returnerer det faktiske ur-tidspunkt ved
-hvert kald, og fordi `SET`-udtrykkene for `ON CONFLICT DO UPDATE` først evalueres *efter*
-rækkelåsen er taget (§6.3 punkt 2), reflekterer et `clock_timestamp()`-kald i
-`SET`-udtrykket altid "nu" på tidspunktet hvor transaktionen rent faktisk fik lov at
-skrive. `greatest(tv.last_opened_at, clock_timestamp())` er derudover et eksplicit,
-ubetinget værn: `last_opened_at`/`last_visit_started_at` kan aldrig gå baglæns, uanset
-urets opførsel (fx en teoretisk NTP-justering).
+mellemtiden allerede har committet en nyere værdi. `clock_timestamp()` er ikke fast — den
+returnerer det faktiske ur-tidspunkt ved hvert kald. `greatest(tv.last_opened_at,
+v_now)` er et eksplicit, ubetinget værn: `last_opened_at`/`last_visit_started_at` kan
+aldrig gå baglæns, uanset urets opførsel eller hvornår `v_now` præcis blev sat.
+
+**Ét tidsstempel pr. kald, ikke flere (endnu et review-fund på PR #66, rettet).** En
+tidligere udgave kaldte `clock_timestamp()` separat tre gange i samme `SET`-klausul (til
+`last_opened_at`, til `visit_count`-prædikatet, til `last_visit_started_at`-prædikatet).
+Hvert kald er et selvstændigt, frisk ur-opslag — ved den *præcise* 30-minutters-grænse
+kunne de derfor i teorien returnere forskellige værdier få mikrosekunder fra hinanden, så
+`visit_count`- og `last_visit_started_at`-prædikaterne endte uenige om hvorvidt et nyt
+besøg startede. Løsningen: funktionen er PL/pgSQL med én eksplicit variabel, `v_now`,
+sat **én** gang ved funktionens indgang (`declare v_now timestamptz :=
+clock_timestamp();`) og genbrugt bogstaveligt alle fire steder — `last_opened_at`, begge
+30-minutters-prædikater (nu tekstuelt identiske udtryk, `tv.last_opened_at < v_now -
+interval '30 minutes'`, så de pr. konstruktion aldrig kan give forskelligt svar) og
+`last_visit_started_at`. Kravet "ingen read-modify-write" udelukker en `SELECT ... FOR
+UPDATE`-forudgående låsning (det ville reelt være præcis det mønster, funktionen er
+designet til at undgå) — løsningen holder sig derfor til ét atomart
+`INSERT ... ON CONFLICT DO UPDATE`-statement, blot i PL/pgSQL i stedet for ren SQL.
+
+**Ærlig konsekvens af `v_now` sat ved funktionens indgang (ikke garanteret post-lock):**
+i et ekstremt sjældent scenarie hvor en transaktion venter usædvanligt længe på
+rækkelåsen, kan dens `v_now` vise sig "gammel" i forhold til det tidspunkt den rent
+faktisk får lov at skrive. `greatest()` garanterer stadig at `last_opened_at`/
+`last_visit_started_at` aldrig går baglæns i det tilfælde — feltet undlader blot at
+rykke sig under netop dét kald i stedet. Samme stale `v_now` kan i teorien gøre
+30-minutters-prædikatet en anelse for konservativt (mindre tilbøjeligt til at sige "nyt
+besøg"), aldrig omvendt — en undertælling, aldrig en overtælling. Samme
+"tæt på eksakte, ikke garanteret komplette"-præmis som resten af denne fase (§9).
 
 **Fælde for en fremtidig implementering:** i en `RETURNING`-klausul refererer
 `tv`-alias'et til rækken *efter* opdateringen — `returning (tv.last_opened_at <
-clock_timestamp() - interval '30 minutes')` er derfor altid falsk og kan ikke bruges til
-at rapportere "var dette et nyt besøg". Fase 1 har ikke brug for den returværdi
-(fail-open ignorerer den alligevel); en fremtidig Fase 2 der har brug for det, må bruge
-`xmax = 0`-mønstret eller en PL/pgSQL-variant med en eksplicit variabel.
+v_now - interval '30 minutes')` er derfor altid falsk og kan ikke bruges til at
+rapportere "var dette et nyt besøg". Fase 1 har ikke brug for den returværdi (fail-open
+ignorerer den alligevel); en fremtidig Fase 2 der har brug for det, kan tilføje en
+eksplicit `v_new_visit boolean`-variabel (sat fra samme prædikat *før* insert/update) og
+returnere den.
+
+**Security invoker, ikke security definer (review-fund på PR #66, rettet).** Funktionen
+kaldes udelukkende via `getSupabaseService()` (`src/lib/trip-visit-write.ts`), som
+autentificerer som Postgres-rollen `service_role` — samme rolle `EXECUTE` er grantet til.
+`service_role` har allerede fuld adgang til `trip_visits` via RLS-policyen i §6.1 (og har,
+som Supabases konvention, `BYPASSRLS`), så der er intet behov for at funktionen kører med
+definer-ejerens forhøjede rettigheder — mindste-privilegie-princippet i praksis.
+`increment_rate_limit` (migration 005) bruger fortsat `SECURITY DEFINER` og røres ikke;
+divergensen her er bevidst og lokal til `record_trip_visit`, ikke en generel politikændring.
 
 ### 6.3 Bevis for race-sikkerhed
 
 **Påstand:** samtidige requests mod samme rejseplan kan hverken dobbelttælle et besøg,
-tabe en opdatering, eller skrive `last_opened_at`/`last_visit_started_at` baglæns i tid.
+tabe en opdatering, skrive `last_opened_at`/`last_visit_started_at` baglæns i tid, eller
+lade `visit_count` og `last_visit_started_at` være uenige om hvorvidt et nyt besøg
+startede.
 
-> Denne udgave (PR #66) erstatter en tidligere version af beviset der fejlagtigt antog at
-> `now()` var "frisk" på tidspunktet for lock-wait. Det er den ikke — se ur-valgs-noten
-> under §6.2. Beviset er derfor omskrevet til at bruge `clock_timestamp()`.
+> Denne udgave (PR #66, to review-runder) erstatter en tidligere version af beviset der
+> dels fejlagtigt antog at `now()` var "frisk" på tidspunktet for lock-wait, dels brugte
+> flere separate `clock_timestamp()`-kald der i teorien kunne give indbyrdes uenige
+> prædikater. Se ur-valgs-noten og "ét tidsstempel pr. kald"-noten under §6.2.
 
 1. **Serialisering.** `trip_id` er primærnøgle. `ON CONFLICT DO UPDATE` bruger
    speculative insertion: Postgres tager rækkelås på den konfliktende række **før**
    `SET`-udtrykkene evalueres. To transaktioner kan derfor aldrig evaluere
    `SET`-grenen for samme `trip_id` samtidig.
-2. **Evalueringstidspunktet er det afgørende.** `tv.`-referencen i `SET`-udtrykket er
-   rækken *som den er lige nu, efter låsen er taget* — ikke et snapshot fra
-   statementets start. Det samme gælder `clock_timestamp()`-kaldene i selve
-   `SET`-udtrykket: de evalueres først når låsen er taget, ikke ved statementets start.
-   En ventende transaktion ser derfor altid et `clock_timestamp()`-tidspunkt der er
-   senere end det tidspunkt hvor den forrige transaktion committede — aldrig et ældre.
-3. **Gennemgang.** Række: `last_opened_at = 11:00`, `visit_count = 3`. T1 startede sin
-   transaktion kl. 11:58, T2 startede kl. 12:00 — men T1 blokerer på en anden lås og når
-   først frem til `record_trip_visit` EFTER T2.
-   - T2 låser først (kl. 12:00:00.010), evaluerer `11:00 < (12:00:00.010 − 30 min)` =
-     sandt → `visit_count = 4`, `last_opened_at = greatest(11:00, 12:00:00.010) =
-     12:00:00.010`. Commit.
-   - T1 får låsen bagefter (kl. 12:00:00.030, uafhængigt af at T1s transaktion *startede*
-     før T2s). `clock_timestamp()` her er `12:00:00.030` — det faktiske urtidspunkt ved
-     evaluering, ikke T1s (ældre) transaktionsstart. Evaluerer
-     `12:00:00.010 < 11:30:00.030` → **falsk** → `visit_count` uændret (4),
-     `last_opened_at = greatest(12:00:00.010, 12:00:00.030) = 12:00:00.030`,
-     `open_count += 1`.
-   - Resultat: præcis ét besøg, to sidevisninger, `last_opened_at` går fremad —
-     uafhængigt af hvilken transaktion der *startede* først. Havde koden i stedet brugt
-     `now()`, ville T1 her have skrevet sin egen, ældre transaktionsstart-værdi og
-     dermed rykket `last_opened_at` baglæns; `greatest()` forhindrer det under alle
-     omstændigheder, selv hvis et fremtidigt review overser noget i selve
-     ur-argumentet ovenfor.
+2. **Evalueringstidspunktet er det afgørende for `tv.`-referencerne.** `tv.`-referencen
+   i `SET`-udtrykket er rækken *som den er lige nu, efter låsen er taget* — ikke et
+   snapshot fra statementets start. En ventende transaktion ser derfor altid den værdi
+   den foregående netop skrev.
+3. **`v_now` er ét tidsstempel, sat ved funktionens indgang, genbrugt overalt.** Det
+   garanterer at `visit_count`-prædikatet og `last_visit_started_at`-prædikatet aldrig
+   kan være uenige (de er bogstaveligt samme udtryk mod samme variabel). `greatest()` på
+   `last_opened_at`/`last_visit_started_at` garanterer at ingen af de to felter kan gå
+   baglæns, uanset om `v_now` for denne ene transaktion skulle vise sig ældre end en
+   allerede committet værdi (fx efter en usædvanlig lang lock-ventetid) — se den ærlige
+   konsekvens-note under §6.2.
 4. **Første besøg / dobbeltklik:** rækken findes ikke. Begge forsøger insert;
    unikhedsindekset lader én vinde (`visit_count = 1`); den anden falder i
    konfliktgrenen og ser en frisk `last_opened_at` → ingen forøgelse. Én række, ét
@@ -401,20 +428,22 @@ tabe en opdatering, eller skrive `last_opened_at`/`last_visit_started_at` baglæ
    siden 2026-06-15) er samme grundkonstruktion: `on conflict (key) do update set count =
    case when rate_limits.reset_at < now() then 1 else rate_limits.count + 1 end` — en
    tidsbetinget tæller på en låst række. `record_trip_visit` bruger samme
-   lock-then-evaluate-mønster, men med `clock_timestamp()` + `greatest()` i stedet for
-   `now()`, fordi `record_trip_visit` (modsat `increment_rate_limit`) sammenligner mod et
-   RULLENDE prædikat (`last_opened_at`, der selv flytter sig ved hvert kald) frem for et
-   ABSOLUT prædikat (`reset_at`, fast for hele vinduets varighed) — det rullende prædikat
-   er det der gør `now()`-staleness til et reelt problem her.
+   lock-then-evaluate-mønster, men med ét `v_now` (`clock_timestamp()`) + `greatest()` i
+   stedet for `now()`, fordi `record_trip_visit` (modsat `increment_rate_limit`)
+   sammenligner mod et RULLENDE prædikat (`last_opened_at`, der selv flytter sig ved
+   hvert kald) frem for et ABSOLUT prædikat (`reset_at`, fast for hele vinduets
+   varighed) — det rullende prædikat er det der gør `now()`-staleness til et reelt
+   problem her, og det er derfor de to funktioner nu bevidst adskiller sig i
+   ur-/sikkerhedsvalg selvom de deler samme grundmønster.
 
 ### 6.4 30-minutters-vinduet — ét ur
 
-Vinduet beregnes **udelukkende i Postgres**, af `clock_timestamp()` og en fast
-`interval`. Node sender ingen tidsstempler og ingen varighed — bevidst forskel fra
-`checkRateLimit()`, som beregner sit vindue i Node (`Date.now()`); det ville her blande
-to ure (Node vs. Postgres) i samme sammenligning. `VISIT_WINDOW_MINUTES = 30`
-eksporteres som konstant i `src/lib/trip-visit.ts` udelukkende til
-dokumentation/UI-tekst — den sendes aldrig over ledningen. Ændres vinduet, kræver det en
+Vinduet beregnes **udelukkende i Postgres**, af `v_now` (`clock_timestamp()`, sat én
+gang pr. kald) og en fast `interval`. Node sender ingen tidsstempler og ingen varighed —
+bevidst forskel fra `checkRateLimit()`, som beregner sit vindue i Node (`Date.now()`);
+det ville her blande to ure (Node vs. Postgres) i samme sammenligning.
+`VISIT_WINDOW_MINUTES = 30` eksporteres som konstant i `src/lib/trip-visit.ts`
+udelukkende til dokumentation/UI-tekst — den sendes aldrig over ledningen. Ændres vinduet, kræver det en
 ny migration; det er en bevidst konsekvens, fordi en vinduesændring ændrer betydningen af
 historiske `visit_count`-værdier.
 

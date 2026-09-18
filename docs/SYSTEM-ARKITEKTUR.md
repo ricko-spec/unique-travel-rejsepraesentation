@@ -248,7 +248,7 @@ sequenceDiagram
   2. Ved for mange forsøg: audit-event `unlock_rate_limited` + dansk fejlbesked med ventetid.
   3. Kode sammenlignes med `booking_no`. Forkert → `unlock_failed`-audit + fejlbesked.
   4. Korrekt → `unlock_success`-audit, httpOnly-cookie scoped til `/{slug}` med 30 dages levetid (`actions.ts:112-118`), derefter `redirect`.
-- Med gyldig cookie evaluerer `page.tsx` derefter (Issue #65) `shouldRecordTripVisit(...)` og planlægger — hvis den er sand — et best-effort `waitUntil(recordTripVisit(row.id))`-kald mod `trip_visits` (§8), inden resten af siden renderes. Aldrig `await`et; kan aldrig forsinke eller ødelægge kundens visning. Derefter renderer `page.tsx` hele præsentationen: data Zod-valideres igen (`:74`) og normaliseres (`:93`) ved **hver** visning — gamle rækker med legacy-JSON-form renderes korrekt uden re-parse. Hero-billedet vælges som `trips.hero_photo` → ellers destinationens `hero_url` → ellers CSS-gradient (`page.tsx:97`).
+- Med gyldig cookie evaluerer `page.tsx` derefter (Issue #65) `shouldRecordTripVisit(...)` og planlægger — hvis den er sand — et best-effort `scheduleTripVisit(row.id)`-kald mod `trip_visits` (§8), inden resten af siden renderes. `scheduleTripVisit()` fanger selv et evt. synkront throw fra `waitUntil()`; aldrig `await`et; kan aldrig forsinke eller ødelægge kundens visning. Derefter renderer `page.tsx` hele præsentationen: data Zod-valideres igen (`:74`) og normaliseres (`:93`) ved **hver** visning — gamle rækker med legacy-JSON-form renderes korrekt uden re-parse. Hero-billedet vælges som `trips.hero_photo` → ellers destinationens `hero_url` → ellers CSS-gradient (`page.tsx:97`).
 
 **4. Løbende redigering (sælger)**
 - Intro-teksten kan redigeres på `/admin/trips/[id]` og gemmes via `POST /admin/api/trips/[id]/intro`, der skriver `intro`, `introEditedAt`, `introEditedBy` ind i `data`-jsonb og audit-logger before/after (se §7 og §13).
@@ -503,18 +503,22 @@ race-sikkerhedsbevis.
 | `open_count` | integer | Tælles op ved hver kvalificeret render, uanset besøgsvindue |
 
 RLS: kun service_role (samme mønster som `upload_events`/`parse_failures`). Skrives
-udelukkende via RPC'en `record_trip_visit(p_trip_id uuid)` — atomar
-`INSERT ... ON CONFLICT DO UPDATE` efter samme race-sikre mønster som
+udelukkende via RPC'en `record_trip_visit(p_trip_id uuid)` — PL/pgSQL, `security
+invoker`, atomar `INSERT ... ON CONFLICT DO UPDATE` efter samme race-sikre mønster som
 `increment_rate_limit` (§12): CASE-udtrykkene evalueres mod raden EFTER dens lock er
 taget, ikke mod en forud-læst værdi, så samtidige requests ikke kan overskrive hinandens
-tælling. Postgres' egen `now()` bruges konsekvent (aldrig Node-tid).
+tælling. Ét `clock_timestamp()`-kald pr. RPC-kald (`v_now`), genbrugt konsekvent —
+aldrig Node-tid, aldrig flere separate ur-opslag i samme kald. `greatest()` sikrer at
+`last_opened_at`/`last_visit_started_at` aldrig går baglæns. Se
+`supabase/010_trip_visits.sql` for det fulde race-bevis.
 
 **Skrivevejen er fail-open** (bevidst modsat `upload_events`, som er fail-closed): kaldet
-sker via `waitUntil(recordTripVisit(row.id))` i `src/app/[bookingId]/page.tsx`, EFTER
-kundens adgangskontrol og gate-logikken i `src/lib/trip-visit.ts`
-(`shouldRecordTripVisit`), og bliver ALDRIG `await`et — kundens respons venter ikke på
-DB'en, og en RPC-fejl/timeout (`src/lib/trip-visit-write.ts`, 2 sek. loft) kan aldrig
-ødelægge kundens visning af rejseplanen.
+sker via `scheduleTripVisit(row.id)` (`src/lib/trip-visit-write.ts`, `waitUntil()`
+indeni) i `src/app/[bookingId]/page.tsx`, EFTER kundens adgangskontrol og gate-logikken i
+`src/lib/trip-visit.ts` (`shouldRecordTripVisit`), og bliver ALDRIG `await`et — kundens
+respons venter ikke på DB'en, og hverken en RPC-fejl/timeout (2 sek. loft, reel
+`AbortController`-annullering) eller en fejlende `waitUntil()`-scheduling kan ødelægge
+kundens visning af rejseplanen.
 
 **Ingen ny cookie, ingen middleware-udvidelse.** Gaten bruger kun eksisterende
 request-signaler (`VERCEL_ENV`, `host`-header, `user-agent`-header, eksisterende
