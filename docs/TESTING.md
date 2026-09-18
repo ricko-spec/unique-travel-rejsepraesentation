@@ -138,8 +138,13 @@ default ACL (auto-ALL på nye public-tabeller) oprettes, migrationen køres to g
 `SECURITY INVOKER` med EXECUTE kun til `service_role`, RPC-INSERT + ON CONFLICT-UPDATE
 virker som `service_role` (`first_seen_at` uændret, `last_seen_at` rykker frem), DELETE/
 TRUNCATE afvist for `service_role`, SELECT/INSERT/RPC afvist for anon/authenticated, og
-`ON DELETE CASCADE` fjerner rækken uden at `service_role` har DELETE (24/24). Det er
-IKKE en kørsel mod production — migrationen er ikke kørt live.
+`ON DELETE CASCADE` fjerner rækken uden at `service_role` har DELETE (24/24). Det var en
+lokal pre-release-kørsel, ikke en production-kørsel. Selve production-migrationen
+(`20260918184105_trip_section_engagement`) blev bagefter kørt af ChatGPT efter Rickos
+godkendelse og verificeret read-only mod den levende database (samme grants/RLS/RPC-
+egenskaber; 0 rækker; ingen syntetiske engagement-events skrevet). Schema-baseline er
+opdateret efter live-kørslen, og live-kommentarer + RPC-krop er kontrolleret identiske med
+migrationsfilen.
 
 **Ikke unit-testet direkte (dokumenteret, bevidst):**
 - `SectionEngagementTracker.tsx` selv (browser-`IntersectionObserver`/`fetch`) — bevidst
@@ -151,8 +156,9 @@ IKKE en kørsel mod production — migrationen er ikke kørt live.
   beslutningslogik lever i `handleSectionEngagement()`, som route.ts kalder og som er
   testet ovenfor. Ingen eksisterende route-handler i dette repo mockes direkte i tests, og
   vitest har ingen `@/`-alias-opsætning (samme etablerede mønster som `/admin/api/trips`).
-- `supabase/011_trip_section_engagement.sql` mod en LEVENDE database — kun kørt lokalt
-  (pglite, se ovenfor), ikke i production/Supabase.
+- `supabase/011_trip_section_engagement.sql`s RPC-adfærd (`ON CONFLICT`-grenen) mod den
+  LEVENDE database — kun kørt lokalt (pglite, se ovenfor). Production har kun fået skemaet
+  (0 rækker); der er bevidst IKKE skrevet syntetiske engagement-rækker dér.
 
 **Manuel smoke-test efter en eventuel senere migration + merge/deploy af Issue #71-PR'en
 (plan, IKKE udført — ingen kunstige section-engagement-events må oprettes):**

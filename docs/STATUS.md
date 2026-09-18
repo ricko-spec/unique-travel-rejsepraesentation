@@ -21,15 +21,27 @@
 - **Aktivt kapitel:** [Issue #71](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/71)
   — Vision 3.0 Fase 2: sektionsengagement end-to-end (barn af
   [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
-  Én samlet work package: ny `trip_section_engagement`-tabel (migration 011, IKKE kørt i
-  production), sikkert write-endpoint under kundens egen slug-path
+  Én samlet work package: ny `trip_section_engagement`-tabel (migration 011, **kørt i
+  production**), sikkert write-endpoint under kundens egen slug-path
   (`POST /[bookingId]/engagement`), klient-tracker med IntersectionObserver + 750 ms dwell
   for de fem hovedafsnit (rejseplan/billeder/hoteller/pris/kontakt — ALDRIG intro), og en
   minimal "Set i rejseplanen"-visning i admin. Se `docs/VISION-3.0-PHASE-2.md` og PR for
   fuld status. **PR #72 er rettet efter ChatGPT's architecture/security-review** (eksplicitte
   table grants/revokes, server-side sektions-eligibility, transparens i Footer også for
-  returning customers, orkestrerings-tests) og afventer ChatGPT re-review. **Migration 011
-  er IKKE kørt i production; production-writes = 0; ingen merge.**
+  returning customers, orkestrerings-tests).
+  - **Production migration 011: kørt** — Supabase-migration
+    `20260918184105_trip_section_engagement` (2026-09-18T18:41:05Z, `iunixfpthdftmkgpugex`),
+    efter Rickos eksplicitte godkendelse. Read-only verificeret: tabel, RLS enabled, PK
+    `(trip_id, section)`, FK → `trips(id)` ON DELETE CASCADE, CHECK (fem sektioner), table
+    privileges (PUBLIC/anon/authenticated: ingen; `service_role`: SELECT/INSERT/UPDATE), RPC
+    `SECURITY INVOKER` med EXECUTE kun for `service_role`. Security Advisor: ingen nye
+    findings for 011.
+  - **`schema-baseline.json` er opdateret EFTER live-migrationen** (kun `trip_section_engagement`-
+    objekter, +84/−0 linjer); drift-tjek = "Ingen drift".
+  - **Production synthetic engagement events: 0** (tabellen har 0 rækker — kun skemaet er
+    skrevet, ingen tracking-data). Koden (endpoint/tracker/admin-visning) er IKKE merget eller
+    deployet til production endnu.
+  - `010b`/`pg_cron`: ikke kørt/aktiveret. Fase 3: ikke startet. Ingen merge.
 
 ## Seneste 3 relevante ændringer
 
@@ -64,11 +76,13 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Afvent ChatGPT architecture/security-review + Rickos godkendelse af Issue #71-PR'en**
-(Vision 3.0 Fase 2: sektionsengagement end-to-end). Migration 011 er versioneret men
-**IKKE kørt i production** — kræver Rickos separate godkendelse, akkurat som migration 010
-var. Release-rækkefølgen (`docs/VISION-3.0-PHASE-2.md`) følger samme mønster som Fase 1B:
-migration køres og verificeres read-only FØR merge, `010b`/pg_cron rører intet af dette.
+**Afvent ChatGPT final HEAD-review, dernæst Rickos eksplicitte merge-godkendelse af
+Issue #71-PR'en (PR #72)** (Vision 3.0 Fase 2: sektionsengagement end-to-end). Migration
+011 er allerede kørt og read-only verificeret i production, og schema-baseline er
+opdateret. Release-rækkefølgen (`docs/VISION-3.0-PHASE-2.md`) følger samme mønster som
+Fase 1B: migration køres og verificeres FØR merge; `010b`/pg_cron rører intet af dette.
+Efter merge/deploy: production-smoketest når Ricko har mulighed for det (må ikke blokere
+merge, hvis kode/schema/checks er grønne).
 
 Herudover: production-smoketest af Fase 1C's UI (Issue #69/PR #70) er stadig udsat, se
 punktet ovenfor — ingen ny handling krævet, kun en kendt, åben opfølgning.

@@ -185,7 +185,7 @@ uniquetravel-rejsepraesentation/
     ├── 009_upload_events.sql     # upload_events + usage_period_summary RPC (Issue #38, live)
     ├── 010_trip_visits.sql       # trip_visits + record_trip_visit RPC (Issue #65 — live i production)
     ├── 010b_trip_visits_retention.sql  # pg_cron-retention, bevidst separat, IKKE aktiveret
-    ├── 011_trip_section_engagement.sql  # trip_section_engagement + RPC (Issue #71 — IKKE kørt live endnu)
+    ├── 011_trip_section_engagement.sql  # trip_section_engagement + grants + RPC (Issue #71 — kørt live 2026-09-18, 20260918184105_trip_section_engagement)
     └── schema-baseline.json      # Committet snapshot af live-DDL (opdateres med --update-baseline)
 ```
 
@@ -385,7 +385,7 @@ Sælgeren kan redigere **fulde navn**, **telefon** og **rådgivernavn i rejsepla
 
 ## 8. Database-model
 
-Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38) og `trip_visits` (8. tabel, migration 010, kørt og verificeret live 2026-09-18T11:31:14Z, Issue #65/PR #66). **8 tabeller**, alle med RLS aktiveret. En 9. tabel, `trip_section_engagement` (migration 011, Issue #71), er versioneret men **ikke kørt i production endnu** — se afsnittet nedenfor.
+Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38) og `trip_visits` (8. tabel, migration 010, kørt og verificeret live 2026-09-18T11:31:14Z, Issue #65/PR #66). **8 tabeller**, alle med RLS aktiveret. En 9. tabel, `trip_section_engagement` (migration 011, Issue #71), er **kørt og read-only verificeret i production 2026-09-18** (`20260918184105_trip_section_engagement`; 0 rækker — koden der skriver til den er endnu ikke merget) — se afsnittet nedenfor.
 
 > **Vigtigt om projekt-referencer:** `.env.example:2` og README peger på `iunixfpthdftmkgpugex` — det er dér de 35 rejser, 7 profiler og al audit-data ligger, altså **den faktiske produktionsdatabase**. To andre refs optræder i repoet og er **misvisende**: `supabase/schema.sql:2` nævner `ocxrvkrggzppyhgyambj` (det er Allotment-værktøjets projekt — copy-paste-fejl), og `supabase/profiles.sql:2-3` kalder `iunixfpthdftmkgpugex` for "dev" og nævner `sujimigwcjkzpekkdpzf` som "production" — om dét projekt overhovedet findes/bruges er ukendt — kræver Ricko-bekræftelse.
 
@@ -561,7 +561,7 @@ eneste der viser dem. `no-recent-data` implementerer den retention-safe visnings
 `010b_trip_visits_retention.sql`, selvom retention-jobbet selv ikke er aktiveret.
 `unavailable` bruges udelukkende ved en fejlet forespørgsel — vises ALDRIG som `not-opened`.
 
-### `trip_section_engagement` — sektionsengagement (Issue #71, migration 011 — **ikke kørt i production endnu**)
+### `trip_section_engagement` — sektionsengagement (Issue #71, migration 011 — **kørt i production 2026-09-18**, `schema-baseline.json` opdateret)
 
 Aggregeret milestone-tabel, højst fem rækker pr. trip (én pr. hovedafsnit) — ikke en rå
 eventlog, samme Model B-præmis som `trip_visits`.
