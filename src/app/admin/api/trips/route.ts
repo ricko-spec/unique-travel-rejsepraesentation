@@ -12,6 +12,7 @@ import {
   markUploadEventSaveFailed,
   verifyUploadEventForPublish,
 } from "@/lib/upload-events";
+import { uniqueCreatorIds, withCreatedByName, type CreatorProfile } from "@/lib/trip-creator";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,7 +55,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("trips")
       .select(
-        "id, booking_no, slug, destination, customer_name, hero_photo, active, created_at, updated_at, raw_pdf_text, data",
+        "id, booking_no, slug, destination, customer_name, hero_photo, active, created_at, updated_at, raw_pdf_text, data, created_by",
       )
       .order("created_at", { ascending: false });
 
@@ -65,7 +66,31 @@ export async function GET() {
         { status: 500 },
       );
     }
-    return NextResponse.json({ trips: data ?? [] });
+
+    const rows = data ?? [];
+
+    // ISSUE-67: "Oprettet af" — ét samlet profiles-opslag for de unikke
+    // created_by-id'er (aldrig ét opslag pr. trip). Fail-open: fejler
+    // opslaget, viser listen bare "—" for alle i stedet for at fejle hele
+    // GET'en — trip-listen er vigtigere end navnekolonnen.
+    let creatorProfiles: CreatorProfile[] = [];
+    const creatorIds = uniqueCreatorIds(rows.map((row) => row.created_by));
+    if (creatorIds.length > 0) {
+      const { data: profileRows, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", creatorIds);
+
+      if (profileError) {
+        console.error("[GET /api/trips] Profiles-opslag (created_by) fejlede", profileError);
+      } else {
+        creatorProfiles = profileRows ?? [];
+      }
+    }
+
+    // created_by (den interne uuid) sendes aldrig til klienten — kun det
+    // afledte, menneskelæsbare created_by_name.
+    return NextResponse.json({ trips: withCreatedByName(rows, creatorProfiles) });
   } catch (e) {
     const detail = describeFetchError(e);
     console.error("[GET /api/trips] Threw", e);
