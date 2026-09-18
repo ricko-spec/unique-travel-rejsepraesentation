@@ -22,6 +22,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `010_trip_visits.sql` | trip_visits + RLS + `record_trip_visit` RPC — cookie-fri visit-aggregation (Issue #65) | 2026-09-18T11:31:14Z (`20260918113114_trip_visits_usage_tracking`) — DB kun, koden er endnu ikke merget/deployet |
 | `010b_trip_visits_retention.sql` | pg_cron-retention for trip_visits (12 mdr.) — bevidst separat fil | **Nej — separat, senere godkendelse (kræver evt. pg_cron-aktivering)** |
 | `011_trip_section_engagement.sql` | trip_section_engagement + eksplicitte table grants + RLS + `record_trip_section_engagement` RPC — sektionsengagement (Issue #71) | 2026-09-18T18:41:05Z (`20260918184105_trip_section_engagement`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
+| `012_trip_contact_intent.sql` | trip_contact_intent + eksplicitte table grants + RLS + `record_trip_contact_intent` RPC — kontakt-intent, max 2 rækker/trip (Issue #73) | **Nej — versioneret, IKKE kørt i production (kræver Rickos særskilte godkendelse). `schema-baseline.json` er ikke opdateret** |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.
@@ -29,7 +30,7 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 ## Regler
 
 1. **Ny DDL = ny nummereret fil.** Rediger aldrig en allerede-kørt migration (undtagen
-   kommentarer); næste fil hedder `010_*.sql`.
+   kommentarer); næste fil hedder `013_*.sql`.
 2. **Kør i Supabase-first, commit i samme ombæring.** Drift opstår når SQL køres i
    SQL Editor/MCP uden at filen lander i repoet — det var præcis hvad der skete med
    003-005 (oprettet maj-juni, først versioneret 2026-07-20).
@@ -113,6 +114,21 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
   `2026-09-18T11:31:14Z`). Efterfølgende blev tabel/RPC/RLS/grants verificeret read-only
   (se punkt ovenfor og PR #66-beskrivelsen). Ingen kunstige `trip_visits`-rækker er
   oprettet, og `record_trip_visit()` er ikke kaldt — al verifikation er read-only.
+
+## Driftsnote: trip_contact_intent (Issue #73)
+
+- **Migration 012 er KUN versioneret — IKKE kørt i production.** Kræver Rickos særskilte,
+  eksplicitte godkendelse. `schema-baseline.json` opdateres FØRST efter en live-kørsel
+  (`node scripts/check-schema-drift.mjs` viser "Ingen drift" indtil da, fordi både production og
+  baseline er uden 012).
+- **Release-rækkefølge:** migrationen køres FØR kode-deploy (ellers fejler skrivning/visning
+  stille: klienten ignorerer 500, admin viser "Kontaktaktivitet kunne ikke hentes").
+- **Data:** højst to rækker pr. trip (`email`/`phone`), kun `trip_id` + kanal + to tidsstempler.
+  Ingen click_count, booking_no, slug, kundenavn, IP, User-Agent, cookie-/session-id eller
+  source/surface. Se kommentarerne i `012_trip_contact_intent.sql`.
+- **Retention er IKKE aktiveret** og er en separat, fremtidig release-/policy-beslutning
+  (samme princip som `010b`). `010b`/`pg_cron` er stadig ikke kørt/aktiveret; max 2 rækker/trip
+  giver intet teknisk lagringspres.
 
 ## Drift-tjek
 
