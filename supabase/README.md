@@ -115,10 +115,12 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 - **Data:** ingen booking_no, slug, kundenavn, IP eller User-Agent. Kun `trip_id` (uuid,
   FK til `trips`) + tidsstempler/tællere. Se kommentarerne i `010_trip_visits.sql` for den
   fulde never-store-liste.
-- **Ingen lokal Postgres-kørsel foretaget af Claude:** migrationen blev kørt manuelt af
-  Ricko i Supabase SQL Editor efter hans eksplicitte godkendelse — Claude har hverken nu
-  eller tidligere kørt migrationen, skrevet til production, eller kaldt
-  `record_trip_visit()`. Al verifikation ovenfor er read-only.
+- **Migrationshistorik:** efter Rickos eksplicitte godkendelse ("Kør migration 010") blev
+  `010_trip_visits.sql` kørt mod production-projektet `iunixfpthdftmkgpugex`
+  (migration `20260918113114_trip_visits_usage_tracking`, skema-tidspunkt
+  `2026-09-18T11:31:14Z`). Efterfølgende blev tabel/RPC/RLS/grants verificeret read-only
+  (se punkt ovenfor og PR #66-beskrivelsen). Ingen kunstige `trip_visits`-rækker er
+  oprettet, og `record_trip_visit()` er ikke kaldt — al verifikation er read-only.
 
 ## Drift-tjek
 

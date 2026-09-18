@@ -51,7 +51,7 @@ const CANONICAL_PRODUCTION_HOST = "rejseplaner.uniquetravel.dk";
 // release-cutover-commit, umiddelbart før merge/deploy af denne PR, der
 // sætter den til det faktiske UTC-tidspunkt hvor koden går live (+
 // opdaterer testen i trip-visit.test.ts til samme værdi). Se
-// "MERGE-BLOKERENDE TJEKLISTE" i supabase/README.md ("Driftsnote:
+// "RELEASE-CUTOVER TJEKLISTE" i supabase/README.md ("Driftsnote:
 // trip_visits (Issue #65)") for den fulde rækkefølge.
 export const TRACKING_SINCE: string | null = null;
 
