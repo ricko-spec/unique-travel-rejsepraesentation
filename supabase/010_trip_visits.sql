@@ -100,32 +100,59 @@ create index if not exists trip_visits_last_opened_idx
 -- flytter sig ved hvert kald) i stedet for increment_rate_limit's ABSOLUTTE
 -- prædikat (sammenlignet mod et fast reset_at sat ved vinduets start).
 --
--- Race-sikkerhed (bevist i detalje i docs/VISION-3.0-EVENT-MODEL.md §6.3):
+-- UR-VALG: clock_timestamp(), IKKE now() (review-fund på PR #66, rettet).
+-- now()/transaction_timestamp() er FAST ved transaktionens/statementets
+-- START — ikke ved det tidspunkt SET-udtrykkene faktisk evalueres. En
+-- transaktion der må VENTE på rækkelåsen (fordi en anden transaktion nåede
+-- konfliktgrenen først) ville derfor kunne skrive last_opened_at med SIT
+-- EGET, ældre now()-tidspunkt — selvom en anden transaktion i mellemtiden
+-- allerede har committet en nyere last_opened_at. En transaktion der startede
+-- FØR en anden, men låser EFTER den, kunne dermed i princippet skrive
+-- last_opened_at BAGLÆNS. clock_timestamp() er IKKE fast: den returnerer det
+-- faktiske ur-tidspunkt ved hvert kald. Fordi SET-udtrykkene for
+-- ON CONFLICT DO UPDATE først evalueres EFTER rækkelåsen er taget (punkt 2
+-- nedenfor), reflekterer et clock_timestamp()-kald i SET-udtrykket altid
+-- "nu" på det tidspunkt hvor DENNE transaktion rent faktisk fik lov at
+-- skrive — aldrig et tidspunkt fra før den ventede.
+-- greatest(tv.last_opened_at, clock_timestamp()) er derudover et eksplicit,
+-- ubetinget værn: selv i en hypotetisk urskævheds-situation kan
+-- last_opened_at/last_visit_started_at aldrig gå baglæns, uanset urets
+-- opførsel.
+--
+-- Race-sikkerhed (revideret bevis, PR #66 — erstatter en tidligere version
+-- der fejlagtigt antog at now() var "frisk" på tidspunktet for lock-wait):
 --   1. trip_id er primærnøgle. ON CONFLICT DO UPDATE tager rækkelås på den
 --      konfliktende række FØR SET-udtrykkene evalueres (speculative
 --      insertion) — to transaktioner kan aldrig evaluere SET-grenen for
 --      samme trip_id samtidig.
---   2. tv.-referencen i SET-udtrykket er rækken SOM DEN ER LIGE NU, efter
---      låsen er taget — ikke et snapshot fra statementets start. En
---      ventende transaktion ser derfor altid den værdi den foregående netop
---      skrev, aldrig en forældet værdi.
---   3. Første besøg / dobbeltklik: rækken findes ikke, begge forsøger
+--   2. SET-udtrykkenes clock_timestamp()-kald evalueres EFTER låsen er
+--      taget — ikke ved statementets/transaktionens start. En transaktion
+--      der har ventet på låsen, ser derfor et clock_timestamp()-tidspunkt
+--      der er SENERE end det tidspunkt hvor den forrige transaktion
+--      committede sin skrivning, aldrig et ældre.
+--   3. tv.-referencen i øvrigt (last_opened_at, open_count, visit_count,
+--      last_visit_started_at på højre side af tildelingerne) er rækken SOM
+--      DEN ER LIGE NU, efter låsen er taget — ikke et snapshot fra
+--      statementets start.
+--   4. Første besøg / dobbeltklik: rækken findes ikke, begge forsøger
 --      insert, unikhedsindekset (primærnøglen) lader én vinde, den anden
 --      falder i konfliktgrenen og ser den friske last_opened_at → ingen
 --      ekstra visit_count-forøgelse.
 -- Resultat: uanset hvor mange samtidige requests der rammer samme trip_id,
--- er der aldrig risiko for dobbelttælling eller en tabt opdatering.
+-- og uanset i hvilken rækkefølge de faktisk får låsen, er der aldrig risiko
+-- for dobbelttælling, en tabt opdatering, eller et last_opened_at/
+-- last_visit_started_at der går baglæns i tid.
 --
 -- FÆLDE for en fremtidig udvidelse: i en RETURNING-klausul refererer
 -- tv-alias'et til rækken EFTER opdateringen — "returning (tv.last_opened_at
--- < now() - interval '30 minutes')" er derfor ALTID falsk og kan ikke bruges
--- til at rapportere "var dette et nyt besøg". Fase 1B har ikke brug for den
--- returværdi (fail-open ignorerer resultatet uanset), men en fremtidig
--- Fase 2 der har brug for det, skal bruge xmax = 0-mønstret eller en
--- PL/pgSQL-variant med en eksplicit variabel — ikke RETURNING på alias'et.
+-- < clock_timestamp() - interval '30 minutes')" er derfor ALTID falsk og kan
+-- ikke bruges til at rapportere "var dette et nyt besøg". Fase 1B har ikke
+-- brug for den returværdi (fail-open ignorerer resultatet uanset), men en
+-- fremtidig Fase 2 der har brug for det, skal bruge xmax = 0-mønstret eller
+-- en PL/pgSQL-variant med en eksplicit variabel — ikke RETURNING på alias'et.
 --
--- 30-minutters-vinduet beregnes UDELUKKENDE i Postgres (now() + fast
--- interval) — Node sender ingen tidsstempler og ingen varighed. Bevidst
+-- 30-minutters-vinduet beregnes UDELUKKENDE i Postgres (clock_timestamp() +
+-- fast interval) — Node sender ingen tidsstempler og ingen varighed. Bevidst
 -- forskel fra checkRateLimit() (src/lib/rate-limit.ts), som beregner sit
 -- vindue i Node; det ville her blande to ure (Node vs. Postgres) i samme
 -- sammenligning. VISIT_WINDOW_MINUTES = 30 eksporteres som konstant i
@@ -143,13 +170,14 @@ as $function$
   insert into public.trip_visits as tv (trip_id)
   values (p_trip_id)
   on conflict (trip_id) do update
-    set last_opened_at        = now(),
+    set last_opened_at        = greatest(tv.last_opened_at, clock_timestamp()),
         open_count            = tv.open_count + 1,
         visit_count           = tv.visit_count
-                                  + (case when tv.last_opened_at < now() - interval '30 minutes'
+                                  + (case when tv.last_opened_at < clock_timestamp() - interval '30 minutes'
                                           then 1 else 0 end),
-        last_visit_started_at = case when tv.last_opened_at < now() - interval '30 minutes'
-                                     then now() else tv.last_visit_started_at end;
+        last_visit_started_at = case when tv.last_opened_at < clock_timestamp() - interval '30 minutes'
+                                     then greatest(tv.last_visit_started_at, clock_timestamp())
+                                     else tv.last_visit_started_at end;
 $function$;
 
 revoke execute on function public.record_trip_visit(uuid) from public;

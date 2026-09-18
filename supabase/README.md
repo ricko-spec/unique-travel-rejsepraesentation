@@ -79,6 +79,21 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 
 ## Driftsnote: trip_visits (Issue #65)
 
+- **MERGE-BLOKERENDE TJEKLISTE (review-fund på PR #66) — `TRACKING_SINCE`.**
+  `src/lib/trip-visit.ts` eksporterer `TRACKING_SINCE: string | null = null`. `null` er en
+  midlertidig pre-release placeholder, **ikke** en gyldig sluttilstand for den mergede
+  release — en fremtidig Fase 1C-UI kan ikke skelne "aldrig åbnet" fra "sporing startede
+  senere end trippens alder" uden en fast tracking-start-dato (se
+  `supabase/010b_trip_visits_retention.sql`). Før PR'en for Issue #65 kan få **endelig**
+  merge-godkendelse, skal følgende ske, i denne rækkefølge, på PR-branchen:
+  1. Migration 010 køres og verificeres i production (se rækkefølgen nedenfor).
+  2. Den faktiske production tracking-start-timestamp fastlægges (tidspunktet for
+     migrationskørslen, UTC).
+  3. `TRACKING_SINCE` i `src/lib/trip-visit.ts` sættes til denne faste timestamp (aldrig
+     en dynamisk `min()` — se konstantens egen kommentar for hvorfor).
+  4. `src/lib/trip-visit.test.ts`s test af `TRACKING_SINCE` opdateres til at afspejle den
+     nye, faste værdi i stedet for `null`.
+  5. Først **derefter** kan Ricko give endelig merge-godkendelse af PR'en.
 - **Release-rækkefølge (planlagt, IKKE udført):** migration 010 skal køres og verificeres
   i production **FØR** kode-deploy. Modsat `upload_events` (#38, fail-closed) er
   skrive-kaldet i `src/lib/trip-visit-write.ts` fail-open — koden ville ikke fejle uden

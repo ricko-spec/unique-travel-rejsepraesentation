@@ -89,10 +89,13 @@ eller GitHub Issues.
 ## Skal besluttes af Ricko
 
 - **Vision 3.0 Fase 1B — production-release af migration 010.** Model B, transparens og
-  12 mdr. retention er besluttet (se `docs/DECISIONS.md` 2026-09-17). Det resterende er
-  ren release-logistik: køre `supabase/010_trip_visits.sql` i production (og evt. senere,
-  særskilt, aktivere `010b_trip_visits_retention.sql`/pg_cron) — se PR'en for Issue #65
-  for eksakt rækkefølge og rollback.
+  12 mdr. retention er besluttet (se `docs/DECISIONS.md` 2026-09-17). Det resterende:
+  køre `supabase/010_trip_visits.sql` i production, **derefter** fastlægge
+  `TRACKING_SINCE` (`src/lib/trip-visit.ts`) til den faktiske tracking-start-timestamp og
+  opdatere testen i samme ombæring — merge-blokerende tjekliste i `supabase/README.md`
+  ("Driftsnote: trip_visits") — og evt. senere, særskilt, aktivere
+  `010b_trip_visits_retention.sql`/pg_cron. Se PR'en for Issue #65 for eksakt
+  rækkefølge og rollback.
 - **Unlock-kode ≠ booking_no?** — sikkerheds-/UX-afvejning. Designet er færdigt og merget
   (2-3 modeller, trusselsmodel og en konkret anbefaling — Model B, separat hashet
   access_code) i `docs/UNLOCK-CODE-DESIGN.md`

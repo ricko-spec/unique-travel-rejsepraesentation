@@ -212,7 +212,14 @@ describe("konstanter", () => {
     expect(VISIT_WINDOW_MINUTES).toBe(30);
   });
 
-  it("TRACKING_SINCE er endnu ikke sat (deployes ikke i denne PR)", () => {
+  // IKKE en påstand om at null er den ønskede endelige production-værdi —
+  // det er en midlertidig pre-release placeholder. Denne test dokumenterer
+  // nuværende state og skal SELV opdateres (sammen med konstanten i
+  // trip-visit.ts) når migration 010 er kørt/verificeret i production og den
+  // faktiske tracking-start-dato er fastlagt. Se MERGE-BLOKERENDE TJEKLISTE
+  // i supabase/README.md ("Driftsnote: trip_visits (Issue #65)") — PR'en må
+  // ikke få endelig merge-godkendelse før dette er gjort.
+  it("TRACKING_SINCE er (endnu) den midlertidige pre-release placeholder null — SKAL opdateres før merge", () => {
     expect(TRACKING_SINCE).toBeNull();
   });
 });
