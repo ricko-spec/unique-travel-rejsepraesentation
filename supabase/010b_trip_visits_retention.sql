@@ -7,8 +7,12 @@
 -- Denne fil må IKKE køres/aktiveres som en del af den almindelige
 -- release-rækkefølge for Issue #65. Den kræver Rickos SÆRSKILTE godkendelse
 -- (ud over godkendelsen af selve 010_trip_visits.sql), fordi den:
---   1) aktiverer pg_cron-extensionen hvis den ikke allerede er slået til i
---      dette Supabase-projekt (Database -> Extensions) — KRÆVER RICKO, og
+--   1) FORUDSÆTTER pg_cron-extensionen — denne fil aktiverer den IKKE selv
+--      (ingen `create extension pg_cron` her). Er extensionen ikke allerede
+--      slået til i dette Supabase-projekt (Database -> Extensions), skal
+--      den aktiveres SEPARAT, FØR denne fil kan køres — se
+--      AKTIVERING-tjeklisten nederst, punkt 1. En projekt-bred
+--      extension-aktivering er sin egen, større beslutning — KRÆVER RICKO.
 --   2) opretter et skemalagt job der SLETTER data automatisk uden manuel
 --      handling ved hvert kørsel — en anden risikoklasse end 010's rene
 --      schema-oprettelse.

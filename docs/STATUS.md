@@ -15,15 +15,17 @@
   — desktop progress navigation (≥1180px) er merget til main (PR #42, `94c561f` + review-fix
   `8097be1`). [Issue #43](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/43)
   — Vision 3.0 fase 1-design er merget (PR #44, `391bf42`), docs-only:
-  `docs/VISION-3.0-EVENT-MODEL.md`. Fase 1B (selve session-opsamlingen) afventer stadig
-  Rickos afklaring af de fem KRÆVER RICKO-punkter i dokumentets §14.
+  `docs/VISION-3.0-EVENT-MODEL.md`. [Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63)/PR #64
+  reviderede designet til Model B (cookie-fri), og Model B er sidenhen **valgt** af Ricko
+  via Issue #65 — se punktet herunder, den gamle "afventer fem KRÆVER RICKO-punkter"-status
+  er ikke længere gældende.
 - **Aktivt kapitel:** [Issue #65](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/65)
-  — Vision 3.0 Fase 1B: cookie-fri kundeåbninger (Model B, valgt via
-  [Issue #63](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/63)/PR #64).
+  — Vision 3.0 Fase 1B: cookie-fri kundeåbninger (Model B, valgt via Issue #63/PR #64).
   Implementeret i PR — `supabase/010_trip_visits.sql` (tabel + `record_trip_visit`-RPC),
-  `src/lib/trip-visit*.ts`, `waitUntil()`-kald i `src/app/[bookingId]/page.tsx`, diskret
-  transparens-linje i `AccessGate`. Migration **ikke** kørt i production endnu — afventer
-  Rickos release-godkendelse. [Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45)
+  `src/lib/trip-visit*.ts`, `scheduleTripVisit()`-kald (waitUntil indeni) i
+  `src/app/[bookingId]/page.tsx`, diskret transparens-linje i `AccessGate`. Migration
+  **ikke** kørt i production endnu — afventer Rickos release-godkendelse.
+  [Issue #45](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/45)
   (Analytics Bridge API) er uafhængigt afsluttet, se punkt herunder.
 
 ## Seneste 3 relevante ændringer

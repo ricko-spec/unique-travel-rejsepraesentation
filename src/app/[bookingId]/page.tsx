@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { cookies, headers } from "next/headers";
-import { waitUntil } from "@vercel/functions";
 import { AccessGate } from "./AccessGate";
 import { DestinationGallery } from "@/components/trip/DestinationGallery";
 import type { Metadata } from "next";
@@ -19,7 +18,7 @@ import { ProgressNav } from "@/components/trip/ProgressNav";
 import { filterGalleryImages, visibleNavSections } from "@/lib/progress-nav";
 import { hasValidTripAccess, tripAccessCookieName, TRIP_PAGE_ROBOTS } from "@/lib/trip-access";
 import { shouldRecordTripVisit } from "@/lib/trip-visit";
-import { recordTripVisit } from "@/lib/trip-visit-write";
+import { scheduleTripVisit } from "@/lib/trip-visit-write";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -73,10 +72,11 @@ export default async function TripPage({ params }: { params: { bookingId: string
   }
 
   // Vision 3.0 Fase 1B (Issue #65): cookie-fri besøgsregistrering. Gaten
-  // evalueres EKSPLICIT (aldrig et ubetinget waitUntil) og kun EFTER
+  // evalueres EKSPLICIT (aldrig et ubetinget kald) og kun EFTER
   // access-kontrollen ovenfor er bestået — se docs/VISION-3.0-EVENT-MODEL.md
-  // §8-9. Planlægges, afventes ALDRIG: responsen venter ikke på DB'en,
-  // hverken ved succes, fejl eller timeout (src/lib/trip-visit-write.ts).
+  // §8-9. scheduleTripVisit() planlægger, afventer ALDRIG, og kan selv ikke
+  // kaste (src/lib/trip-visit-write.ts) — responsen venter ikke på DB'en,
+  // hverken ved succes, fejl, timeout eller en fejlende waitUntil().
   const shouldRecord = shouldRecordTripVisit({
     vercelEnv: process.env.VERCEL_ENV,
     host: headers().get("host"),
@@ -86,7 +86,7 @@ export default async function TripPage({ params }: { params: { bookingId: string
       .map((cookie) => cookie.name),
   });
   if (shouldRecord) {
-    waitUntil(recordTripVisit(row.id));
+    scheduleTripVisit(row.id);
   }
 
   const destination = await getDestination(row.destination);

@@ -182,7 +182,7 @@ A. Første besøg, ukendt kunde
      -> redirect /<slug>
    GET /ab12cd34ef56   (redirectet)
      page.tsx : accessCookie == booking_no, gate-funktion tillader
-                -> waitUntil(recordTripVisit(row.id))   [INGEN await]
+                -> scheduleTripVisit(row.id)   [waitUntil indeni, INGEN await]
                 -> render rejseplanen og SEND responsen
                 ~~ baggrund, efter responsen ~~
                 -> record_trip_visit(trip_id): ingen række fandtes -> INSERT,
@@ -313,13 +313,14 @@ as $function$
   insert into public.trip_visits as tv (trip_id)
   values (p_trip_id)
   on conflict (trip_id) do update
-    set last_opened_at        = now(),
+    set last_opened_at        = greatest(tv.last_opened_at, clock_timestamp()),
         open_count            = tv.open_count + 1,
         visit_count           = tv.visit_count
-                                  + (case when tv.last_opened_at < now() - interval '30 minutes'
+                                  + (case when tv.last_opened_at < clock_timestamp() - interval '30 minutes'
                                           then 1 else 0 end),
-        last_visit_started_at = case when tv.last_opened_at < now() - interval '30 minutes'
-                                     then now() else tv.last_visit_started_at end;
+        last_visit_started_at = case when tv.last_opened_at < clock_timestamp() - interval '30 minutes'
+                                     then greatest(tv.last_visit_started_at, clock_timestamp())
+                                     else tv.last_visit_started_at end;
 $function$;
 
 revoke execute on function public.record_trip_visit(uuid) from public;
@@ -333,17 +334,36 @@ selv. Samme begrundelse for RPC frem for `supabase.from().upsert()` som
 `increment_rate_limit` (migration 005): klientbiblioteket kan ikke udtrykke
 `tv.open_count + 1` eller et betinget `CASE`-udtryk på konfliktgrenen.
 
+**Ur-valg: `clock_timestamp()`, ikke `now()` (review-fund på PR #66, rettet).**
+`now()`/`transaction_timestamp()` er FAST ved statementets/transaktionens **start** —
+ikke ved det tidspunkt `SET`-udtrykkene faktisk evalueres. En transaktion der må vente
+på rækkelåsen (fordi en anden transaktion nåede konfliktgrenen først) kunne derfor skrive
+`last_opened_at` med sit eget, ældre `now()`-tidspunkt — selvom en anden transaktion i
+mellemtiden allerede har committet en nyere værdi. En transaktion der startede før en
+anden, men låser efter den, kunne dermed i princippet skrive `last_opened_at` **baglæns**
+i tid. `clock_timestamp()` er ikke fast — den returnerer det faktiske ur-tidspunkt ved
+hvert kald, og fordi `SET`-udtrykkene for `ON CONFLICT DO UPDATE` først evalueres *efter*
+rækkelåsen er taget (§6.3 punkt 2), reflekterer et `clock_timestamp()`-kald i
+`SET`-udtrykket altid "nu" på tidspunktet hvor transaktionen rent faktisk fik lov at
+skrive. `greatest(tv.last_opened_at, clock_timestamp())` er derudover et eksplicit,
+ubetinget værn: `last_opened_at`/`last_visit_started_at` kan aldrig gå baglæns, uanset
+urets opførsel (fx en teoretisk NTP-justering).
+
 **Fælde for en fremtidig implementering:** i en `RETURNING`-klausul refererer
-`tv`-alias'et til rækken *efter* opdateringen — `returning (tv.last_opened_at < now() -
-interval '30 minutes')` er derfor altid falsk og kan ikke bruges til at rapportere "var
-dette et nyt besøg". Fase 1 har ikke brug for den returværdi (fail-open ignorerer den
-alligevel); en fremtidig Fase 2 der har brug for det, må bruge `xmax = 0`-mønstret eller
-en PL/pgSQL-variant med en eksplicit variabel.
+`tv`-alias'et til rækken *efter* opdateringen — `returning (tv.last_opened_at <
+clock_timestamp() - interval '30 minutes')` er derfor altid falsk og kan ikke bruges til
+at rapportere "var dette et nyt besøg". Fase 1 har ikke brug for den returværdi
+(fail-open ignorerer den alligevel); en fremtidig Fase 2 der har brug for det, må bruge
+`xmax = 0`-mønstret eller en PL/pgSQL-variant med en eksplicit variabel.
 
 ### 6.3 Bevis for race-sikkerhed
 
-**Påstand:** samtidige requests mod samme rejseplan kan hverken dobbelttælle et besøg
-eller tabe en opdatering.
+**Påstand:** samtidige requests mod samme rejseplan kan hverken dobbelttælle et besøg,
+tabe en opdatering, eller skrive `last_opened_at`/`last_visit_started_at` baglæns i tid.
+
+> Denne udgave (PR #66) erstatter en tidligere version af beviset der fejlagtigt antog at
+> `now()` var "frisk" på tidspunktet for lock-wait. Det er den ikke — se ur-valgs-noten
+> under §6.2. Beviset er derfor omskrevet til at bruge `clock_timestamp()`.
 
 1. **Serialisering.** `trip_id` er primærnøgle. `ON CONFLICT DO UPDATE` bruger
    speculative insertion: Postgres tager rækkelås på den konfliktende række **før**
@@ -351,38 +371,52 @@ eller tabe en opdatering.
    `SET`-grenen for samme `trip_id` samtidig.
 2. **Evalueringstidspunktet er det afgørende.** `tv.`-referencen i `SET`-udtrykket er
    rækken *som den er lige nu, efter låsen er taget* — ikke et snapshot fra
-   statementets start. En ventende transaktion ser derfor den værdi den foregående
-   netop skrev.
-3. **Gennemgang.** Række: `last_opened_at = 11:00`, `visit_count = 3`. T1 og T2 ankommer
-   begge ca. kl. 12:00.
-   - T1 låser, evaluerer `11:00 < (12:00 − 30 min)` = `11:00 < 11:30` → sandt →
-     `visit_count = 4`, `last_opened_at = 12:00:00.000`. Commit.
-   - T2 får låsen, gen-læser `last_opened_at = 12:00:00.000`. Evaluerer
-     `12:00:00.000 < 11:30:00.0xx` → **falsk** → `visit_count` uændret (4),
+   statementets start. Det samme gælder `clock_timestamp()`-kaldene i selve
+   `SET`-udtrykket: de evalueres først når låsen er taget, ikke ved statementets start.
+   En ventende transaktion ser derfor altid et `clock_timestamp()`-tidspunkt der er
+   senere end det tidspunkt hvor den forrige transaktion committede — aldrig et ældre.
+3. **Gennemgang.** Række: `last_opened_at = 11:00`, `visit_count = 3`. T1 startede sin
+   transaktion kl. 11:58, T2 startede kl. 12:00 — men T1 blokerer på en anden lås og når
+   først frem til `record_trip_visit` EFTER T2.
+   - T2 låser først (kl. 12:00:00.010), evaluerer `11:00 < (12:00:00.010 − 30 min)` =
+     sandt → `visit_count = 4`, `last_opened_at = greatest(11:00, 12:00:00.010) =
+     12:00:00.010`. Commit.
+   - T1 får låsen bagefter (kl. 12:00:00.030, uafhængigt af at T1s transaktion *startede*
+     før T2s). `clock_timestamp()` her er `12:00:00.030` — det faktiske urtidspunkt ved
+     evaluering, ikke T1s (ældre) transaktionsstart. Evaluerer
+     `12:00:00.010 < 11:30:00.030` → **falsk** → `visit_count` uændret (4),
+     `last_opened_at = greatest(12:00:00.010, 12:00:00.030) = 12:00:00.030`,
      `open_count += 1`.
-   - Resultat: præcis ét besøg, to sidevisninger — uafhængigt af hvilken transaktion
-     der reelt kom først (forskellen mellem de to `now()`-værdier er mikrosekunder,
-     vinduet er 30 minutter).
+   - Resultat: præcis ét besøg, to sidevisninger, `last_opened_at` går fremad —
+     uafhængigt af hvilken transaktion der *startede* først. Havde koden i stedet brugt
+     `now()`, ville T1 her have skrevet sin egen, ældre transaktionsstart-værdi og
+     dermed rykket `last_opened_at` baglæns; `greatest()` forhindrer det under alle
+     omstændigheder, selv hvis et fremtidigt review overser noget i selve
+     ur-argumentet ovenfor.
 4. **Første besøg / dobbeltklik:** rækken findes ikke. Begge forsøger insert;
    unikhedsindekset lader én vinde (`visit_count = 1`); den anden falder i
    konfliktgrenen og ser en frisk `last_opened_at` → ingen forøgelse. Én række, ét
    besøg, `open_count = 2`.
 5. **Præcedens, ikke nyudvikling.** `increment_rate_limit` (migration 005, i produktion
-   siden 2026-06-15) er samme konstruktion: `on conflict (key) do update set count =
+   siden 2026-06-15) er samme grundkonstruktion: `on conflict (key) do update set count =
    case when rate_limits.reset_at < now() then 1 else rate_limits.count + 1 end` — en
-   tidsbetinget tæller på en låst række. `record_trip_visit` er samme mønster med et
-   rullende prædikat i stedet for et absolut.
+   tidsbetinget tæller på en låst række. `record_trip_visit` bruger samme
+   lock-then-evaluate-mønster, men med `clock_timestamp()` + `greatest()` i stedet for
+   `now()`, fordi `record_trip_visit` (modsat `increment_rate_limit`) sammenligner mod et
+   RULLENDE prædikat (`last_opened_at`, der selv flytter sig ved hvert kald) frem for et
+   ABSOLUT prædikat (`reset_at`, fast for hele vinduets varighed) — det rullende prædikat
+   er det der gør `now()`-staleness til et reelt problem her.
 
 ### 6.4 30-minutters-vinduet — ét ur
 
-Vinduet beregnes **udelukkende i Postgres**, af `now()` og en fast `interval`. Node
-sender ingen tidsstempler og ingen varighed — bevidst forskel fra `checkRateLimit()`,
-som beregner sit vindue i Node (`Date.now()`); det ville her blande to ure
-(Node vs. Postgres) i samme sammenligning. `VISIT_WINDOW_MINUTES = 30` eksporteres som
-konstant i `src/lib/trip-visit.ts` udelukkende til dokumentation/UI-tekst — den sendes
-aldrig over ledningen. Ændres vinduet, kræver det en ny migration; det er en bevidst
-konsekvens, fordi en vinduesændring ændrer betydningen af historiske
-`visit_count`-værdier.
+Vinduet beregnes **udelukkende i Postgres**, af `clock_timestamp()` og en fast
+`interval`. Node sender ingen tidsstempler og ingen varighed — bevidst forskel fra
+`checkRateLimit()`, som beregner sit vindue i Node (`Date.now()`); det ville her blande
+to ure (Node vs. Postgres) i samme sammenligning. `VISIT_WINDOW_MINUTES = 30`
+eksporteres som konstant i `src/lib/trip-visit.ts` udelukkende til
+dokumentation/UI-tekst — den sendes aldrig over ledningen. Ændres vinduet, kræver det en
+ny migration; det er en bevidst konsekvens, fordi en vinduesændring ændrer betydningen af
+historiske `visit_count`-værdier.
 
 ## 7. Privacy og sikkerhed
 
@@ -504,8 +538,8 @@ ikke kunne gøre den langsommere (nul kritisk-vej-latens). Løsningen er den sam
 
 ```tsx
 import { cookies, headers } from "next/headers";
-import { waitUntil } from "@vercel/functions";
 import { shouldRecordTripVisit } from "@/lib/trip-visit";
+import { scheduleTripVisit } from "@/lib/trip-visit-write";
 
 const row = await loadTrip(params.bookingId);
 if (!row) notFound();                                   // 1. intet skriv
@@ -525,51 +559,89 @@ const shouldRecord = shouldRecordTripVisit({
 });
 
 if (shouldRecord) {
-  waitUntil(recordTripVisit(row.id));
+  scheduleTripVisit(row.id);
 }
 
 const parsed = tripSchema.safeParse(row.data);           // 4. fejlsiden tæller som åbning
 ```
 
-**Bevidst eksplicit, ikke ubetinget.** Et ubetinget `waitUntil(recordTripVisit(row.id))`
-uden det omgivende `if (shouldRecord)` ville være en farlig og misvisende
-implementationsspec — det ville tælle preview, admin/sælgere og bots. Gate-kaldet skal
-altid stå skrevet ud i klartekst i enhver fremtidig implementering af dette punkt, ikke
-antages implicit.
+**Bevidst eksplicit, ikke ubetinget.** Et ubetinget `scheduleTripVisit(row.id)` uden det
+omgivende `if (shouldRecord)` ville være en farlig og misvisende implementationsspec —
+det ville tælle preview, admin/sælgere og bots. Gate-kaldet skal altid stå skrevet ud i
+klartekst i enhver fremtidig implementering af dette punkt, ikke antages implicit.
 
 Placeringen: efter access-gaten (så `notFound()`/`AccessGate` aldrig tælles), før
 skema-parsingen (en kunde der åbner en rejseplan med ødelagte data *har* åbnet linket).
 
-`recordTripVisit()` er strukturelt identisk med det oprindelige designs
-`recordCustomerSession()`, kun med `trip_id` i stedet for et session-id-opslag:
+`page.tsx` kalder **ikke** `waitUntil()` direkte (review-fund på PR #66): selve
+scheduling-kaldet er flyttet ind i en lille helper, `scheduleTripVisit()`, så et
+synkront throw fra platform-primitiven ikke kan vælte siden, og så `page.tsx` slipper
+for try/catch-logik:
 
 ```ts
 // src/lib/trip-visit-write.ts (FASE 1B — skitse)
+import { waitUntil } from "@vercel/functions";
+
 const WRITE_TIMEOUT_MS = 2000;
 
+export type RecordTripVisitOutcome =
+  | { kind: "ok" }
+  | { kind: "timeout" }
+  | { kind: "rpc-error"; code: string; message: string };
+
+// Ren klassifikation, udtrukket for at kunne unit-testes uden at mocke
+// Supabase-klienten (samme mønster som evaluateRateLimit() i rate-limit.ts).
+export function describeRecordTripVisitOutcome(input: {
+  error: { code?: string | null; message?: string | null } | null;
+  aborted: boolean;
+}): RecordTripVisitOutcome {
+  if (!input.error) return { kind: "ok" };
+  if (input.aborted) return { kind: "timeout" };
+  return { kind: "rpc-error", code: input.error.code ?? "", message: input.error.message ?? "" };
+}
+
 export async function recordTripVisit(tripId: string): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), WRITE_TIMEOUT_MS);
   try {
     const supabase = getSupabaseService();
-    const write = supabase.rpc("record_trip_visit", { p_trip_id: tripId });
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), WRITE_TIMEOUT_MS));
-    const result = await Promise.race([write, timeout]);
-    if (result === null) {
-      console.error("[trip-visit] timeout", { tripId });
-      return;
-    }
-    const { error } = result;
-    if (error) {
-      console.error("[trip-visit] rpc-fejl", { tripId, code: error.code, message: error.message });
-    }
+    const { error } = await supabase
+      .rpc("record_trip_visit", { p_trip_id: tripId })
+      .abortSignal(controller.signal);           // reel abort af HTTP-kaldet, ikke kun "stop med at vente"
+    const outcome = describeRecordTripVisitOutcome({ error, aborted: controller.signal.aborted });
+    if (outcome.kind === "timeout") console.error("[trip-visit] timeout", { tripId });
+    if (outcome.kind === "rpc-error")
+      console.error("[trip-visit] rpc-fejl", { tripId, code: outcome.code, message: outcome.message });
   } catch (e) {
-    console.error("[trip-visit] uventet fejl", e);
+    const name = e instanceof Error ? e.name : "unknown";
+    console.error("[trip-visit] uventet fejl", { tripId, name });
+  } finally {
+    clearTimeout(timer);                          // rydder timeren selv når RPC'en svarer hurtigt
   }
   // Kaster ALDRIG.
 }
+
+// Beskytter selve scheduling-kaldet — recordTripVisit() ovenfor kan aldrig
+// kaste/rejecte, men waitUntil() (platform-primitiven) er ude af vores kontrol.
+export function scheduleTripVisit(tripId: string): void {
+  try {
+    waitUntil(recordTripVisit(tripId));
+  } catch (e) {
+    const name = e instanceof Error ? e.name : "unknown";
+    console.error("[trip-visit] scheduling-fejl", { tripId, name });
+  }
+}
 ```
 
-**Loggrænsen, uændret:** `tripId` + Postgres' `error.code`/`error.message` er det eneste
-der logges — aldrig `booking_no`, slug, kundenavn, rejsedata eller rå request-headere.
+**Ur-valg og ærlighed om abort:** `clock_timestamp()`/`greatest()` i selve RPC'en er
+dækket i §6.2-6.3 (revideret på PR #66). `abortSignal()` lukker VORES HTTP-forbindelse
+til PostgREST med det samme timeout'et udløber — det garanterer ikke med sikkerhed at en
+eventuel igangværende forespørgsel på Postgres-serveren stopper i samme øjeblik, kun at
+vi selv stopper med at vente og at forbindelsen lukkes.
+
+**Loggrænsen, uændret:** `tripId` + Postgres' `error.code`/`error.message` (eller ved
+scheduling-fejl: fejlens `name`) er det eneste der logges — aldrig `booking_no`, slug,
+kundenavn, rejsedata eller rå request-headere.
 
 **Hvorfor `waitUntil` og ikke Next.js' `after()`:** `after()` kræver Next.js 15; repoet
 kører Next 14. `waitUntil` fra `@vercel/functions` er en platform-primitiv, virker
@@ -652,8 +724,8 @@ forudbestemt her.
 | `supabase/schema-baseline.json` | ÆNDRES | Efter `--update-baseline` |
 | `src/lib/trip-visit.ts` | **NY** | Rene funktioner, §8. Ingen imports fra `next/*`/Supabase |
 | `src/lib/trip-visit.test.ts` | **NY** | Vitest, ingen DB, ingen browser |
-| `src/lib/trip-visit-write.ts` | **NY** | `recordTripVisit()`, §9 |
-| `src/app/[bookingId]/page.tsx` | ÆNDRES | Ét `if (shouldRecordTripVisit(...)) { waitUntil(recordTripVisit(...)); }` efter access-gaten — ikke `await`, §9 |
+| `src/lib/trip-visit-write.ts` | **NY** | `recordTripVisit()` + `scheduleTripVisit()`, §9 |
+| `src/app/[bookingId]/page.tsx` | ÆNDRES | Ét `if (shouldRecordTripVisit(...)) { scheduleTripVisit(...); }` efter access-gaten — ikke `await`, §9 |
 | `package.json` + `package-lock.json` | ÆNDRES | Ny dependency: `@vercel/functions` (eneste nye) |
 | `docs/SYSTEM-ARKITEKTUR.md` | ÆNDRES | Datamodel + routebeskrivelse |
 | `docs/DECISIONS.md` | ÆNDRES | Rickos godkendelse af Model B (§14, punkt 1) · fail-open vs. #38 · retention (§11 — Rickos svar) |
@@ -759,8 +831,8 @@ opsamlingen fra dér, fordi preview deler production-DB.
    med trafik); retention er en ren, endnu ubesluttet politik (§11 — KRÆVER RICKO).
 10. **Hvad skal bygges i Fase 1B?** `supabase/010_trip_visits.sql`,
     `src/lib/trip-visit.ts` + tests, `src/lib/trip-visit-write.ts`, ét
-    `waitUntil(...)`-kald i `page.tsx`, én ny dependency. **Ingen middleware-ændring.**
-    Fuld liste §12.
+    `scheduleTripVisit(...)`-kald i `page.tsx`, én ny dependency. **Ingen
+    middleware-ændring.** Fuld liste §12.
 
 ## 14. Beslutninger der kræver Ricko før Fase 1B
 

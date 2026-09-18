@@ -29,14 +29,22 @@ const CANONICAL_PRODUCTION_HOST = "rejseplaner.uniquetravel.dk";
 // Fast konstant — IKKE et dynamisk min() som upload_events' trackingSince
 // (src/lib/usage.ts), fordi trip_visits-rækker selv kan blive slettet af
 // den (endnu ikke aktiverede) 12-måneders retention og derfor ikke duer som
-// kilde til "hvornår startede sporing". Sættes til den faktiske deploy-dato
-// DEN DAG Fase 1B rent faktisk går i produktion (ikke i denne PR — der
-// deployes intet herfra). Bruges af en FREMTIDIG Fase 1C til at afgøre om
-// "ingen trip_visits-række" kan læses som "aldrig åbnet" eller om trippen/
-// sporingen er ældre end 12-måneders-retention-vinduet — se
+// kilde til "hvornår startede sporing". Bruges af en FREMTIDIG Fase 1C til
+// at afgøre om "ingen trip_visits-række" kan læses som "aldrig åbnet" eller
+// om trippen/sporingen er ældre end 12-måneders-retention-vinduet — se
 // supabase/010b_trip_visits_retention.sql for den fulde begrundelse. Ikke
 // brugt af shouldRecordTripVisit() eller record_trip_visit() — kun til
 // fremtidig visningslogik.
+//
+// ⚠️ MIDLERTIDIG PRE-RELEASE PLACEHOLDER, IKKE den ønskede endelige
+// production-værdi (review-fund på PR #66). `null` her betyder blot at
+// denne PR endnu ikke har en kørt production-migration at datere sig fra —
+// det er IKKE en gyldig sluttilstand for den mergede release. Se
+// MERGE-BLOKERENDE TJEKLISTE i supabase/README.md ("Driftsnote: trip_visits
+// (Issue #65)"): migration 010 skal køres og verificeres i production, den
+// faktiske tracking-start-timestamp skal fastlægges, og DENNE konstant
+// (+ testen i trip-visit.test.ts) skal opdateres til den faste værdi på
+// denne PR-branch, FØR PR'en kan få endelig merge-godkendelse.
 export const TRACKING_SINCE: string | null = null;
 
 // Ren regex, transient: strengen læses, matches, og forsvinder med
