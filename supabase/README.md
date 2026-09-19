@@ -22,7 +22,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `010_trip_visits.sql` | trip_visits + RLS + `record_trip_visit` RPC — cookie-fri visit-aggregation (Issue #65) | 2026-09-18T11:31:14Z (`20260918113114_trip_visits_usage_tracking`) — DB kun, koden er endnu ikke merget/deployet |
 | `010b_trip_visits_retention.sql` | pg_cron-retention for trip_visits (12 mdr.) — bevidst separat fil | **Nej — separat, senere godkendelse (kræver evt. pg_cron-aktivering)** |
 | `011_trip_section_engagement.sql` | trip_section_engagement + eksplicitte table grants + RLS + `record_trip_section_engagement` RPC — sektionsengagement (Issue #71) | 2026-09-18T18:41:05Z (`20260918184105_trip_section_engagement`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
-| `012_trip_contact_intent.sql` | trip_contact_intent + eksplicitte table grants + RLS + `record_trip_contact_intent` RPC — kontakt-intent, max 2 rækker/trip (Issue #73) | **Nej — versioneret, IKKE kørt i production (kræver Rickos særskilte godkendelse). `schema-baseline.json` er ikke opdateret** |
+| `012_trip_contact_intent.sql` | trip_contact_intent + eksplicitte table grants + RLS + `record_trip_contact_intent` RPC — kontakt-intent, max 2 rækker/trip (Issue #73) | 2026-09-19T07:43:41Z (`20260919074341_trip_contact_intent`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.
@@ -117,21 +117,23 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 
 ## Driftsnote: trip_contact_intent (Issue #73)
 
-- **Migration 012 er KUN versioneret — IKKE kørt i production.** Kræver Rickos særskilte,
-  eksplicitte godkendelse. `schema-baseline.json` opdateres FØRST efter en live-kørsel
-  (`node scripts/check-schema-drift.mjs` viser "Ingen drift" indtil da, fordi både production og
-  baseline er uden 012).
-- **Release-rækkefølge:** migrationen køres FØR kode-deploy (ellers fejler skrivning/visning
-  stille: klienten ignorerer 500, admin viser "Kontaktaktivitet kunne ikke hentes"). Derefter
-  `--update-baseline`, og i den afsluttende release-cutover commit sættes
-  `CONTACT_INTENT_TRACKING_SINCE` (`src/lib/contact-intent-tracking.ts`, `null` indtil da) — Fase 3's egen
-  starttidspunkt, adskilt fra Fase 1B's `TRACKING_SINCE`, som kun gælder åbninger.
+- **Migration 012 ER KØRT og verificeret i production** — `iunixfpthdftmkgpugex`, migration `20260919074341_trip_contact_intent`
+  (2026-09-19T07:43:41Z), efter Rickos eksplicitte godkendelse. Read-only verificeret 2026-09-19: tabel med de fire
+  forventede kolonner, PK `(trip_id, channel)`, FK til `trips(id) on delete cascade`, CHECK (`email`/`phone`),
+  RLS aktiveret, policy `service_role full access trip_contact_intent`, table privileges kun `service_role`
+  (SELECT/INSERT/UPDATE) ud over ejeren, `record_trip_contact_intent(uuid,text)` med `SECURITY INVOKER`,
+  `search_path = public, pg_catalog` og `EXECUTE` kun til `service_role`. Row count: 0 — ingen kunstige
+  testevents (koden er ikke merget/deployet). `schema-baseline.json` er opdateret (kun 012-objekter, +84/−0);
+  `node scripts/check-schema-drift.mjs` viser "Ingen drift". `010b`/`pg_cron` er **ikke** kørt/aktiveret.
+- **VIGTIG DISTINKTION:** migrationstidspunktet er DB-parathed, IKKE tracking-start. `CONTACT_INTENT_TRACKING_SINCE`
+  (`src/lib/contact-intent-tracking.ts`, `null` indtil videre) skal være ≥ tidspunktet hvor Fase 3-koden er live i
+  production — Fase 3's egen start, adskilt fra Fase 1B's `TRACKING_SINCE` (kun åbninger). Fastlæggelsen er det
+  eneste resterende releasetrin; se `docs/VISION-3.0-PHASE-3.md` § "Tracking-cutover".
 - **Data:** højst to rækker pr. trip (`email`/`phone`), kun `trip_id` + kanal + to tidsstempler.
   Ingen click_count, booking_no, slug, kundenavn, IP, User-Agent, cookie-/session-id eller
   source/surface. Se kommentarerne i `012_trip_contact_intent.sql`.
 - **Retention er IKKE aktiveret** og er en separat, fremtidig release-/policy-beslutning
-  (samme princip som `010b`). `010b`/`pg_cron` er stadig ikke kørt/aktiveret; max 2 rækker/trip
-  giver intet teknisk lagringspres.
+  (samme princip som `010b`). Max 2 rækker/trip giver intet teknisk lagringspres.
 
 ## Drift-tjek
 

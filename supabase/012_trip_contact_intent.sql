@@ -2,12 +2,16 @@
 -- Migration 012: trip_contact_intent — kontakt-intent (Vision 3.0 Fase 3,
 -- Issue #73)
 -- ============================================================================
--- IKKE kørt live. Kun versioneret i denne PR — Rickos særskilte, eksplicitte
--- godkendelse kræves før den køres i production (samme kontrollerede
--- release-flow som migration 010/011). Idempotent.
+-- Kørt i production 2026-09-19 via migration `20260919074341_trip_contact_intent`
+-- (projekt iunixfpthdftmkgpugex), efter Rickos eksplicitte godkendelse og samme
+-- kontrollerede release-flow som migration 010/011. Read-only verificeret efter
+-- kørslen (tabel, RLS, PK, FK, CHECK, table grants, RPC-grants, 0 rækker);
+-- schema-baseline.json er opdateret efter live-kørslen. SQL'en nedenfor er
+-- uændret siden kørslen; kun denne statuskommentar er opdateret. Idempotent.
+-- Migrationstidspunktet er DB-parathed, IKKE tracking-start (se
+-- CONTACT_INTENT_TRACKING_SINCE i src/lib/contact-intent-tracking.ts).
 -- Denne fil opretter KUN tabel, eksplicitte table grants/revokes, RLS-policy,
--- CHECK-constraint og skriv-RPC'en. schema-baseline.json opdateres FØRST efter
--- migrationen faktisk er kørt live.
+-- CHECK-constraint og skriv-RPC'en.
 -- Ingen retention-mekanisme — se "RETENTION" nederst. 010b/pg_cron røres ikke.
 --
 -- Filnavn: fortsætter repoets EGEN, dokumenterede nummererings-konvention

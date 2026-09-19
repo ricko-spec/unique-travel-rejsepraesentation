@@ -194,7 +194,7 @@ uniquetravel-rejsepraesentation/
     ├── 010_trip_visits.sql       # trip_visits + record_trip_visit RPC (Issue #65 — live i production)
     ├── 010b_trip_visits_retention.sql  # pg_cron-retention, bevidst separat, IKKE aktiveret
     ├── 011_trip_section_engagement.sql  # trip_section_engagement + grants + RPC (Issue #71 — kørt live 2026-09-18, 20260918184105_trip_section_engagement)
-    ├── 012_trip_contact_intent.sql  # trip_contact_intent + grants + RPC (Issue #73 — versioneret, IKKE kørt i production)
+    ├── 012_trip_contact_intent.sql  # trip_contact_intent + grants + RPC (Issue #73 — kørt live 2026-09-19, 20260919074341_trip_contact_intent)
     └── schema-baseline.json      # Committet snapshot af live-DDL (opdateres med --update-baseline)
 ```
 
@@ -394,7 +394,7 @@ Sælgeren kan redigere **fulde navn**, **telefon** og **rådgivernavn i rejsepla
 
 ## 8. Database-model
 
-Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38) og `trip_visits` (8. tabel, migration 010, kørt og verificeret live 2026-09-18T11:31:14Z, Issue #65/PR #66). **8 tabeller**, alle med RLS aktiveret. En 9. tabel, `trip_section_engagement` (migration 011, Issue #71), er **kørt og read-only verificeret i production 2026-09-18** (`20260918184105_trip_section_engagement`) — se afsnittet nedenfor. En 10. tabel, `trip_contact_intent` (migration 012, Issue #73), er kun **versioneret, IKKE kørt i production** — se `docs/VISION-3.0-PHASE-3.md`.
+Verificeret direkte i den levende database 2026-07-20 (`list_tables` + `pg_policies` + `pg_indexes` + `pg_get_functiondef` på projekt `iunixfpthdftmkgpugex`), plus `upload_events` (7. tabel, tilføjet af migration 009 og verificeret live 2026-09-16, Issue #38) og `trip_visits` (8. tabel, migration 010, kørt og verificeret live 2026-09-18T11:31:14Z, Issue #65/PR #66). **8 tabeller**, alle med RLS aktiveret. En 9. tabel, `trip_section_engagement` (migration 011, Issue #71), er **kørt og read-only verificeret i production 2026-09-18** (`20260918184105_trip_section_engagement`) — se afsnittet nedenfor. En 10. tabel, `trip_contact_intent` (migration 012, Issue #73), er **kørt og read-only verificeret i production 2026-09-19** (`20260919074341_trip_contact_intent`; 0 rækker — koden der skriver til den er endnu ikke merget) — se `docs/VISION-3.0-PHASE-3.md`.
 
 > **Vigtigt om projekt-referencer:** `.env.example:2` og README peger på `iunixfpthdftmkgpugex` — det er dér de 35 rejser, 7 profiler og al audit-data ligger, altså **den faktiske produktionsdatabase**. To andre refs optræder i repoet og er **misvisende**: `supabase/schema.sql:2` nævner `ocxrvkrggzppyhgyambj` (det er Allotment-værktøjets projekt — copy-paste-fejl), og `supabase/profiles.sql:2-3` kalder `iunixfpthdftmkgpugex` for "dev" og nævner `sujimigwcjkzpekkdpzf` som "production" — om dét projekt overhovedet findes/bruges er ukendt — kræver Ricko-bekræftelse.
 
@@ -613,7 +613,7 @@ ovenfor — `trip_section_engagement` → authenticated admin-server →
 ELIGIBLE sektioner (beregnet server-side, samme kilde som klientens eligibility) optræder
 nogensinde i visningen; en fejlet forespørgsel giver `unavailable`, aldrig et falsk minus.
 
-### `trip_contact_intent` — kontakt-intent (Issue #73, migration 012 — **versioneret, IKKE kørt i production**)
+### `trip_contact_intent` — kontakt-intent (Issue #73, migration 012 — **kørt i production 2026-09-19**, `schema-baseline.json` opdateret)
 
 Aggregeret, højst **to rækker pr. trip** (én pr. kanal, PK `(trip_id, channel)`), `channel` CHECK-
 begrænset til `email` | `phone`, plus `first_clicked_at`/`last_clicked_at`. Ingen `click_count`, ingen

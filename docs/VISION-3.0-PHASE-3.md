@@ -14,9 +14,10 @@ aldrig.
 |---|---|---|
 | `email` | `mailto:`-kortet i `ContactCTA` | ja |
 | `phone` | rådgiverens `tel:`-link i `ContactCTA` og "Ring" i `ActionBar` (`tel:+4559498630`) | ja — begge er samme kanal, der gemmes ikke hvilken knap |
-| — | "Kontakt os" i `ActionBar` (`#kontakt`) | **nej** — ren intern navigation |
+| — | "Kontakt os" i `ActionBar` og hero-knapperne (`#kontakt`) | **nej** — ren intern navigation |
+| — | `tel:`-linket på kundesidens fejlsider (ikke-parsebar trip / ukendt slug) | **nej** — ingen ContactCTA/ActionBar; endpointet klassificerer ikke-parsebar trip-data som ineligible |
 
-## Datamodel — `supabase/012_trip_contact_intent.sql` (IKKE kørt i production)
+## Datamodel — `supabase/012_trip_contact_intent.sql` (kørt i production som `20260919074341_trip_contact_intent`)
 
 ```sql
 trip_id           uuid        not null references public.trips(id) on delete cascade
@@ -103,12 +104,27 @@ Fase 1B's `TRACKING_SINCE` (`trip-visit.ts`) gælder **kun åbninger** (`trip_vi
 **"Åbningsmåling fra …"**. Kontakt-intent har sin EGEN cutover: `CONTACT_INTENT_TRACKING_SINCE:
 string | null` (`src/lib/contact-intent-tracking.ts`, en lille zod-fri fil, så admin-bundlet ikke trækker zod ind).
 
-- **`null` indtil release-cutover** — vi kender ikke det faktiske production go-live-tidspunkt, og et
-  gættet tidspunkt ville være en falsk påstand i sælger-UI'et.
-- **Sættes udelukkende i den afsluttende release-cutover commit** — EFTER migration 012 er kørt i
-  production og umiddelbart FØR merge/deploy — som en fast, hardkodet ISO-8601 UTC-streng (samme princip
-  som Fase 1B: aldrig `Date.now()`, env-var, migrationens tidspunkt eller et DB-opslag). Release-metadata
-  i kode; ingen ny DB-kolonne. Testen kræver at den er `null` ELLER en gyldig UTC-streng senere end Fase 1B's.
+- **Migrationstidspunktet er IKKE tracking-start.** Migration 012 blev kørt 2026-09-19T07:43:41Z (`20260919074341_trip_contact_intent`) —
+  det er kun DB-parathed. Ingen kode skriver til tabellen, før PR #74 er merget og deployet.
+- **`null` indtil cutover** — et go-live-tidspunkt er ikke opfundet, og et gættet tidspunkt ville være en falsk
+  påstand i sælger-UI'et. Indtil da viser admin den ærlige, dato-løse tekst.
+- **Regel for værdien:** `CONTACT_INTENT_TRACKING_SINCE` skal være **≥ det tidspunkt, hvor Fase 3-koden er live i
+  production**. En dato FØR ville lade et "—" påstå dækning for en periode uden tracking (falsk negativt signal); en
+  dato EFTER er sikker (et klik før datoen vises stadig som ✓, og "—" påstår kun dækning fra datoen). Fast,
+  hardkodet ISO-8601 UTC-streng (aldrig `Date.now()`, env-var, migrationens tidspunkt eller et DB-opslag);
+  release-metadata i kode, ingen ny DB-kolonne. Testen kræver `null` ELLER en UTC-streng senere end både Fase 1B's
+  `TRACKING_SINCE` og migrationstidspunktet.
+- **Det eneste resterende releasetrin (ud over godkendelser og checks): fastlæg værdien.** En cutover-commit
+  FØR merge kan pr. konstruktion kun gætte deploy-tidspunktet (Vercel-build/-kø varierer fra få til >15 min).
+  Metode — **afventer Rickos valg:**
+  - **B (anbefalet): efter deploy.** Lad konstanten være `null` gennem merge/deploy; når produktionsdeploymentet af
+    merge-committen er `READY`, sættes den til dét tidspunkt (eller senere) i en lille opfølgende ændring
+    (`CONTACT_INTENT_TRACKING_SINCE` + evt. testjustering). Eksakt og sikker, men kræver en ekstra production-deploy
+    (og dermed en separat merge-OK, som al push til main). Indtil da er UI'et dato-løst.
+  - **A: før merge (Fase 1B-præcedens).** Sæt værdien i en sidste commit før merge, med bevidst konservativ margin
+    (planlagt merge-tidspunkt + buffer). Én deploy, men der er risiko for, at værdien ligger før den faktiske
+    go-live, hvis deploy trækker ud — og så er "—" overdrevet i mellemrummet.
+  - (Ingen ny tabelkolonne og ingen ændring i selve trackingen i nogen af varianterne.)
 - **UI** (under Kontakt-intent-blokken, `buildContactIntentTrackingNote`): med dato → *"Kontaktklik måles
   fra [dato]."*; uden (før release) → *"Kontaktklik registreres fra det tidspunkt funktionen sættes i
   drift."* — ingen konkret dato før cutover.
@@ -130,18 +146,19 @@ default.
 
 ## Release-rækkefølge
 
-1. ✅ Implementering + migrationsfil + tests + docs i én PR.
-2. ChatGPT architecture/security-review.
-3. Rickos konkrete godkendelse af migration 012.
-4. Migration 012 køres i production **før** kode-deploy, og verificeres read-only (grants, RLS, RPC,
-   0 rækker). Uden tabellen fejler intet for kunden (klienten ignorerer 500), men klik registreres ikke,
-   og admin viser "Kontaktaktivitet kunne ikke hentes".
-5. `node scripts/check-schema-drift.mjs --update-baseline` **kun efter** migrationen er live.
-6. **Release-cutover commit:** sæt `CONTACT_INTENT_TRACKING_SINCE` til det faktiske go-live-tidspunkt
-   (fast ISO-8601 UTC) — først EFTER migration 012 er live og umiddelbart FØR merge/deploy. Indtil da er
-   den `null`.
-7. Fulde checks + Vercel.
-8. ChatGPT final HEAD-review → Rickos merge-godkendelse → merge/deploy.
+Status pr. 2026-09-19 (✅ = gennemført):
+
+1. ✅ Implementering + migrationsfil + tests + docs i én PR (#74).
+2. ✅ ChatGPT architecture/security-review og re-review (to blockers rettet).
+3. ✅ Rickos godkendelse af migration 012.
+4. ✅ Migration 012 kørt i production **før** kode-deploy — `20260919074341_trip_contact_intent` (2026-09-19T07:43:41Z) — og read-only verificeret
+   (grants, RLS, RPC, 0 rækker, `pg_cron` ikke installeret).
+5. ✅ `node scripts/check-schema-drift.mjs --update-baseline` kørt efter live-migrationen; kun 012-objekter (+84/−0);
+   drift-tjek = "Ingen drift".
+6. ⏭ **NÆSTE:** ChatGPT final HEAD-review (inkl. Vercel-preview på final HEAD; retrigger/redeploy hvis Vercel ikke
+   bygger den).
+7. Rickos valg af cutover-metode (A/B ovenfor) + eksplicitte merge-godkendelse → merge/deploy.
+8. **Resterende releasetrin:** fastlæg `CONTACT_INTENT_TRACKING_SINCE` efter reglen ovenfor.
 9. Production-smoketest når Ricko har mulighed (må ikke oprette kunstige events; udskydelse blokerer ikke merge).
 
 ## Udenfor scope (Fase 4+)
