@@ -208,7 +208,7 @@ Kontrolleret ved mutation (hver ændring fælder tests): server-eligibility fjer
 adgangstjek fjernet, `preventDefault` tilføjet, "Kontakt os" gjort tracked, `.strict()` fjernet,
 dedup-markering fjernet.
 
-**Kontakt-intent — review-rettelser på PR #74 (`src/lib/contact-intent-trip.test.ts`, 39 tests):**
+**Kontakt-intent — review-rettelser på PR #74 (`src/lib/contact-intent-trip.test.ts`, 40 tests):**
 - (A) `resolveContactChannels` — valid trip + advisorEmail ⇒ email + phone; valid uden advisorEmail (null/
   undefined/tom/mangler) ⇒ kun phone; malformed trip-data (null, streng, tal, array, itinerary/hotels ikke
   array, ukendt itinerary-type, ikke-streng advisorEmail) ⇒ `null` — aldrig en tom liste; kaster aldrig.
@@ -217,7 +217,7 @@ dedup-markering fjernet.
 - (C) **Paritet:** for valid/malformed data giver admin-eligibility og `handleContactIntent()` (spion på
   skrivningen) præcis samme svar pr. kanal — én runtime-sandhed.
 - (D) `CONTACT_INTENT_TRACKING_SINCE` er `null` ELLER en fast UTC-streng senere end Fase 1B's
-  `TRACKING_SINCE`, aldrig genbrugt.
+  `TRACKING_SINCE` og migrationstidspunktet (`2026-09-19T07:43:41Z`), aldrig genbrugt.
 - (E) No-row-semantik: `buildContactIntentTrackingNote` uden dato ⇒ ingen konkret dato/årstal; med dato ⇒
   "Kontaktklik måles fra …" (dansk format); uparsebar dato ⇒ dato-løs tekst; nævner aldrig Fase 1B's dato.
 - (F) Statisk scan af admin-filerne: `page.tsx` bruger `resolveContactChannels(row.data)` og ikke
@@ -238,8 +238,11 @@ PUBLIC/anon/authenticated uden table privileges, `service_role` præcis SELECT/I
 `last_clicked_at` rykker frem og går aldrig baglæns (`greatest`), mange klik ⇒ stadig præcis 2
 rækker pr. trip, ugyldig channel/`kontakt`/en tredje kanal/dublet/ukendt trip afvist,
 DELETE/TRUNCATE afvist for `service_role`, SELECT/INSERT/UPDATE/RPC afvist for anon/authenticated,
-og cascade uden `service_role` DELETE (45/45). **IKKE en kørsel mod production** — migrationen er
-ikke kørt live, og `schema-baseline.json` er ikke opdateret.
+og cascade uden `service_role` DELETE (45/45). Det var en lokal pre-release-kørsel. Selve production-migrationen
+(`20260919074341_trip_contact_intent`) blev bagefter kørt efter Rickos godkendelse og verificeret read-only mod den levende database (samme
+grants/RLS/RPC-egenskaber, 0 rækker, `pg_cron` ikke installeret); live-kommentarer og RPC-krop er kontrolleret
+identiske med migrationsfilen, og `schema-baseline.json` er opdateret efter live-kørslen. Der er bevidst IKKE
+skrevet syntetiske contact-intent-rækker i production.
 
 **Manuel smoke-test efter migration 012 + merge/deploy af Issue #73-PR'en (plan, IKKE udført —
 ingen kunstige contact-intent-events må oprettes):**

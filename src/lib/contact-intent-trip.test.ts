@@ -213,6 +213,19 @@ describe("D. CONTACT_INTENT_TRACKING_SINCE (Fase 3 cutover)", () => {
       new Date(TRACKING_SINCE ?? 0).getTime(),
     );
   });
+
+  it("er (hvis sat) ALDRIG migrationstidspunktet — migrationen er DB-parathed, ikke tracking-start", () => {
+    // Migration 012 blev kørt i production 2026-09-19T07:43:41Z
+    // (20260919074341_trip_contact_intent). Ingen kode skriver til tabellen før
+    // PR #74 er deployet, så tracking-start kan ikke ligge på eller før dette
+    // tidspunkt — en sådan værdi ville lade et "—" påstå dækning uden tracking.
+    const MIGRATION_012_APPLIED_AT = "2026-09-19T07:43:41Z";
+    if (CONTACT_INTENT_TRACKING_SINCE === null) return; // før cutover
+    expect(CONTACT_INTENT_TRACKING_SINCE).not.toBe(MIGRATION_012_APPLIED_AT);
+    expect(new Date(CONTACT_INTENT_TRACKING_SINCE).getTime()).toBeGreaterThan(
+      new Date(MIGRATION_012_APPLIED_AT).getTime(),
+    );
+  });
 });
 
 // ============================================================================

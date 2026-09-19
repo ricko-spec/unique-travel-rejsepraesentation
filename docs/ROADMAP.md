@@ -87,7 +87,7 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
    Vision 3.0 Fase 3: kontakt-intent end-to-end** (barn af
    [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)). Én samlet work package: aggregeret
    `trip_contact_intent` (max 2 rækker pr. trip, email/phone, ingen click_count) + RPC (migration
-   012, **versioneret, IKKE kørt i production**), `POST /[bookingId]/intent` under kundens egen
+   012, **kørt i production** som `20260919074341_trip_contact_intent`, baseline opdateret), `POST /[bookingId]/intent` under kundens egen
    slug-path, `ContactIntentLink` (ingen preventDefault, `keepalive` fire-and-forget) på
    ContactCTA og ActionBar "Ring" ("Kontakt os" → #kontakt tracker IKKE), "Kontakt-intent" i
    admin, opdateret transparenstekst. Se `docs/VISION-3.0-PHASE-3.md`.
@@ -109,14 +109,12 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Vision 3.0 Fase 3 — production-migration af 012 + merge-godkendelse af Issue #73-PR'en.**
-  Migration `012_trip_contact_intent.sql` er versioneret, ikke kørt. Release-rækkefølgen (samme
-  mønster som migration 010/011): ChatGPT architecture/security-review → Ricko godkender
-  migrationen konkret → den køres FØR kode-deploy og verificeres read-only (schema/RLS/grants/
-  RPC) → `--update-baseline` (kun efter live-kørsel) → release-cutover commit
-  (`CONTACT_INTENT_TRACKING_SINCE`, `null` indtil da) → checks/Vercel → ChatGPT final HEAD-review →
-  Rickos merge-godkendelse → merge/deploy → production-smoketest (kan udskydes). Se
-  `docs/VISION-3.0-PHASE-3.md` for eksakt rækkefølge.
+- **Vision 3.0 Fase 3 — cutover-metode + merge-godkendelse af Issue #73-PR'en (PR #74).**
+  Migration `012_trip_contact_intent.sql` er godkendt, kørt i production (`20260919074341_trip_contact_intent`) og read-only
+  verificeret; schema-baseline er opdateret; 0 syntetiske events. Tilbage: ChatGPT final HEAD-review →
+  Rickos valg af metode for `CONTACT_INTENT_TRACKING_SINCE` (skal være ≥ tidspunktet hvor koden er live —
+  aldrig migrationstidspunktet; se `docs/VISION-3.0-PHASE-3.md` § "Tracking-cutover") → Rickos merge-godkendelse
+  → merge/deploy → cutover-trinnet → production-smoketest (kan udskydes; blokerer ikke merge).
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af
   `pg_cron`-extensionen). Ingen tidsfrist — hverken `trip_visits`, `trip_section_engagement`

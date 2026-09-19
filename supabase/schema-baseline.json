@@ -214,6 +214,34 @@
       "column": "trip_id",
       "default": null,
       "nullable": "NO",
+      "table": "trip_contact_intent",
+      "type": "uuid"
+    },
+    {
+      "column": "channel",
+      "default": null,
+      "nullable": "NO",
+      "table": "trip_contact_intent",
+      "type": "text"
+    },
+    {
+      "column": "first_clicked_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "trip_contact_intent",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "last_clicked_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "trip_contact_intent",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "trip_id",
+      "default": null,
+      "nullable": "NO",
       "table": "trip_section_engagement",
       "type": "uuid"
     },
@@ -507,6 +535,31 @@
     },
     {
       "column": null,
+      "comment": "Kontakt-intent pr. rejseplan (Vision 3.0 Fase 3, Issue #73). Højst 2 rækker pr. trip_id — én pr. kanal (email/phone), aldrig én pr. klik. Ingen click_count, ingen identifikator af nogen art: ingen cookie, ingen IP, ingen user-agent, intet bookingnummer, ingen slug, intet navn, ingen source/surface. Skrives kun via record_trip_contact_intent(). Service-role-only på BÅDE Postgres GRANT-laget (kun service_role har table privileges: SELECT/INSERT/UPDATE) og RLS-laget. Retention er endnu IKKE aktiveret (bevidst, separat release-/policy-beslutning) — se driftsnoten i supabase/README.md.",
+      "table": "trip_contact_intent"
+    },
+    {
+      "column": "channel",
+      "comment": "Kontrolleret enum, håndhævet af CHECK-constraint: email | phone. email = mailto-linket i ContactCTA; phone = tel:-links (rådgiverens nummer i ContactCTA og \"Ring\" i ActionBar). Det interne \"Kontakt os\"-link (#kontakt) er navigation og registreres IKKE.",
+      "table": "trip_contact_intent"
+    },
+    {
+      "column": "first_clicked_at",
+      "comment": "Første gang kunden brugte denne kanal. Sættes på insert-grenen i record_trip_contact_intent() og opdateres ALDRIG efterfølgende.",
+      "table": "trip_contact_intent"
+    },
+    {
+      "column": "last_clicked_at",
+      "comment": "Seneste gang kunden brugte denne kanal. Opdateres ved hver kvalificeret registrering (fx efter et refresh) og går aldrig baglæns i tid.",
+      "table": "trip_contact_intent"
+    },
+    {
+      "column": "trip_id",
+      "comment": "FK til trips.id, on delete cascade — en slettet rejseplan tager sin kontakt-intent med sig.",
+      "table": "trip_contact_intent"
+    },
+    {
+      "column": null,
       "comment": "Sektionsengagement pr. rejseplan (Vision 3.0 Fase 2, Issue #71). Højst 5 rækker pr. trip_id — én pr. hovedafsnit, aldrig én pr. visning. Ingen identifikator af nogen art: ingen cookie, ingen IP, ingen user-agent, intet bookingnummer, intet navn. Skrives kun via record_trip_section_engagement(). Service-role-only på BÅDE Postgres GRANT-laget (kun service_role har table privileges: SELECT/INSERT/UPDATE) og RLS-laget. Retention er endnu IKKE aktiveret (bevidst, separat release-/policy-beslutning) — se driftsnoten i supabase/README.md.",
       "table": "trip_section_engagement"
     },
@@ -648,6 +701,21 @@
       "table": "rate_limits"
     },
     {
+      "def": "CHECK ((channel = ANY (ARRAY['email'::text, 'phone'::text])))",
+      "name": "trip_contact_intent_channel_check",
+      "table": "trip_contact_intent"
+    },
+    {
+      "def": "PRIMARY KEY (trip_id, channel)",
+      "name": "trip_contact_intent_pkey",
+      "table": "trip_contact_intent"
+    },
+    {
+      "def": "FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE",
+      "name": "trip_contact_intent_trip_id_fkey",
+      "table": "trip_contact_intent"
+    },
+    {
       "def": "PRIMARY KEY (trip_id, section)",
       "name": "trip_section_engagement_pkey",
       "table": "trip_section_engagement"
@@ -733,6 +801,10 @@
       "name": "increment_rate_limit"
     },
     {
+      "def": "CREATE OR REPLACE FUNCTION public.record_trip_contact_intent(p_trip_id uuid, p_channel text)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\ndeclare\n  v_now timestamptz := clock_timestamp();\nbegin\n  insert into public.trip_contact_intent as tci\n    (trip_id, channel, first_clicked_at, last_clicked_at)\n  values\n    (p_trip_id, p_channel, v_now, v_now)\n  on conflict (trip_id, channel) do update\n    set last_clicked_at = greatest(tci.last_clicked_at, v_now);\nend;\n$function$\n",
+      "name": "record_trip_contact_intent"
+    },
+    {
       "def": "CREATE OR REPLACE FUNCTION public.record_trip_section_engagement(p_trip_id uuid, p_section text)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\ndeclare\n  v_now timestamptz := clock_timestamp();\nbegin\n  insert into public.trip_section_engagement as tse\n    (trip_id, section, first_seen_at, last_seen_at)\n  values\n    (p_trip_id, p_section, v_now, v_now)\n  on conflict (trip_id, section) do update\n    set last_seen_at = greatest(tse.last_seen_at, v_now);\nend;\n$function$\n",
       "name": "record_trip_section_engagement"
     },
@@ -801,6 +873,10 @@
     {
       "def": "CREATE INDEX rate_limits_reset_at_idx ON public.rate_limits USING btree (reset_at)",
       "name": "rate_limits_reset_at_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX trip_contact_intent_pkey ON public.trip_contact_intent USING btree (trip_id, channel)",
+      "name": "trip_contact_intent_pkey"
     },
     {
       "def": "CREATE UNIQUE INDEX trip_section_engagement_pkey ON public.trip_section_engagement USING btree (trip_id, section)",
@@ -913,6 +989,14 @@
       "policy": "service_role full access",
       "roles": "{service_role}",
       "table": "rate_limits",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access trip_contact_intent",
+      "roles": "{service_role}",
+      "table": "trip_contact_intent",
       "using": "true",
       "with_check": "true"
     },
