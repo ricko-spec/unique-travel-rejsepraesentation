@@ -80,14 +80,48 @@ describe("classifyTripEngagement", () => {
     expect(result).toEqual({ kind: "not-opened" });
   });
 
-  it("E. trip oprettet FØR TRACKING_SINCE, men TRACKING_SINCE selv < 12 mdr. gammel → not-opened", () => {
+  it("E. trip oprettet FØR TRACKING_SINCE, men TRACKING_SINCE selv < 12 mdr. gammel → not-measured (Fase 4)", () => {
     const result = classifyTripEngagement({
       visitRow: null,
       readFailed: false,
       tripCreatedAt: "2020-01-01T00:00:00Z", // langt før TRACKING_SINCE — cutoff bliver TRACKING_SINCE
       now: NOW,
     });
-    expect(result).toEqual({ kind: "not-opened" });
+    // Den godkendte Fase 4-rettelse: ikke længere "not-opened" — vi kan ikke vide
+    // om kunden åbnede linket før målingen startede.
+    expect(result).toEqual({ kind: "not-measured", since: "2026-09-18T12:20:18.000Z" });
+  });
+
+  it("E2. trip oprettet PRÆCIS ved TRACKING_SINCE eller senere → not-opened (målt fra dag ét)", () => {
+    for (const tripCreatedAt of ["2026-09-18T12:20:18Z", "2026-09-18T12:20:19Z", "2026-12-01T00:00:00Z"]) {
+      expect(
+        classifyTripEngagement({ visitRow: null, readFailed: false, tripCreatedAt, now: NOW }),
+      ).toEqual({ kind: "not-opened" });
+    }
+    // ét sekund FØR målestart → not-measured
+    expect(
+      classifyTripEngagement({
+        visitRow: null,
+        readFailed: false,
+        tripCreatedAt: "2026-09-18T12:20:17Z",
+        now: NOW,
+      }),
+    ).toEqual({ kind: "not-measured", since: "2026-09-18T12:20:18.000Z" });
+  });
+
+  it("E3. not-measured overtrumfer aldrig en åbning: en trip oprettet før målestart MED række → opened", () => {
+    const result = classifyTripEngagement({
+      visitRow: {
+        first_opened_at: "2026-09-19T08:00:00Z",
+        last_opened_at: "2026-09-19T09:00:00Z",
+        visit_count: 1,
+        open_count: 1,
+      },
+      readFailed: false,
+      tripCreatedAt: "2026-05-23T00:00:00Z",
+      now: NOW,
+    });
+    expect(result.kind).toBe("opened");
   });
 
   it("F. ingen row + cutoff >= 12 måneder gammel → no-recent-data", () => {
@@ -113,7 +147,7 @@ describe("classifyTripEngagement", () => {
       expect(result).toEqual({ kind: "no-recent-data" });
     });
 
-    it("cutoff ét millisekund YNGRE end 12 måneder → stadig not-opened", () => {
+    it("cutoff ét millisekund YNGRE end 12 måneder → stadig ikke no-recent-data (her not-measured, da tripen er ældre end målestart)", () => {
       // now sat 1ms FØR det præcise 12-måneders-punkt (2027-09-18T12:20:18.000Z)
       // ovenfor — cutoffs alder er derfor 12 måneder minus 1ms, ikke 12 måneder.
       const now = new Date("2027-09-18T12:20:17.999Z");
@@ -123,7 +157,7 @@ describe("classifyTripEngagement", () => {
         tripCreatedAt: "2020-01-01T00:00:00Z",
         now,
       });
-      expect(result).toEqual({ kind: "not-opened" });
+      expect(result).toEqual({ kind: "not-measured", since: "2026-09-18T12:20:18.000Z" });
     });
   });
 
@@ -363,8 +397,11 @@ describe("toTripEngagementListState", () => {
     expect(compact).not.toHaveProperty("openCount");
   });
 
-  it("not-opened/no-recent-data/unavailable går uændret igennem", () => {
+  it("not-opened/not-measured/no-recent-data/unavailable går uændret igennem", () => {
     expect(toTripEngagementListState({ kind: "not-opened" })).toEqual({ kind: "not-opened" });
+    expect(
+      toTripEngagementListState({ kind: "not-measured", since: "2026-09-18T12:20:18.000Z" }),
+    ).toEqual({ kind: "not-measured", since: "2026-09-18T12:20:18.000Z" });
     expect(toTripEngagementListState({ kind: "no-recent-data" })).toEqual({
       kind: "no-recent-data",
     });

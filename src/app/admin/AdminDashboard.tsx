@@ -7,62 +7,20 @@ import { DestinationManager } from "./DestinationManager";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Trip } from "@/lib/types";
-import { formatCustomerPreview } from "@/lib/format";
-import { filterTrips, hasSearchQuery } from "@/lib/trip-search";
-import { formatVisitTimestampShort, type TripEngagementListState } from "@/lib/trip-engagement";
+import { SalesOverviewTable } from "./SalesOverviewTable";
+import type { SalesOverview } from "@/lib/sales-overview-types";
 
-const TRIPS_PREVIEW_COUNT = 5;
-
-type TripListItem = {
-  id: string;
-  booking_no: string;
-  slug: string;
-  destination: string;
-  customer_name: string | null;
-  hero_photo: string | null;
-  active: boolean;
-  created_at: string;
-  // ISSUE-67: afledt server-side (GET /admin/api/trips) fra trips.created_by
-  // + profiles — aldrig den rå uuid. null for ældre trips eller en creator
-  // uden (længere) en profil-række.
-  created_by_name: string | null;
-  // ISSUE-69: afledt server-side fra trip_visits via classifyTripEngagement
-  // (src/lib/trip-engagement.ts) — aldrig den rå visit-række.
-  engagement: TripEngagementListState;
-};
-
-// ISSUE-69: "Kundeaktivitet"-cellen. Ren rendering af en allerede-klassificeret
-// tilstand (se src/lib/trip-engagement.ts for selve klassifikationen/testene)
-// — "unavailable" må ALDRIG vises som "Ikke åbnet endnu".
-function EngagementCell({ engagement }: { engagement: TripEngagementListState }) {
-  if (engagement.kind === "opened") {
-    return (
-      <div>
-        <div>{engagement.visitCount === 1 ? "1 besøg" : `${engagement.visitCount} besøg`}</div>
-        <div style={{ fontSize: 11, color: "var(--grey-text)", marginTop: 2 }}>
-          Senest {formatVisitTimestampShort(engagement.lastOpenedAt)}
-        </div>
-      </div>
-    );
-  }
-  if (engagement.kind === "not-opened") {
-    return <span style={{ color: "var(--grey-text)" }}>Ikke åbnet endnu</span>;
-  }
-  if (engagement.kind === "no-recent-data") {
-    return (
-      <span style={{ color: "var(--grey-text)" }}>
-        Ingen registrerede åbninger de seneste 12 måneder
-      </span>
-    );
-  }
-  return <span style={{ color: "var(--grey-text)" }}>Aktivitet kunne ikke hentes</span>;
-}
+// Vision 3.0 Fase 4 (Issue #76): listen er nu salgsoversigten — et kompakt DTO fra
+// GET /admin/api/trips (src/lib/sales-overview*.ts), vist af SalesOverviewTable.
+// Hele listen (også deaktiverede) hentes; filtre/sortering/pagination sker
+// klient-side. Dashboardet bruger listen til at genkende et eksisterende
+// bookingnummer ved upload ("findes allerede") — derfor holdes ALLE rækker her.
+const EMPTY_OVERVIEW: SalesOverview = { trips: [], viewer: { mineAvailable: false }, degraded: [] };
 
 export function AdminDashboard({ userEmail }: { userEmail?: string }) {
   const router = useRouter();
-  const [trips, setTrips] = useState<TripListItem[]>([]);
-  const [showAllTrips, setShowAllTrips] = useState(false);
-  const [tripSearch, setTripSearch] = useState("");
+  const [overview, setOverview] = useState<SalesOverview>(EMPTY_OVERVIEW);
+  const trips = overview.trips;
   const [loadingList, setLoadingList] = useState(true);
   // ERR-3: skelner "fetch fejlede" fra "listen er reelt tom" — uden dette
   // felt ligner en 500'er fra /admin/api/trips en legitim tom liste.
@@ -91,27 +49,41 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Kun den første indlæsning — senere genindlæsninger udløses af handlinger (loadTrips(true)).
   useEffect(() => {
     loadTrips();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function loadTrips() {
-    setLoadingList(true);
-    setListError(null);
+  // `silent`: genindlæsning efter en handling (oprettelse/aktivér/deaktivér) viser
+  // IKKE spinneren — ellers afmonteres salgsoversigten, og sælgerens valgte filtre,
+  // sortering og sideantal nulstilles. Kun den første indlæsning (og "Prøv igen") er
+  // ikke-silent.
+  async function loadTrips(silent = false) {
+    if (!silent) {
+      setLoadingList(true);
+      setListError(null);
+    }
     try {
       const res = await fetch("/admin/api/trips");
       if (!res.ok) {
-        setListError("Rejseplanerne kunne ikke hentes lige nu.");
+        if (silent) showToast("Listen kunne ikke opdateres");
+        else setListError("Rejseplanerne kunne ikke hentes lige nu.");
         return;
       }
       const j = await res.json();
-      setTrips(j.trips ?? []);
+      setOverview({
+        trips: j.trips ?? [],
+        viewer: { mineAvailable: !!j.viewer?.mineAvailable },
+        degraded: Array.isArray(j.degraded) ? j.degraded : [],
+      });
     } catch {
       // Netværksfejl kaster fra fetch() selv (i modsætning til et 4xx/5xx-svar,
       // som håndteres via !res.ok ovenfor) — samme rolige fejltilstand for begge.
-      setListError("Rejseplanerne kunne ikke hentes lige nu.");
+      if (silent) showToast("Listen kunne ikke opdateres");
+      else setListError("Rejseplanerne kunne ikke hentes lige nu.");
     } finally {
-      setLoadingList(false);
+      if (!silent) setLoadingList(false);
     }
   }
 
@@ -199,7 +171,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     setCreatedSlug(j.slug);
     setWasUpdate(!!j.updated);
     showToast(j.updated ? "Præsentation opdateret" : "Præsentation oprettet");
-    loadTrips();
+    loadTrips(true);
   }
 
   async function toggleActive(id: string, current: boolean) {
@@ -210,7 +182,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     });
     if (res.ok) {
       showToast(current ? "Deaktiveret" : "Aktiveret");
-      loadTrips();
+      loadTrips(true);
     }
   }
 
@@ -252,19 +224,6 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
     setSlugOverride("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
-
-  // Søgning filtrerer den allerede hentede liste (GET /admin/api/trips har ingen
-  // pagination). Ved aktiv søgning vises ALLE match — ellers ville en rejse langt
-  // nede i listen stadig være skjult bag "Vis alle", hvilket er hele problemet
-  // søgningen skal løse. Tom søgning giver præcis den hidtidige visning, og
-  // showAllTrips-tilstanden bevares urørt imens der søges.
-  const isSearchingTrips = hasSearchQuery(tripSearch);
-  const matchedTrips = filterTrips(trips, tripSearch);
-  const visibleTrips = isSearchingTrips
-    ? matchedTrips
-    : showAllTrips
-      ? trips
-      : trips.slice(0, TRIPS_PREVIEW_COUNT);
 
   const newLink = createdSlug
     ? typeof window !== "undefined"
@@ -464,29 +423,6 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
         </div>
 
         <div className="admin-card">
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "baseline",
-              justifyContent: "space-between",
-              gap: 12,
-              marginBottom: 16,
-            }}
-          >
-            <h2 style={{ marginBottom: 0 }}>Alle præsentationer</h2>
-            {!loadingList && trips.length > 0 && (
-              <input
-                type="search"
-                className="admin-input"
-                style={{ width: "auto", minWidth: 240, flex: "0 1 320px" }}
-                value={tripSearch}
-                onChange={(e) => setTripSearch(e.target.value)}
-                placeholder="Søg bookingnummer, kunde eller destination"
-                aria-label="Søg i rejsepræsentationer"
-              />
-            )}
-          </div>
           {loadingList ? (
             <div style={{ color: "var(--grey-text)", fontSize: 13 }}>
               <span className="admin-spinner" />
@@ -498,123 +434,16 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
               style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}
             >
               <span>{listError}</span>
-              <button className="admin-btn admin-btn-secondary" onClick={loadTrips}>
+              <button className="admin-btn admin-btn-secondary" onClick={() => loadTrips()}>
                 Prøv igen
               </button>
             </div>
-          ) : trips.length === 0 ? (
-            <div style={{ color: "var(--grey-text)", fontSize: 13 }}>Ingen præsentationer endnu.</div>
-          ) : matchedTrips.length === 0 ? (
-            <div style={{ color: "var(--grey-text)", fontSize: 13 }}>
-              Ingen rejsepræsentationer fundet.
-            </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Booking</th>
-                    <th>Destination</th>
-                    <th>Kunde</th>
-                    <th>Oprettet</th>
-                    <th>Oprettet af</th>
-                    <th>Kundeaktivitet</th>
-                    <th>Status</th>
-                    <th>Handlinger</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleTrips.map((t) => (
-                    <tr key={t.id}>
-                      <td style={{ fontFamily: "ui-monospace, monospace" }}>#{t.booking_no}</td>
-                      <td>{t.destination}</td>
-                      <td style={{ color: "var(--grey-text)" }} title={t.customer_name ?? undefined}>
-                        {t.customer_name ? formatCustomerPreview(t.customer_name) : "—"}
-                      </td>
-                      <td style={{ color: "var(--grey-text)" }}>
-                        {new Date(t.created_at).toLocaleDateString("da-DK")}
-                      </td>
-                      <td style={{ color: "var(--grey-text)" }}>{t.created_by_name ?? "—"}</td>
-                      <td style={{ fontSize: 12 }}>
-                        <EngagementCell engagement={t.engagement} />
-                      </td>
-                      <td>
-                        {t.active ? (
-                          <span className="admin-status-active">Aktiv</span>
-                        ) : (
-                          <span className="admin-status-inactive">Deaktiveret</span>
-                        )}
-                      </td>
-                      <td>
-                        <div className="admin-row-actions">
-                          <button
-                            className="admin-btn admin-btn-secondary"
-                            onClick={() => copyLink(t.slug)}
-                            style={{ borderColor: "rgba(0,78,80,0.5)", color: "var(--rainforest)" }}
-                          >
-                            Kopiér link
-                          </button>
-                          <a
-                            href={`/${t.slug}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="admin-btn admin-btn-secondary"
-                            style={{ borderColor: "rgba(0,78,80,0.5)", color: "var(--rainforest)" }}
-                          >
-                            Åbn
-                          </a>
-                        <Link
-                          href={`/admin/trips/${t.id}`}
-                          className="admin-btn admin-btn-secondary"
-                        >
-                          Detaljer
-                        </Link>
-                        <Link
-                          href={`/admin/qa/${t.slug}`}
-                          className="admin-btn admin-btn-secondary"
-                        >
-                          Sammenlign
-                        </Link>
-                          <button
-                            className="admin-btn admin-btn-danger"
-                            onClick={() => toggleActive(t.id, t.active)}
-                          >
-                            {t.active ? "Deaktivér" : "Aktivér"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {isSearchingTrips ? (
-                <div
-                  style={{
-                    marginTop: 14,
-                    textAlign: "center",
-                    color: "var(--grey-text)",
-                    fontSize: 13,
-                  }}
-                >
-                  {matchedTrips.length === 1
-                    ? "1 præsentation matcher søgningen"
-                    : `${matchedTrips.length} præsentationer matcher søgningen`}
-                </div>
-              ) : (
-                trips.length > TRIPS_PREVIEW_COUNT && (
-                  <div style={{ marginTop: 14, textAlign: "center" }}>
-                    <button
-                      className="admin-btn admin-btn-secondary"
-                      onClick={() => setShowAllTrips((v) => !v)}
-                    >
-                      {showAllTrips
-                        ? `Vis kun de seneste ${TRIPS_PREVIEW_COUNT}`
-                        : `Vis alle præsentationer (${trips.length})`}
-                    </button>
-                  </div>
-                )
-              )}
-            </div>
+            <SalesOverviewTable
+              overview={overview}
+              onCopyLink={copyLink}
+              onToggleActive={toggleActive}
+            />
           )}
         </div>
       </div>
