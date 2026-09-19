@@ -37,12 +37,9 @@ function row(over: Partial<SalesOverviewRow> & { id: string }): SalesOverviewRow
     customer_name: "Kunde",
     active: true,
     created_at: "2026-09-19T10:00:00.000Z",
-    created_by_name: null,
-    mine: false,
     opened: { kind: "not-opened" },
     sections: { kind: "none-registered" },
     contact: { kind: "none-registered" },
-    lastActivityAt: null,
     ...over,
   };
 }
@@ -60,7 +57,7 @@ const R = {
     contact: { kind: "clicked", phone: true, email: false } }),
   // ingen aktivitet — kendt
   newNone: row({ id: "newNone", created_at: "2026-09-19T09:00:00.000Z" }),
-  oldNone: row({ id: "oldNone", created_at: "2026-05-01T00:00:00.000Z", opened: { kind: "not-measured", since: "2026-09-18T12:20:18.000Z" } }),
+  oldNone: row({ id: "oldNone", created_at: "2026-05-01T00:00:00.000Z", opened: { kind: "not-measured" } }),
   // ingen aktivitet — UKENDT (fejlet kilde / ukendt eligibility)
   unknownSrc: row({ id: "unknownSrc", created_at: "2026-09-18T00:00:00.000Z", contact: { kind: "unavailable" } }),
   unassessable: row({ id: "unassessable", created_at: "2026-09-17T00:00:00.000Z", sections: { kind: "unassessable" }, contact: { kind: "unassessable" } }),
@@ -176,7 +173,7 @@ describe("C. filtre — kombineres (AND)", () => {
     const rows = [
       row({ id: "m1", mine: true, lastActivityAt: "2026-09-20T10:00:00.000Z" }),
       row({ id: "m2", mine: true }),
-      row({ id: "x1", mine: false, lastActivityAt: "2026-09-20T10:00:00.000Z" }),
+      row({ id: "x1", lastActivityAt: "2026-09-20T10:00:00.000Z" }),
       row({ id: "m3", mine: true, active: false, lastActivityAt: "2026-09-20T10:00:00.000Z" }),
     ];
     expect(ids(applyView(rows, view({ mine: "mine", activity: "has-activity" })))).toEqual(["m1"]);
@@ -233,7 +230,7 @@ describe("F. tekster: kun observerede fakta, ingen fortolkning (AK-11/AK-12)", (
     { kind: "opened", lastOpenedAt: "2026-09-20T10:00:00.000Z", visitCount: 1 },
     { kind: "opened", lastOpenedAt: "2026-09-20T10:00:00.000Z", visitCount: 7 },
     { kind: "not-opened" },
-    { kind: "not-measured", since: "2026-09-18T12:20:18.000Z" },
+    { kind: "not-measured" },
     { kind: "no-recent-data" },
     { kind: "unavailable" },
   ] as const;
@@ -284,7 +281,7 @@ describe("F. tekster: kun observerede fakta, ingen fortolkning (AK-11/AK-12)", (
   });
 
   it("'før måling' skrives som 'Ingen åbning målt siden <dato>' — aldrig 'Ikke åbnet endnu'", () => {
-    const before = openedLines({ kind: "not-measured", since: "2026-09-18T12:20:18.000Z" }).primary;
+    const before = openedLines({ kind: "not-measured" }).primary;
     expect(before).toBe("Ingen åbning målt siden 18. september 2026");
     expect(before).not.toMatch(/Ikke åbnet endnu/);
     expect(openedLines({ kind: "not-opened" }).primary).toBe("Ikke åbnet endnu");

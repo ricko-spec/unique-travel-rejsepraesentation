@@ -158,7 +158,7 @@ Status pr. 2026-09-19 (✅ = gennemført):
 6. ⏭ **NÆSTE:** ChatGPT final HEAD-review (inkl. Vercel-preview på final HEAD; retrigger/redeploy hvis Vercel ikke
    bygger den).
 7. Rickos valg af cutover-metode (A/B ovenfor) + eksplicitte merge-godkendelse → merge/deploy.
-8. **Resterende releasetrin:** fastlæg `CONTACT_INTENT_TRACKING_SINCE` efter reglen ovenfor.
+8. ✅ **Cutover fastlagt (metode B):** `CONTACT_INTENT_TRACKING_SINCE = "2026-09-19T08:21:19Z"` (Fase 3 production READY) sættes i Fase 4-PR'en (Issue #76) og er aktiv i production når den er merget.
 9. Production-smoketest når Ricko har mulighed (må ikke oprette kunstige events; udskydelse blokerer ikke merge).
 
 ## Udenfor scope (Fase 4+)

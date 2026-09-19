@@ -114,7 +114,8 @@ uniquetravel-rejsepraesentation/
 │   │   └── admin/                # SÆLGERENS univers — alt bag Supabase Auth
 │   │       ├── page.tsx          # Session-gate: viser AdminLogin eller AdminDashboard
 │   │       ├── AdminLogin.tsx    # Client: email+password-formular mod POST /admin/api/auth
-│   │       ├── AdminDashboard.tsx# Client: PDF-dropzone, parse-preview, opret/opdater, liste over alle rejser
+│   │       ├── AdminDashboard.tsx# Client: PDF-dropzone, parse-preview, opret/opdater; viser salgsoversigten
+│   │       ├── SalesOverviewTable.tsx # Client: salgsoversigten — kolonner, filtre, sortering, pagination (Issue #76)
 │   │       ├── DestinationManager.tsx  # Client: billede-bibliotek pr. destination — opret destination + 3-trins signed-URL-upload (hero + 3 galleri-slots)
 │   │       │
 │   │       ├── trips/[id]/       # Detalje-side pr. rejse
@@ -173,8 +174,15 @@ uniquetravel-rejsepraesentation/
 │       ├── contact-intent.ts     # kanal-enum/strict schema/eligibility/gate/dedup/admin-visning (Issue #73, ingen DB/Next-imports)
 │       ├── contact-intent-client.ts  # trackContactIntent — fire-and-forget fetch med keepalive, ren + testet (Issue #73)
 │       ├── contact-intent-write.ts   # recordContactIntent — best-effort RPC-skrivning, kaster aldrig (Issue #73)
+│       ├── paged-read.ts         # readAllRows — count-baseret paginering (PostgRESTs 1000-rækkers grænse afkorter aldrig tavst) (Issue #76)
+│       ├── trip-eligibility.ts   # parseNormalizedTrip + resolveEligibleSections — ÉN runtime-validering af trips.data (liste, admin-detalje, Fase 2-endpoint) (Issue #76)
+│       ├── sales-overview-types.ts # DTO-typer for salgsoversigten (kun typer) (Issue #76)
+│       ├── sales-overview.ts     # buildSalesOverview — server-side read model (seks kilder → kompakt DTO, fejl pr. kilde) (Issue #76)
+│       ├── sales-overview-server.ts # loadSalesOverview + supabaseSalesSources — seks set-baserede, pagineredes læsninger (Issue #76)
+│       ├── sales-overview-view.ts # klient-side filtre/sortering/pagination (ren, zod-fri) (Issue #76)
+│       ├── sales-overview-copy.ts # alle UI-tekster (ordliste-testet: ingen fortolkning) (Issue #76)
 │       ├── contact-intent-trip.ts    # resolveContactChannels — tripSchema+normalizeTrip => eligible kanaler; delt af endpoint OG admin (Issue #73)
-│       ├── contact-intent-tracking.ts  # CONTACT_INTENT_TRACKING_SINCE (null indtil release-cutover) + buildContactIntentTrackingNote — lille zod-fri fil (Issue #73)
+│       ├── contact-intent-tracking.ts  # CONTACT_INTENT_TRACKING_SINCE (= 2026-09-19T08:21:19Z, Issue #76) + buildContactIntentTrackingNote — lille zod-fri fil (Issue #73)
 │       ├── contact-intent-endpoint.ts  # handleContactIntent — hele endpoint-beslutningskæden, deps-injiceret + testet (Issue #73)
 │       └── supabase/
 │           ├── server.ts         # Service-role-klient + nøgle-validering + env-diagnostik
@@ -284,7 +292,7 @@ Verificeret ved gennemlæsning af samtlige 12 `route.ts`-filer under `src/app/` 
 | `/admin/api/auth` | DELETE | Nej (no-op uden session) | Log ud (signOut + cookie-rydning) | — | `{ ok: true }` |
 | `/admin/api/password` | PATCH | Ja | Skift egen adgangskode. Kræver nuværende kode (verificeret via session-løs anon-klient), rate-limitet `pwchange:{ip}`, audit `password_changed`/`password_change_failed`/`password_change_rate_limited` | JSON `{ currentPassword, password (min 6) }` | `{ ok: true }` / 400 / 401 / 429 |
 | `/admin/api/parse` | POST | Ja | PDF → Claude → valideret, normaliseret, advisor-beriget Trip. Fail-closed `upload_events`-insert før Claude kaldes (Issue #38, live — se §8 `upload_events`); derefter magic-byte-tjek (`isPdf()`, `src/lib/file-sniff.ts` — SEC-4) inden Claude kaldes, uafhængigt af filnavn/MIME-type | FormData `file` (PDF, max 10 MB) | `{ trip, rawPdfText, uploadEventId }` / 400 (inkl. ugyldig filtype) / 422 `{ error, issues, raw }` / 500 / 503 (event-log utilgængelig) |
-| `/admin/api/trips` | GET | Ja | Liste over alle rejser (inkl. `data` + `raw_pdf_text` til QA) | — | `{ trips: [...] }` nyeste først |
+| `/admin/api/trips` | GET | Ja | **Salgsoversigten (Issue #76):** KOMPAKT DTO — aldrig `data`, `raw_pdf_text` eller `created_by`. Seks set-baserede, pagineredes læsninger; fejl pr. aktivitetskilde er fail-open. Uautentificeret ⇒ 401 | — | `{ trips: [...], viewer: { mineAvailable }, degraded: [...] }` / 401 / 500 |
 | `/admin/api/trips` | POST | Ja | Opret/opdater præsentation (upsert på `booking_no`). Kræver + verificerer `uploadEventId` før gem (Issue #38, live) | JSON `{ trip, heroPhoto?, customerName?, slugOverride?, rawPdfText?, uploadEventId }` | `{ id, slug, created, updated }` / 400 / 403 / 409 (slug-kollision) / 500 |
 | `/admin/api/trips/[id]` | PATCH | Ja | Aktivér/deaktivér (soft delete) og/eller skift hero-foto | JSON `{ active?, heroPhoto? }` | `{ ok: true }` / 400 / 500 |
 | `/admin/api/trips/[id]/intro` | POST | Ja | Gem sælger-redigeret intro (max 500 tegn; tom tilladt) + audit med fingerprints. **Optimistisk lås (DATA-1):** UPDATE betinget på læst `updated_at` — konflikt giver 409 | JSON `{ intro }` | `{ ok: true, trip }` / 400 / 404 / **409** / 500 |
@@ -369,7 +377,7 @@ Sælgeren kan:
 1. **Uploade og parse en PDF** — dropzone (klik eller drag-and-drop), spinner med forventningstekst "20-40 sekunder". *API:* `POST /admin/api/parse`.
 2. **Oprette/opdatere en præsentation** — justere link-slug, kundenavn (internt) og hero-foto-URL med live-preview; se råt JSON; advarsel hvis booking-nummeret findes i forvejen. *API:* `POST /admin/api/trips`.
 3. **Kopiere kunde-materiale** — "Kopiér link" lægger en færdig dansk email-tekst (intro-linje + link + "Adgangskode: {booking_no}") i udklipsholderen (`AdminDashboard.tsx:152-168`).
-4. **Administrere alle præsentationer** — tabel med booking, destination, kunde, dato, status; pr. række: Kopiér link, Åbn, Detaljer (→ `/admin/trips/[id]`), Sammenlign (→ `/admin/qa/[slug]`), Deaktivér/Aktivér. *API:* `GET /admin/api/trips`, `PATCH /admin/api/trips/[id]`.
+4. **Administrere alle præsentationer / se målt kundeaktivitet (Issue #76)** — tabel med booking, destination, kunde, oprettet, **Åbnet, Set, Kontakt, Seneste aktivitet**, status; filtre (aktivitet, Mine/Alle, vis deaktiverede) + søgning + sortering; pr. række: Kopiér link, Åbn, Detaljer (→ `/admin/trips/[id]`), Sammenlign (→ `/admin/qa/[slug]`), Deaktivér/Aktivér. *API:* `GET /admin/api/trips`, `PATCH /admin/api/trips/[id]`.
 5. **Vedligeholde destinationsbilleder** — `DestinationManager` nederst: **opret ny destination** (navn, trimmet, case-insensitivt dublet-tjek i både klient og server) og pr. destination ét hero-slot (16:9) + tre galleri-slots (4:3). Upload kører 3-trins-flowet: lokal validering (max 50 MB + magic-byte-sniff) → `POST .../upload-url` (signeret Storage-URL) → direkte PUT til Supabase Storage (udenom Vercels 4,5 MB-grænse) → `POST .../finalize-upload` (sharp → WebP, række-opdatering, staging-oprydning). "Behandler billede..." vises under hele forløbet. *API:* `GET/POST /admin/api/destinations`, `POST .../upload-url`, `POST .../finalize-upload`.
 6. **Log ud** (`DELETE /admin/api/auth`) og gå til **Min profil**.
 
@@ -638,8 +646,37 @@ in-memory `Set` ejet af `ContactIntentProvider`. Kun `ContactCTA` (email + rådg
 `resolveContactChannels(row.data)` (`tripSchema` + `normalizeTrip`) — SAMME runtime-sandhed som kundesiden og
 endpointet; email vises kun hvis trippen har `advisorEmail`. En fejlet forespørgsel giver `unavailable`
 ("Kontaktaktivitet kunne ikke hentes"), ugyldig trip-data giver `unassessable` ("kunne ikke vurderes") — aldrig
-"ikke klikket". Fase 3 har sin egen tracking-cutover, `CONTACT_INTENT_TRACKING_SINCE` (`src/lib/contact-intent-tracking.ts`, `null` indtil
+"ikke klikket". Fase 3 har sin egen tracking-cutover, `CONTACT_INTENT_TRACKING_SINCE` (`src/lib/contact-intent-tracking.ts`, sat til `2026-09-19T08:21:19Z` i Issue #76 — før: `null` indtil
 release-cutover); Fase 1B's `TRACKING_SINCE` gælder kun åbninger ("Åbningsmåling fra …").
+
+### Salgsoversigten — rejseforslagslisten med målt kundeaktivitet (Issue #76)
+
+`GET /admin/api/trips` leverer et **kompakt DTO** (`SalesOverview` i `src/lib/sales-overview-types.ts`), bygget af
+`loadSalesOverview()` (`sales-overview-server.ts`) → `buildSalesOverview()` (`sales-overview.ts`). Browseren modtager
+**aldrig** `data`, `raw_pdf_text` eller `created_by`; `data` læses kun server-side til runtime-eligibility/rådgiver.
+
+- **Seks logiske læsninger, ingen N+1:** `trips`, `profiles` (dækker både "Oprettet af" og "Mine"), `trip_visits`,
+  `trip_section_engagement`, `trip_contact_intent`, `destinations`. Ingen `.in("trip_id", […])` (URL-vækst, jf. PR #70).
+- **Pagineret læsehjælper** (`paged-read.ts`): første side beder om `count: "exact"`; løkken er først færdig når det
+  eksakte antal er hentet. En kortere side (fx serverens `max_rows` < sidestørrelsen) er fint; en tom side før totalen,
+  manglende count eller en fejl er en FEJL. Kilder er derfor enten hele sæt eller `{ ok: false }` — aldrig delvise.
+- **Tilstande pr. signal (aldrig blandet):** *Åbnet* — opened · ikke åbnet endnu (oprettet efter målestart) ·
+  **ikke målt** (oprettet før `TRACKING_SINCE`; "Ingen åbning målt siden …") · ingen åbning seneste 12 mdr · kunne ikke
+  hentes. *Set* — n af m afsnit (+ Pris nået) · ingen registreret · kunne ikke vurderes · kunne ikke hentes. *Kontakt* —
+  telefon/email **klikket** · ingen registreret · kunne ikke vurderes · kunne ikke hentes. En fejlet kilde eller ukendt
+  eligibility bliver aldrig til "ingen registreret".
+- **Fejl pr. kilde er uafhængige** (`degraded`): den berørte kolonne viser "kunne ikke hentes", kilden udelades fra
+  *Seneste aktivitet*, en bemærkning vises, og rækkerne bevares. Kun en fejlet trips-læsning giver 500.
+- **Seneste aktivitet** = nyeste af tre observerede tidsstempler (senest åbnet, seneste sete afsnit, seneste kontaktklik) —
+  ren dato-aritmetik, ingen vægtning. Udeladt hvis ingen.
+- **Runtime-validering:** `parseNormalizedTrip`/`resolveEligibleSections` (`trip-eligibility.ts`) er den ENE sandhed for
+  kundesiden, Fase 2-endpointet, admin-detaljen og listen. Ugyldig trip-data ⇒ `null` ⇒ "kunne ikke vurderes".
+- **Visning** (`sales-overview-view.ts`, klient-side): default = aktive, *Seneste aktivitet* ↓ (rækker uden aktivitet
+  under, Oprettet ↓, tie → id); filtre Aktivitet/Mine/Vis deaktiverede + eksisterende søgning; sider á 50 ("Vis flere";
+  aktiv søgning viser alle match). "Ingen målt aktivitet"-filteret udelader rækker med ukendt signal. "Mine" er kun et
+  filter (rådgivernavn ↔ `profiles.advisor_match_name`), ikke adgangskontrol — alle sælgere ser alle rejseforslag.
+- **Tekster** (`sales-overview-copy.ts`): kun observerede fakta; ordliste-test forbyder hot/varm/lead/score/interesseret/
+  sandsynlig; et kontaktklik er *klikket*, aldrig *kontaktet/booket*.
 
 ### Tilføjelses-tidslinje
 

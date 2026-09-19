@@ -39,7 +39,7 @@ export const DEFAULT_VIEW: SalesViewState = {
 
 /** Har rækken nogen MÅLT (observeret) aktivitet? */
 export function hasMeasuredActivity(row: SalesOverviewRow): boolean {
-  return row.lastActivityAt !== null;
+  return typeof row.lastActivityAt === "string";
 }
 
 /**
@@ -118,7 +118,7 @@ export function sortRows(rows: SalesOverviewRow[], sort: SortKey): SalesOverview
 export function applyView(rows: SalesOverviewRow[], view: SalesViewState): SalesOverviewRow[] {
   let result = rows;
   if (!view.showInactive) result = result.filter((r) => r.active);
-  if (view.mine === "mine") result = result.filter((r) => r.mine);
+  if (view.mine === "mine") result = result.filter((r) => r.mine === true);
   if (view.activity !== "all") result = result.filter((r) => matchesActivity(r, view.activity));
   result = filterTrips(result, view.search); // eksisterende søgning, uændret
   return sortRows(result, view.sort);

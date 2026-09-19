@@ -126,7 +126,7 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
   testevents (koden er ikke merget/deployet). `schema-baseline.json` er opdateret (kun 012-objekter, +84/−0);
   `node scripts/check-schema-drift.mjs` viser "Ingen drift". `010b`/`pg_cron` er **ikke** kørt/aktiveret.
 - **VIGTIG DISTINKTION:** migrationstidspunktet er DB-parathed, IKKE tracking-start. `CONTACT_INTENT_TRACKING_SINCE`
-  (`src/lib/contact-intent-tracking.ts`, `null` indtil videre) skal være ≥ tidspunktet hvor Fase 3-koden er live i
+  (`src/lib/contact-intent-tracking.ts`; sat til `2026-09-19T08:21:19Z` i Fase 4-PR'en, Issue #76) skal være ≥ tidspunktet hvor Fase 3-koden er live i
   production — Fase 3's egen start, adskilt fra Fase 1B's `TRACKING_SINCE` (kun åbninger). Fastlæggelsen er det
   eneste resterende releasetrin; se `docs/VISION-3.0-PHASE-3.md` § "Tracking-cutover".
 - **Data:** højst to rækker pr. trip (`email`/`phone`), kun `trip_id` + kanal + to tidsstempler.
