@@ -1,7 +1,7 @@
 # Vision 3.0 Fase 4 — salgsoversigt: beslutningsgrundlag
 
 **Status: FORSLAG. Intet af dette er implementeret.** Implementering kræver Rickos scopegodkendelse (se §14).
-Dette dokument er adskilt fra Fase 3 (PR #74) og ændrer ingen kode. Master-issue:
+Fase 3 (PR #74) er merget og live; dette dokument er adskilt fra den og ændrer ingen kode. Master-issue:
 [#41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41).
 
 **Resultat (kapitlets ene mål):** sælgeren kan på under et minut se, hvilke rejseforslag der har målt
@@ -12,7 +12,7 @@ påstår mere end det har observeret.
 
 | | |
 |---|---|
-| **Verificeret** (2026-09-19) | Kodens nuværende adfærd (listevisning, adgang, læsning) er læst i `main`/PR #74. Tal i §1 er read-only aggregater fra produktions-DB (kun optællinger/størrelser — ingen kundedata læst eller gengivet) |
+| **Verificeret** (2026-09-19) | Kodens nuværende adfærd (listevisning, adgang, læsning) er læst i `main` og i PR #74-branchen (før merge; `main`-træet er siden identisk med den). Tal i §1 er read-only aggregater fra produktions-DB (kun optællinger/størrelser — ingen kundedata læst eller gengivet) |
 | **Foreslået** | Alt i §2–§14: kolonner, filtre, default, tilstande, læsemodel, acceptkriterier, scope |
 
 ## 1. Observeret grundlag (verificerede tal)
@@ -25,7 +25,7 @@ påstår mere end det har observeret.
 | … heraf uden `trip_visits`-række | 251 | I dag vises de som **"Ikke åbnet endnu"** — misvisende (se §7) |
 | `trip_visits` / med aktivitet seneste 7 dage | 9 / 9 | Målingen er ny; aktivitetsdata er sparsomt |
 | Rejseplaner med sektionsdata (Fase 2) | 4 (15 rækker) | Ditto |
-| Kontakt-intent (Fase 3) | 0 rækker | Ikke deployet; ingen kode skriver endnu |
+| Kontakt-intent (Fase 3) | 0 rækker (målt **før** Fase 3-deploy) | Udgangspunkt: koden er live siden 2026-09-19T08:21:19Z, så rigtige kundeklik kan nu give rækker |
 | Profiler / med `advisor_match_name` | 8 / 8 | Grundlag for "Mine" |
 | Distinkte rådgivernavne i `trips.data.advisor` | 11 (0 trips uden) | Rådgivernavn er en pålidelig nøgle; 11 > 8 profiler ⇒ nogle rådgivere har ikke login |
 | Trips uden `created_by` | 172 af 267 | `created_by` er **ikke** egnet til "Mine" |
@@ -106,8 +106,8 @@ mere information end sortering + filter på samme tabel.
   målingen). Forslag: ny tilstand **"Ingen åbning målt siden \<dato\>"** (`not-measured`); "Ikke åbnet endnu"
   bevares kun for trips oprettet efter målestart. Det er en mindre ændring af Fase 1C's liste-tilstand
   (`classifyTripEngagement`) og er **i scope**.
-- **Sektioner og kontaktklik** har egne målestarter (Fase 2 er live siden 2026-09-18; Fase 3's
-  `CONTACT_INTENT_TRACKING_SINCE` er `null` indtil cutover). Fordi listen kun viser *positive* fakta, kræver den
+- **Sektioner og kontaktklik** har egne målestarter (Fase 2 er live siden 2026-09-18; Fase 3 er live siden 2026-09-19T08:21:19Z;
+  `CONTACT_INTENT_TRACKING_SINCE` er fortsat `null` og kan sættes til dette tidspunkt i næste kodeleverance). Fordi listen kun viser *positive* fakta, kræver den
   ingen ekstra målestarts-kolonne; detaljesiden bærer noterne.
 - **Fejl pr. kilde.** Hver kilde læses og fejler uafhængigt. En fejlet kilde giver *"kunne ikke hentes"* i sin
   kolonne og udelades fra *Seneste aktivitet* (med diskret banner) — aldrig en tom/"ingen"-tilstand, og listen
@@ -210,7 +210,7 @@ kontaktklik) uden at systemet fortolker aktiviteten.
 Bridge, charts/dashboards/KPI'er, per-sælger-adgangsstyring, nye tabeller/migrationer/tracking/retention, ændring af
 Fase 1B/2/3's målesemantik, "sendt til kunden"-tracking, Fase 5.
 
-**Afhængigheder og release:** bygger på Fase 3 (PR #74 merget, så `trip_contact_intent` og cutover-beslutningen er
+**Afhængigheder og release:** bygger på Fase 3, som er merget og live (PR #74; cutover-metode B valgt, så `trip_contact_intent` og cutover-beslutningen er
 på plads). Ingen migration ⇒ kun kode-deploy: preview → ChatGPT-review → Rickos merge-OK. Model: Sonnet er
 tilstrækkelig; ingen arkitektur-/sikkerhedskompleksitet der kræver en dyrere model.
 
@@ -224,8 +224,9 @@ tilstrækkelig; ingen arkitektur-/sikkerhedskompleksitet der kræver en dyrere m
    ordlyd og at Fase 1C's liste-tilstand justeres.
 4. **Default-visning (§6):** alle aktive, sorteret efter seneste aktivitet — bekræft (alternativet er en separat side).
 
-*Uafhængig afhængighed fra Fase 3:* metode til `CONTACT_INTENT_TRACKING_SINCE` (se `docs/VISION-3.0-PHASE-3.md`,
-PR #74). Fase 4 kan planlægges uden den, fordi listen kun viser positive fakta.
+*Fase 3-afhængighed:* cutover-metode B er valgt (se `docs/VISION-3.0-PHASE-3.md`); `CONTACT_INTENT_TRACKING_SINCE` er
+fortsat `null` og kan sættes til `2026-09-19T08:21:19Z` i næste relevante kodeleverance — Fase 4-PR'en eller en lille
+separat ændring (Ricko afgør; ikke medregnet i scope §13). Fase 4 kan planlægges uden den, fordi listen kun viser positive fakta.
 
 ## 15. Risici
 
