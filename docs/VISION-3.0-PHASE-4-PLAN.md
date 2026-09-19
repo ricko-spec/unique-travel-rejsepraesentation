@@ -1,12 +1,30 @@
 # Vision 3.0 Fase 4 — salgsoversigt: beslutningsgrundlag
 
-**Status: FORSLAG. Intet af dette er implementeret.** Implementering kræver Rickos scopegodkendelse (se §14).
+**Status: GODKENDT af Ricko 2026-09-19 og IMPLEMENTERET i Issue #76 (PR åben, ikke merget).** Se "Implementeringsstatus" nedenfor for hvad der er verificeret, og hvilke tal/valg der blev justeret undervejs.
 Fase 3 (PR #74) er merget og live; dette dokument er adskilt fra den og ændrer ingen kode. Master-issue:
 [#41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41).
 
 **Resultat (kapitlets ene mål):** sælgeren kan på under et minut se, hvilke rejseforslag der har målt
 kundeaktivitet, som kan give anledning til opfølgning — og hvilke der *ikke kan vurderes* — uden at systemet
 påstår mere end det har observeret.
+
+## Implementeringsstatus (Issue #76)
+
+Alle 14 acceptkriterier i §12 er implementeret og verificeret (tests + mutationskontrol + lokal end-to-end kontrol af den
+byggede app + read-only kørsel af den rigtige loader mod produktion). Justeringer i forhold til planen:
+
+- **AK-1 (payload):** planens estimat (≈ 60–80 KB) var for optimistisk. Måling mod de rigtige 267 rejseplaner gav
+  **134,5 KB før trimning** (lange kundenavne: gns. 109 tegn, max 384; Supabase-tidsstempler; `since` gentaget 257 gange).
+  Efter trimning (ingen `since` pr. række, tomme valgfrie felter udeladt, `created_at` normaliseret): **111,5 KB for 267
+  rækker ≈ 125 KB ved 300** — under 150 KB, ≈ 28× mindre end før (≈ 3,1 MB). Testen bruger realistiske rækker. Det
+  teoretiske værste tilfælde (alle rækker med al aktivitet) er ≈ 177 KB ved 300 og er bevidst målt og begrænset.
+- **AK-2 (antal forespørgsler):** *seks logiske læsninger* uanset antal rejseplaner (og præcis seks HTTP-kald ved ≤ 1000
+  rækker pr. kilde). Ved > 1000 rækker i en kilde tager den læsning flere sider (én pr. 1000 rækker) — aldrig ét kald pr.
+  række. "Højst seks" gælder derfor logiske læsninger.
+- **Profiler læses én gang** og dækker både "Oprettet af" og "Mine" (erstatter det tidligere `profiles.in("id", …)`).
+- **`not-measured`** bærer målestarten i trip-detaljen (`since`); listens DTO gentager den ikke (UI'et bruger `TRACKING_SINCE`).
+- **`CONTACT_INTENT_TRACKING_SINCE = 2026-09-19T08:21:19Z`** er sat i samme PR (godkendt beslutning #5).
+- **Nyt fund ved live-kørslen:** 0 af 267 rejseplaner er ugyldige (hardening er fortsat nødvendig, men latent).
 
 ## 0. Hvad er verificeret, og hvad er foreslået
 
@@ -216,7 +234,7 @@ tilstrækkelig; ingen arkitektur-/sikkerhedskompleksitet der kræver en dyrere m
 
 **Størrelse:** middel — ca. 10–14 filer + tests; ingen ny infrastruktur.
 
-## 14. Åbne beslutninger til Ricko
+## 14. Beslutninger til Ricko (alle fire godkendt 2026-09-19, jf. Issue #76)
 
 1. **Scopegodkendelse** af §13 som ét kapitel.
 2. **Adgang (§8):** alle sælgere ser alle rejseforslag (uændret) — bekræft. Per-sælger-synlighed er ikke inkluderet.

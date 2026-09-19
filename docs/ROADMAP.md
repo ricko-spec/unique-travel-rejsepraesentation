@@ -80,21 +80,25 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
   kørt og read-only verificeret i production, schema-baseline opdateret), `POST
   /[bookingId]/engagement`, klient-tracker, "Set i rejseplanen" i admin, server-side
   eligibility. **Production UI-smoketest er udsat** — driftsopfølgning, ikke en blocker.
+- **[Issue #73](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/73) —
+  Vision 3.0 Fase 3: kontakt-intent end-to-end.** Merget (PR #74). `trip_contact_intent` + RPC (migration 012,
+  `20260919074341_trip_contact_intent`, kørt og read-only verificeret, baseline opdateret), `POST /[bookingId]/intent`,
+  tracked links, "Kontakt-intent" i admin. Live i production 2026-09-19T08:21:19Z. **Production UI-smoketest er udsat**
+  — driftsopfølgning, ikke en blocker.
 
 ## Næste
 
-1. **[Issue #73](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/73) —
-   Vision 3.0 Fase 3: kontakt-intent end-to-end** (barn af
-   [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)). Én samlet work package: aggregeret
-   `trip_contact_intent` (max 2 rækker pr. trip, email/phone, ingen click_count) + RPC (migration
-   012, **kørt i production** som `20260919074341_trip_contact_intent`, baseline opdateret), `POST /[bookingId]/intent` under kundens egen
-   slug-path, `ContactIntentLink` (ingen preventDefault, `keepalive` fire-and-forget) på
-   ContactCTA og ActionBar "Ring" ("Kontakt os" → #kontakt tracker IKKE), "Kontakt-intent" i
-   admin, opdateret transparenstekst. Se `docs/VISION-3.0-PHASE-3.md`.
+1. **[Issue #76](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/76) —
+   Vision 3.0 Fase 4: salgsoversigt med målt kundeaktivitet** (barn af [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
+   Godkendt af Ricko 2026-09-19; **implementeret, PR åben (ikke merget)**. Kompakt server-side DTO (ingen
+   `data`/`raw_pdf_text`/`created_by`), pagineret læsehjælper, seks set-baserede læsninger, kolonnerne
+   Åbnet/Set/Kontakt/Seneste aktivitet, filtre + sortering + klient-side pagination, `not-measured`, delt
+   `resolveEligibleSections`, `CONTACT_INTENT_TRACKING_SINCE = 2026-09-19T08:21:19Z`. Ingen migration. Se
+   `docs/VISION-3.0-PHASE-4-PLAN.md`.
 2. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
    Vision 3.0: Customer Engagement & Sales Intelligence.** Master-issue — IKKE én stor PR.
-   Fase 3 (kontakt-intent) er aktiv (#73); fase 4 (salgsoversigt/sortering-efter-besøg/
-   -sektion/-kontakt-intent) tages ét PR ad gangen efter Fase 3.
+   Fase 3 (kontakt-intent) er live (#73/PR #74); fase 4 (salgsoversigt) er implementeret i #76 (PR åben);
+   fase 5 (HubSpot) hører hjemme i Marketing Dashboard-projektet.
 3. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
 Herudover intet forudbestemt. Punkter efter dette vælges af Ricko fra backloggen nedenfor
@@ -109,12 +113,9 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Vision 3.0 Fase 3 — cutover-metode + merge-godkendelse af Issue #73-PR'en (PR #74).**
-  Migration `012_trip_contact_intent.sql` er godkendt, kørt i production (`20260919074341_trip_contact_intent`) og read-only
-  verificeret; schema-baseline er opdateret; 0 syntetiske events. Tilbage: ChatGPT final HEAD-review →
-  Rickos valg af metode for `CONTACT_INTENT_TRACKING_SINCE` (skal være ≥ tidspunktet hvor koden er live —
-  aldrig migrationstidspunktet; se `docs/VISION-3.0-PHASE-3.md` § "Tracking-cutover") → Rickos merge-godkendelse
-  → merge/deploy → cutover-trinnet → production-smoketest (kan udskydes; blokerer ikke merge).
+- **Vision 3.0 Fase 4 — merge-godkendelse af Issue #76-PR'en.** Implementeret og verificeret (se `docs/STATUS.md`).
+  Ingen migration nødvendig; merge til `main` er et production-deploy og kræver Rickos PR-specifikke godkendelse.
+  Derefter autentificeret production-smoketest af salgsoversigten (kan udskydes; blokerer ikke merge).
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af
   `pg_cron`-extensionen). Ingen tidsfrist — hverken `trip_visits`, `trip_section_engagement`

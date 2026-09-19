@@ -38,18 +38,21 @@ export type SalesOverviewRow = {
   customer_name: string | null;
   active: boolean;
   created_at: string;
-  /** Afledt navn (aldrig den rå created_by-uuid). */
-  created_by_name: string | null;
-  /** Bekvemmelighedsfilter (ikke adgangskontrol): rejseplanens rådgiver = den indloggede advisor_match_name. */
-  mine: boolean;
+  /** Afledt navn (aldrig den rå created_by-uuid). UDELADT når ukendt (kompakt DTO). */
+  created_by_name?: string;
+  /**
+   * Bekvemmelighedsfilter (ikke adgangskontrol): rejseplanens rådgiver = den indloggede
+   * advisor_match_name. UDELADT når falsk (kompakt DTO).
+   */
+  mine?: true;
   opened: OpenedCell;
   sections: SectionsCell;
   contact: ContactCell;
   /**
    * Nyeste af de observerede tidsstempler (senest åbnet, seneste sete afsnit, seneste
-   * kontaktklik) — ren dato-aritmetik, ingen vægtning. null = ingen målt aktivitet.
+   * kontaktklik) — ren dato-aritmetik, ingen vægtning. UDELADT = ingen målt aktivitet.
    */
-  lastActivityAt: string | null;
+  lastActivityAt?: string;
 };
 
 /** Datakilder der kan fejle uafhængigt af hinanden (fail-open pr. kilde). */

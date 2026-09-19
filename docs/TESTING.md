@@ -257,6 +257,60 @@ ingen kunstige contact-intent-events må oprettes):**
    "Kontaktaktivitet kunne ikke vurderes" — aldrig "Telefon klikket —".
 6. Genindlæs og klik igen: `last_clicked_at` opdateres, `first_clicked_at` er uændret.
 
+**Salgsoversigt (Issue #76):** nye testfiler (uden browser/DB) — adfærd og fejlveje, ikke antal.
+- `src/lib/paged-read.test.ts`: tom tabel; < én side; 2 500 rækker med 1000-loft ⇒ alle, tre sider, ingen huller/dubletter;
+  præcis 1000/1001/2000; **server-loft LAVERE end sidestørrelsen (500)** afkorter ikke tavst; kun første side beder om
+  `count`; fejl på første/senere side, manglende count, tom side før total, kastende fetch og uendelig løkke ⇒ `ok:false`
+  (aldrig en tom eller delvis liste).
+- `src/lib/trip-eligibility.test.ts`: `parseNormalizedTrip`/`resolveEligibleSections` — gyldig ⇒ samme som kundesiden;
+  malformed ⇒ `null` (aldrig tom liste); **paritet mellem admin/liste og Fase 2-endpointet** (spion på skrivningen) på
+  valid/malformed data; sektionsvisning `unassessable`; statiske kontrakter (admin-detalje bruger `resolveEligibleSections`,
+  endpointet parser ikke selv).
+- `src/lib/sales-overview.test.ts` (read model): **Åbnet** (opened/not-opened/`not-measured`/unavailable/malformed række),
+  **Set** (n af m kun for afsnit rejseplanen HAR, Pris nået, ingen registreret, ukendt/dublet-rækker, unassessable,
+  unavailable inkl. destinations-fejl, fejl har forrang), **Kontakt** (kun klikket; ineligible email tælles ikke; ukendt
+  channel ignoreres), de fem tilstande blandes aldrig, **Seneste aktivitet** (nyeste af tre observerede tidsstempler,
+  fejlede kilder udelades, ugyldige ignoreres, rækkefølge-uafhængig), **Mine**/Oprettet af, **DTO** (kun tilladte nøgler,
+  intet rå/kundetekst/uuid/email, **300 realistiske rækker < 150 KB og < 125 KB**, teoretisk værste tilfælde < 200 KB),
+  degraded pr. kilde, ydeevne (500 rejseplaner < 2 s).
+- `src/lib/sales-overview-view.test.ts`: default-visning, sortering (deterministisk under 10 permutationer, muterer ikke,
+  tie-breakers), filtre kombineres, **"Ingen målt aktivitet" udelader ukendte rækker**, søgning uændret, pagination, og
+  **tekster** (AK-11/12: ordliste, klik = *klikket*, `not-measured` skrives "Ingen åbning målt siden <dato>", fejl/ukendt ≠
+  "ingen registreret").
+- `src/lib/sales-overview-server.test.ts`: den FAKTISKE loader + Supabase-adapter mod en falsk klient (tæller kald, stille
+  række-loft, ingen `.in()`): **seks forespørgsler uanset 10/500 rejseplaner**, aldrig ét kald pr. række, count kun på første
+  side, stabil sortering, kolonner uden `raw_pdf_text`, profiles én gang, **1 500 rejseplaner + 2 500 sektionsrækker ⇒ alle
+  talt korrekt**, loft 500 ⇒ stadig hele sættet, fejl pr. kilde ⇒ `degraded` + kolonne unavailable, fejl på senere side
+  kasserer kilden, trips-fejl ⇒ `SalesOverviewError`, sanitiseret logning, DTO uden rå felter (hele kæden), og statisk kontrakt
+  for ruten (**uautentificeret ⇒ 401 før enhver læsning**).
+- `src/lib/sales-overview-ui.test.ts`: statiske kontrakter for `SalesOverviewTable`/`AdminDashboard` (default-visning,
+  *Mine* kun med `viewer.mineAvailable`, filtre/søgning, sider, degraderet-bemærkning, stille genindlæsning).
+- `trip-engagement.test.ts` (udvidet): `not-measured` (E/E2/E3, 12-måneders-grænsen, list-variant uden `since`);
+  `contact-intent-trip.test.ts`: cutover-konstanten `2026-09-19T08:21:19Z`.
+Kontrolleret ved mutation (hver ændring fælder tests; 16 kritiske): "kort side = færdig", manglende count ignoreres,
+sektions-/kontakt-/visits-fejl vist som "ingen", ugyldig trip-data ⇒ falsk tilstand, ineligible email tælles,
+`not-measured` ⇒ "ikke åbnet", "ingen aktivitet" inkluderer ukendte, rækker uden aktivitet først, tie-breaker fjernet,
+`raw_pdf_text` hentes, fortolkende ord i tekst, klik omtalt som "kontaktet", 401-gate fjernet, admin tilbage til rå JSON.
+
+**Lokal end-to-end kontrol af den byggede app (Issue #76, 20/20)** — `next start` på `localhost` ⇒ to uafhængige gates
+forhindrer skrivning; read-only datakilde; ingen slug/booking_no/nøgler printet: `GET /admin/api/trips` uden session og
+med en kunde-adgangscookie ⇒ 401 uden rejseplan-data; `POST /admin/api/trips` uden session ⇒ 401; admin-detalje uden
+session ⇒ redirect; Fase 2-endpointet (efter refaktoreringen) og Fase 3-endpointet uændrede (404/400/204); kundesiden
+uændret; **rækketal uændret i `trip_visits`, `trip_section_engagement`, `trip_contact_intent` (0 skrivninger)**. Dertil en
+**read-only kørsel af den rigtige loader mod produktion** (267 rejseplaner): 6 HTTP-kald, ≈ 0,7 s, 0 ugyldige rejseplaner,
+111,5 KB, ingen rå felter. *Ikke verificeret automatisk:* den autentificerede 200-sti via HTTP (kræver et sælger-login);
+den dækkes af loader-kørslen, testene og smoketesten nedenfor.
+
+**Manuel smoke-test efter merge/deploy af Issue #76-PR'en (plan, IKKE udført — ingen kunstige events må oprettes):**
+1. Log ind som sælger; åbn `/admin`. Listen viser kolonnerne Åbnet, Set, Kontakt, Seneste aktivitet; rækker med målt aktivitet
+   ligger øverst (seneste først), resten under.
+2. Rejseplaner oprettet før 18. september viser "Ingen åbning målt siden 18. september 2026" (ikke "Ikke åbnet endnu").
+3. Filtrér *Kontaktklik* / *Har målt aktivitet* / *Ingen målt aktivitet*; skift sortering; slå *Vis deaktiverede* til/fra;
+   søg på booking/kunde/destination. Deaktivér/aktivér en rejseplan: filtre og sortering nulstilles ikke.
+4. *Mine* vises kun hvis din profil har en rådgiver-match; den filtrerer på rådgivernavn (alle ser stadig alle rejseforslag).
+5. Åbn Detaljer: "Kontaktklik måles fra 19. september 2026." vises under Kontakt-intent.
+6. Netværks-fanen: svaret fra `/admin/api/trips` er ≈ 110–130 KB og indeholder ikke `data`, `raw_pdf_text` eller `created_by`.
+
 ## Efter enhver testrunde
 
 Rapportér resultater ærligt (også røde), opdatér `docs/STATUS.md`, og ryd test-data op.

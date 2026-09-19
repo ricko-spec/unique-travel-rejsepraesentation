@@ -87,6 +87,12 @@ export function latestTimestamp(values: Array<string | null | undefined>): strin
   return best === null ? null : new Date(best).toISOString();
 }
 
+/** Supabase leverer fx "2026-07-04T18:48:09.123456+00:00" — normalisér til kort ISO (Z). Ugyldigt urørt. */
+function normalizeIso(value: string): string {
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? value : new Date(ms).toISOString();
+}
+
 function nameKey(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
@@ -195,7 +201,10 @@ export function buildSalesOverview(input: {
 
     const advisor = trip?.advisor ?? (t.data as { advisor?: unknown } | null)?.advisor;
     const mine = mineAvailable && nameKey(advisor) === viewerAdvisorKey;
+    const createdByName = resolveCreatedByName(t.created_by, profiles);
 
+    // KOMPAKT DTO: tomme/falske valgfrie felter UDELADES (mine, created_by_name,
+    // lastActivityAt) — svarstørrelsen skal være en brøkdel af det gamle liste-svar.
     return {
       id: t.id,
       booking_no: t.booking_no,
@@ -203,13 +212,13 @@ export function buildSalesOverview(input: {
       destination: t.destination,
       customer_name: t.customer_name,
       active: t.active,
-      created_at: t.created_at,
-      created_by_name: resolveCreatedByName(t.created_by, profiles),
-      mine,
+      created_at: normalizeIso(t.created_at),
+      ...(createdByName ? { created_by_name: createdByName } : {}),
+      ...(mine ? { mine: true as const } : {}),
       opened,
       sections,
       contact,
-      lastActivityAt,
+      ...(lastActivityAt ? { lastActivityAt } : {}),
     };
   });
 

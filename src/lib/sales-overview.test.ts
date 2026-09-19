@@ -89,9 +89,10 @@ describe("A. Åbnet (trip_visits)", () => {
     expect(rowOf([trip({ id: "t1" })]).opened).toEqual({ kind: "not-opened" });
   });
 
-  it("ingen række + oprettet FØR målestart => not-measured (aldrig 'ikke åbnet endnu') med målestarten", () => {
+  it("ingen række + oprettet FØR målestart => not-measured (aldrig 'ikke åbnet endnu'); målestarten gentages ikke pr. række", () => {
     const r = rowOf([trip({ id: "t1", created_at: "2026-05-23T00:00:00Z" })]);
-    expect(r.opened).toEqual({ kind: "not-measured", since: "2026-09-18T12:20:18.000Z" });
+    expect(r.opened).toEqual({ kind: "not-measured" });
+    expect(JSON.stringify(r.opened)).not.toContain("2026-09-18");
   });
 
   it("visits-kilden fejlede => unavailable for ALLE rækker (aldrig not-opened/not-measured)", () => {
@@ -279,8 +280,9 @@ describe("E. lastActivityAt — kun observerede tidsstempler, deterministisk", (
   });
 
   it("ingen aktivitet => null (aldrig en opfundet dato)", () => {
-    expect(rowOf([trip({ id: "t1" })]).lastActivityAt).toBeNull();
-    expect(rowOf([trip({ id: "t1", created_at: "2026-05-01T00:00:00Z" })]).lastActivityAt).toBeNull();
+    expect(rowOf([trip({ id: "t1" })]).lastActivityAt).toBeUndefined();
+    expect(rowOf([trip({ id: "t1", created_at: "2026-05-01T00:00:00Z" })]).lastActivityAt).toBeUndefined();
+    expect(rowOf([trip({ id: "t1" })])).not.toHaveProperty("lastActivityAt");
   });
 
   it("en FEJLET kilde udelades — og udgør aldrig en aktivitet", () => {
@@ -291,7 +293,7 @@ describe("E. lastActivityAt — kun observerede tidsstempler, deterministisk", (
     });
     expect(r.lastActivityAt).toBe("2026-09-19T09:00:00.000Z");
     const none = rowOf([trip({ id: "t1" })], { visits: FAIL, sections: FAIL, contact: FAIL });
-    expect(none.lastActivityAt).toBeNull();
+    expect(none.lastActivityAt).toBeUndefined();
   });
 
   it("ugyldige tidsstempler og ukendte enum-rækker ignoreres", () => {
@@ -302,7 +304,7 @@ describe("E. lastActivityAt — kun observerede tidsstempler, deterministisk", (
       ]),
       contact: OK([{ trip_id: "t1", channel: "kontakt", last_clicked_at: "2030-01-01T00:00:00Z" }]),
     });
-    expect(r.lastActivityAt).toBeNull();
+    expect(r.lastActivityAt).toBeUndefined();
   });
 
   it("er uafhængig af rækkefølgen af inputrækker", () => {
@@ -344,7 +346,8 @@ describe("F. Mine (bekvemmelighedsfilter) og Oprettet af", () => {
       { profiles },
     );
     expect(res.viewer.mineAvailable).toBe(true);
-    expect(res.trips.map((r) => r.mine)).toEqual([true, false]);
+    expect(res.trips.map((r) => r.mine)).toEqual([true, undefined]); // falsk udelades (kompakt DTO)
+    expect(res.trips[1]).not.toHaveProperty("mine");
   });
 
   it("mineAvailable=false uden advisor_match_name, uden profil, eller når profiles-kilden fejlede", () => {
@@ -353,7 +356,7 @@ describe("F. Mine (bekvemmelighedsfilter) og Oprettet af", () => {
     expect(build([trip({ id: "a" })], { profiles: OK([]) }).viewer.mineAvailable).toBe(false);
     const failed = build([trip({ id: "a" })], { profiles: FAIL });
     expect(failed.viewer.mineAvailable).toBe(false);
-    expect(failed.trips[0].mine).toBe(false);
+    expect(failed.trips[0].mine).toBeUndefined();
     expect(failed.degraded).toContain("profiles");
   });
 
@@ -367,7 +370,7 @@ describe("F. Mine (bekvemmelighedsfilter) og Oprettet af", () => {
       [trip({ id: "a", created_by: "u2" }), trip({ id: "b", created_by: null }), trip({ id: "c", created_by: "ukendt" })],
       { profiles },
     );
-    expect(res.trips.map((r) => r.created_by_name)).toEqual(["Bo Jensen", null, null]);
+    expect(res.trips.map((r) => r.created_by_name)).toEqual(["Bo Jensen", undefined, undefined]);
     expect(JSON.stringify(res)).not.toContain('"created_by"');
   });
 });
@@ -376,7 +379,7 @@ describe("F. Mine (bekvemmelighedsfilter) og Oprettet af", () => {
 // G. DTO er KOMPAKT og udleverer ikke rå/kundefølsomme felter
 // ============================================================================
 describe("G. DTO: intet rå, kompakt", () => {
-  const ALLOWED_KEYS = [
+  const REQUIRED_KEYS = [
     "id",
     "booking_no",
     "slug",
@@ -384,20 +387,35 @@ describe("G. DTO: intet rå, kompakt", () => {
     "customer_name",
     "active",
     "created_at",
-    "created_by_name",
-    "mine",
     "opened",
     "sections",
     "contact",
-    "lastActivityAt",
   ].sort();
+  const OPTIONAL_KEYS = ["created_by_name", "mine", "lastActivityAt"];
 
-  it("hver række har PRÆCIS de tilladte nøgler — aldrig data, raw_pdf_text eller created_by", () => {
-    const res = build([trip({ id: "a", created_by: "u2" })]);
-    expect(Object.keys(res.trips[0]).sort()).toEqual(ALLOWED_KEYS);
+  it("hver række har KUN tilladte nøgler — aldrig data, raw_pdf_text, created_by, hero_photo eller updated_at", () => {
+    const res = build([trip({ id: "a", created_by: "u2" })], {
+      profiles: OK([{ id: "u2", full_name: "Bo", email: null, advisor_match_name: null }]),
+    });
+    const keys = Object.keys(res.trips[0]);
+    for (const k of REQUIRED_KEYS) expect(keys).toContain(k);
+    for (const k of keys) expect([...REQUIRED_KEYS, ...OPTIONAL_KEYS]).toContain(k);
     for (const banned of ["data", "raw_pdf_text", "created_by", "hero_photo", "updated_at"]) {
       expect(res.trips[0]).not.toHaveProperty(banned);
     }
+  });
+
+  it("tomme valgfrie felter UDELADES (kompakt DTO): en række uden aktivitet/skaber/'mine' har præcis de påkrævede nøgler", () => {
+    const res = build([trip({ id: "a" })]);
+    expect(Object.keys(res.trips[0]).sort()).toEqual(REQUIRED_KEYS);
+  });
+
+  it("created_at normaliseres til kort ISO (Supabase-format med mikrosekunder/offset er længere)", () => {
+    const res = build([trip({ id: "a", created_at: "2026-07-04T18:48:09.123456+00:00" })]);
+    expect(res.trips[0].created_at).toBe("2026-07-04T18:48:09.123Z");
+    expect(build([trip({ id: "a", created_at: "ikke-en-dato" })]).trips[0].created_at).toBe(
+      "ikke-en-dato",
+    );
   });
 
   it("kundetekst i data/uuid'er lækker ikke ind i det serialiserede svar", () => {
@@ -410,7 +428,11 @@ describe("G. DTO: intet rå, kompakt", () => {
           data: { ...FULL_DATA, intro: MARK, travellers: MARK, notes: MARK },
         }),
       ],
-      { profiles: OK([{ id: "created-by-uuid-123", full_name: "Anna", email: "anna@x.dk", advisor_match_name: "X" }]) },
+      {
+        profiles: OK([
+          { id: "created-by-uuid-123", full_name: "Anna", email: "anna@x.dk", advisor_match_name: "X" },
+        ]),
+      },
     );
     const json = JSON.stringify(res);
     expect(json).not.toContain(MARK);
@@ -419,44 +441,111 @@ describe("G. DTO: intet rå, kompakt", () => {
     expect(json).not.toContain("anna@uniquetravel.dk"); // advisorEmail fra trip.data
   });
 
-  it("300 realistiske rejseplaner (stor data, varierede tilstande) => svar under 150 KB", () => {
-    const big = "x".repeat(6000); // ≈ 6 KB kundetekst pr. rejseplan i data — skal IKKE med
-    const trips: SalesTripRow[] = Array.from({ length: 300 }, (_, i) =>
+  // AK-1: "Listepayload for 300 mock-rejseplaner er under 150 KB". Mock-data skal være
+  // REALISTISK: en måling mod de rigtige 267 rejseplaner (2026-09-19) gav ≈ 134 KB FØR
+  // trimning, fordi kundenavne er lange (gns. 109 tegn, max 384), Supabase-tidsstempler
+  // er lange, og de fleste rækker er "før måling". En let mock ville skjule det.
+  function realisticTrips(n: number): SalesTripRow[] {
+    const names = [
+      "Susanne og Finn Bastegaard",
+      "Anders Vestergaard Christensen, Mette Vestergaard Christensen, Sofie Vestergaard Christensen og Lukas Vestergaard Christensen",
+      "Kirsten Holm Andersen og Jens Peter Holm Andersen samt børnebørnene Emil og Freja Holm Andersen fra Aarhus",
+    ];
+    const destinations = [
+      "Sri Lanka & Maldiverne",
+      "Bali",
+      "Vietnam & Thailand & Bali",
+      "Tanzania & Zanzibar",
+    ];
+    return Array.from({ length: n }, (_, i) =>
       trip({
-        id: `trip-${String(i).padStart(4, "0")}-0000-0000-0000-000000000000`,
+        id: String(i).padStart(8, "0") + "-1111-2222-3333-444444444444",
         booking_no: String(35000 + i),
-        customer_name: `Susanne og Finn Bastegaard ${i}`,
-        destination: i % 3 === 0 ? "Sri Lanka & Maldiverne" : "Bali",
-        created_at: i % 4 === 0 ? "2026-09-19T10:00:00Z" : "2026-06-01T10:00:00Z",
-        created_by: i % 2 ? "u2" : null,
-        data: { ...FULL_DATA, intro: big },
+        slug: "n" + (i * 7919).toString(36) + (i * 104729).toString(36),
+        // op til ~250 tegn kundenavn
+        customer_name: names[i % 3] + (i % 5 === 0 ? " " + names[(i + 1) % 3] : ""),
+        destination: destinations[i % 4],
+        // Supabase leverer mikrosekunder + offset
+        created_at:
+          i % 20 === 0 ? "2026-09-19T10:11:12.123456+00:00" : "2026-07-04T18:48:09.654321+00:00",
+        created_by: i % 3 === 0 ? "u2" : null,
+        data: { ...FULL_DATA, intro: "x".repeat(6000) },
       }),
     );
-    const visits: SalesVisitRow[] = trips.slice(0, 40).map((t) => ({
+  }
+
+  it("300 REALISTISKE rejseplaner (lange kundenavne, mange 'før måling') => svar under 150 KB — og med margin (< 125 KB)", () => {
+    const trips = realisticTrips(300);
+    const visits: SalesVisitRow[] = trips.slice(0, 9).map((t) => ({
       trip_id: t.id,
       first_opened_at: "2026-09-19T08:00:00Z",
       last_opened_at: "2026-09-20T08:00:00Z",
       visit_count: 4,
       open_count: 9,
     }));
-    const sections: SalesSectionRow[] = trips
-      .slice(0, 40)
-      .flatMap((t) => ["itinerary", "hotels", "price"].map((s) => ({ trip_id: t.id, section: s, last_seen_at: "2026-09-20T08:00:00Z" })));
-    const contact: SalesContactRow[] = trips
-      .slice(0, 10)
-      .map((t) => ({ trip_id: t.id, channel: "phone", last_clicked_at: "2026-09-20T09:00:00Z" }));
+    const sections: SalesSectionRow[] = trips.slice(0, 4).flatMap((t) =>
+      ["itinerary", "hotels", "price"].map((s) => ({
+        trip_id: t.id,
+        section: s,
+        last_seen_at: "2026-09-20T08:00:00Z",
+      })),
+    );
     const res = build(trips, {
       visits: OK(visits),
       sections: OK(sections),
-      contact: OK(contact),
       profiles: OK([{ id: "u2", full_name: "Bo Jensen", email: null, advisor_match_name: null }]),
     });
     const bytes = Buffer.byteLength(JSON.stringify(res), "utf8");
-    // Kontrast: det gamle svar sendte data + raw_pdf_text for hver rejseplan.
+    // det gamle svar sendte data (og raw_pdf_text) pr. række
     const oldStyleBytes = Buffer.byteLength(JSON.stringify(trips), "utf8");
     expect(res.trips).toHaveLength(300);
-    expect(bytes).toBeLessThan(150 * 1024);
+    expect(bytes).toBeLessThan(150 * 1024); // AK-1
+    expect(bytes).toBeLessThan(125 * 1024); // robust margin
     expect(bytes).toBeLessThan(oldStyleBytes / 10);
+  });
+
+  // Teoretisk værste tilfælde (findes ikke endnu): ALLE rækker har åbning, alle afsnit, begge kontaktklik og en
+  // skaber ≈ 590 B/række ⇒ ≈ 177 KB ved 300. Det er bevidst målt og begrænset (ingen ubegrænsede lister pr. række) —
+  // og stadig ≈ 17× mindre end det gamle svar (≈ 3,1 MB, som vokser med data). Vercel komprimerer desuden JSON.
+  // Server-side pagination genbesøges ved ≈ 1000 rejseplaner (docs/VISION-3.0-PHASE-4-PLAN.md §9).
+  it("værste tilfælde (alle 300 rækker har aktivitet, alle afsnit, begge kontaktklik og skaber) er begrænset: < 200 KB og ≥ 10× mindre end det gamle svar", () => {
+    const trips = realisticTrips(300).map((t) => ({ ...t, created_by: "u2" }));
+    const res = build(trips, {
+      visits: OK(
+        trips.map((t) => ({
+          trip_id: t.id,
+          first_opened_at: "2026-09-19T08:00:00Z",
+          last_opened_at: "2026-09-20T08:00:00Z",
+          visit_count: 12,
+          open_count: 30,
+        })),
+      ),
+      sections: OK(
+        trips.flatMap((t) =>
+          ["itinerary", "gallery", "hotels", "price", "contact"].map((s) => ({
+            trip_id: t.id,
+            section: s,
+            last_seen_at: "2026-09-20T08:00:00Z",
+          })),
+        ),
+      ),
+      contact: OK(
+        trips.flatMap((t) =>
+          ["phone", "email"].map((c) => ({
+            trip_id: t.id,
+            channel: c,
+            last_clicked_at: "2026-09-20T09:00:00Z",
+          })),
+        ),
+      ),
+      profiles: OK([
+        { id: "u2", full_name: "Bo Jensen Christensen", email: null, advisor_match_name: "Anna Hansen" },
+      ]),
+    });
+    expect(res.trips).toHaveLength(300);
+    const bytes = Buffer.byteLength(JSON.stringify(res), "utf8");
+    expect(bytes).toBeLessThan(200 * 1024);
+    expect(bytes).toBeLessThan(Buffer.byteLength(JSON.stringify(trips), "utf8") / 10);
   });
 });
 

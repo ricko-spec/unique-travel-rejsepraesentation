@@ -399,9 +399,10 @@ describe("toTripEngagementListState", () => {
 
   it("not-opened/not-measured/no-recent-data/unavailable går uændret igennem", () => {
     expect(toTripEngagementListState({ kind: "not-opened" })).toEqual({ kind: "not-opened" });
+    // list-varianten gentager ikke målestarten pr. række (kompakt DTO)
     expect(
       toTripEngagementListState({ kind: "not-measured", since: "2026-09-18T12:20:18.000Z" }),
-    ).toEqual({ kind: "not-measured", since: "2026-09-18T12:20:18.000Z" });
+    ).toEqual({ kind: "not-measured" });
     expect(toTripEngagementListState({ kind: "no-recent-data" })).toEqual({
       kind: "no-recent-data",
     });

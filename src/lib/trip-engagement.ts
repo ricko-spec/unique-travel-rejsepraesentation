@@ -37,14 +37,20 @@ export type TripEngagementState =
 export type TripEngagementListState =
   | { kind: "opened"; lastOpenedAt: string; visitCount: number }
   | { kind: "not-opened" }
-  | { kind: "not-measured"; since: string }
+  // Målestarten (TRACKING_SINCE) er en konstant — den gentages ikke pr. række i listens
+  // svar (Fase 4: kompakt DTO); UI'et læser konstanten. Trip-detaljen bruger den fulde
+  // TripEngagementState, som bærer `since`.
+  | { kind: "not-measured" }
   | { kind: "no-recent-data" }
   | { kind: "unavailable" };
 
 /** Beskærer en fuld TripEngagementState til den kompakte list-variant. */
 export function toTripEngagementListState(state: TripEngagementState): TripEngagementListState {
-  if (state.kind !== "opened") return state;
-  return { kind: "opened", lastOpenedAt: state.lastOpenedAt, visitCount: state.visitCount };
+  if (state.kind === "opened") {
+    return { kind: "opened", lastOpenedAt: state.lastOpenedAt, visitCount: state.visitCount };
+  }
+  if (state.kind === "not-measured") return { kind: "not-measured" };
+  return state;
 }
 
 // Formen af en trip_visits-række som den kommer retur fra Supabase — bevidst

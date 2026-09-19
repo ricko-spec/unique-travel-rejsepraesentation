@@ -6,6 +6,7 @@
 // Formuleringer beskriver KUN hvad der er observeret (eller ikke kan siges).
 
 import { formatDateLongDK, formatVisitTimestampShort } from "./trip-engagement";
+import { TRACKING_SINCE } from "./trip-visit";
 import type {
   ActivityFilter,
   MineFilter,
@@ -101,7 +102,12 @@ export function openedLines(cell: OpenedCell): { primary: string; secondary?: st
     case "not-opened":
       return { primary: "Ikke åbnet endnu" };
     case "not-measured":
-      return { primary: `Ingen åbning målt siden ${formatDateLongDK(cell.since)}` };
+      // Målestarten er konstanten TRACKING_SINCE (ikke sendt pr. række i listens svar).
+      return {
+        primary: TRACKING_SINCE
+          ? `Ingen åbning målt siden ${formatDateLongDK(TRACKING_SINCE)}`
+          : "Ingen åbning målt",
+      };
     case "no-recent-data":
       return { primary: "Ingen registrerede åbninger de seneste 12 måneder" };
     case "unavailable":
@@ -144,7 +150,7 @@ export function contactLines(cell: ContactCell): string[] {
 }
 
 /** "Seneste aktivitet"-cellen: dato, eller neutral "Ingen målt". */
-export function lastActivityText(iso: string | null): string {
+export function lastActivityText(iso: string | null | undefined): string {
   return iso ? formatVisitTimestampShort(iso) : COPY.noneMeasured;
 }
 
