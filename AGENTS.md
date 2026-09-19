@@ -23,6 +23,12 @@ altid forud. Kilder: `docs/PROJECT_PROFILE.md` (tilstand) og `docs/SYSTEM-ARKITE
 - Stop og spørg Ricko frem for at gætte videre, og frem for at gentage samme check eller
   handling uden ny information (se Stopbetingelser nedenfor).
 
+## Kapitel-arbejdsform
+
+Større opgaver køres som ét kapitel med ét resultat og én samlet leverance (analyse → implementering → tests →
+rettelser → aflevering), med samlet behandling af reviewfund og checkpoints ved milepæle. Se
+**`docs/WORKING_MODE.md`**. Arbejdsformen ændrer ikke stop- og godkendelsesreglerne i denne fil.
+
 ## Git-regler
 
 1. **`main` = production.** Hvert push til main er en produktionsudgivelse (Vercel auto-deploy).

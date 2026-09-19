@@ -8,6 +8,8 @@ Følg de fælles agent-regler i **@AGENTS.md** — de vinder ved konflikt.
 - `docs/PROJECT_PROFILE.md` — identitet, toolchain, husregler
 - `docs/SYSTEM-ARKITEKTUR.md` — dyb teknisk reference (routes, DB, flows)
 - `docs/DECISIONS.md` / `docs/ROADMAP.md` — hvad der er besluttet og hvad der er næst
+- `docs/WORKING_MODE.md` — fast arbejdsform for kapitler (ét resultat, samlet leverance, samlet review)
+- `docs/CHECKPOINT.md` — kort hand-off til næste session (branch/HEAD, udestående, næste handling)
 
 ## Arbejdsform
 
