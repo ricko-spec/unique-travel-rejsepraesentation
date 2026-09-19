@@ -11,11 +11,10 @@
 import {
   sectionEngagementBodySchema,
   shouldRecordSectionEngagement,
-  computeEligibleSectionsForTrip,
   type SectionId,
 } from "./section-engagement";
+import { resolveEligibleSections } from "./trip-eligibility";
 import { hasValidTripAccess } from "./trip-access";
-import { tripSchema, normalizeTrip } from "./types";
 import type { VisitDecisionInput } from "./trip-visit";
 
 /** De kolonner endpointet skal bruge fra `trips` (aldrig `select("*")`). */
@@ -84,18 +83,16 @@ export async function handleSectionEngagement(
   // trust boundary: en kunde med gyldig adgangscookie kan manuelt POSTe fx
   // { "section": "contact" } for en rejseplan uden kontaktsektion. Vi afgør
   // derfor selv, ud fra trippens egne data og destinationens galleri, om
-  // sektionen findes — med samme funktion (computeEligibleSectionsForTrip)
-  // som kundesiden. Ineligible = harmless 204 no-op, INGEN skrivning: samme
-  // svar som en gate-afvisning eller et lykkedes write, så endpointet ikke
-  // kan bruges til at udspørge en rejseplans indhold. Trip-data der ikke kan
-  // parses (kundesiden viser så sin fejlside uden sektioner) er ligeledes
-  // ineligible.
-  const tripData = tripSchema.safeParse(trip.data);
-  if (!tripData.success) return { status: 204, reason: "ineligible" };
-  const normalized = normalizeTrip(tripData.data);
+  // sektionen findes — med samme funktion (resolveEligibleSections,
+  // src/lib/trip-eligibility.ts: tripSchema + normalizeTrip +
+  // computeEligibleSectionsForTrip) som admin-detaljen og salgsoversigten
+  // bruger. Ineligible = harmless 204 no-op, INGEN skrivning: samme svar som en
+  // gate-afvisning eller et lykkedes write, så endpointet ikke kan bruges til at
+  // udspørge en rejseplans indhold. Trip-data der ikke kan valideres (kundesiden
+  // viser så sin fejlside uden sektioner) giver null og er ligeledes ineligible.
   const galleryImages = await deps.loadGalleryImages(trip.destination);
-  const eligible = computeEligibleSectionsForTrip(normalized, galleryImages);
-  if (!eligible.includes(section)) return { status: 204, reason: "ineligible" };
+  const eligible = resolveEligibleSections(trip.data, galleryImages);
+  if (!eligible || !eligible.includes(section)) return { status: 204, reason: "ineligible" };
 
   // 5. Selve skrivningen — trip.id er SERVER-afledt fra slug-opslaget, aldrig
   // fra klienten; section er den validerede, parsede værdi.

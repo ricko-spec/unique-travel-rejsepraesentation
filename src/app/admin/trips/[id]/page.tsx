@@ -5,13 +5,12 @@ import { getSupabaseService } from "@/lib/supabase/server";
 import type { Trip } from "@/lib/types";
 import { classifyTripEngagement, type RawTripVisitRow } from "@/lib/trip-engagement";
 import {
-  computeEligibleSections,
   buildSectionEngagementDisplay,
   type RawSectionEngagementRow,
 } from "@/lib/section-engagement";
+import { resolveEligibleSections } from "@/lib/trip-eligibility";
 import { buildContactIntentDisplay, type RawContactIntentRow } from "@/lib/contact-intent";
 import { resolveContactChannels } from "@/lib/contact-intent-trip";
-import { filterGalleryImages } from "@/lib/progress-nav";
 import { pickDestinationMatch, type DestinationRecord } from "@/lib/destination-match";
 import { TripDetail } from "./TripDetail";
 
@@ -111,12 +110,11 @@ export default async function TripDetailPage({
     (destinationsResult.data as DestinationRecord[]) ?? [],
     row.destination,
   );
-  const eligibleSections = computeEligibleSections({
-    hasItinerary: (row.data?.itinerary?.length ?? 0) > 0,
-    galleryImageCount: filterGalleryImages(destinationMatch?.gallery ?? []).length,
-    hasHotels: (row.data?.hotels?.length ?? 0) > 0,
-    hasContact: !!row.data?.advisorEmail,
-  });
+  // Fase 4 (Issue #76): SAMME runtime-validerede eligibility som kundesiden,
+  // Fase 2-endpointet og salgsoversigten (resolveEligibleSections:
+  // tripSchema → normalizeTrip). Tidligere læstes row.data rå her; en malformed
+  // trip kunne så få et falsk "ikke set". null ⇒ "kunne ikke vurderes".
+  const eligibleSections = resolveEligibleSections(row.data, destinationMatch?.gallery ?? []);
   // En fejlet destinations-opslag gør galleri-eligibility ubestemmelig, og
   // dermed hele sektionsvisningen — ikke kun galleri-linjen — usikker at
   // vise korrekt. Samme fail-open-kontrakt som trip_visits ovenfor: hellere

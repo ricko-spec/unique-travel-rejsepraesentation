@@ -5,7 +5,13 @@
 //
 // "no row" og "query fejlede" er to VIDT forskellige tilstande — en fejlet
 // forespørgsel må ALDRIG vises som "Ikke åbnet endnu" (Issue #69). Derfor har
-// klassifikationen fire udfald, ikke tre.
+// klassifikationen flere udfald end blot "åbnet"/"ikke åbnet".
+//
+// Fase 4 (Issue #76): "not-measured" — en rejseplan oprettet FØR åbningsmålingen
+// startede (TRACKING_SINCE), uden en trip_visits-række, kan systemet ikke sige
+// "ikke åbnet endnu" om: kunden kan have åbnet linket før målingen. Tilstanden
+// bærer målestarten, så UI'et kan skrive "Ingen åbning målt siden <dato>".
+// "Ikke åbnet endnu" er nu forbeholdt rejseplaner oprettet EFTER målestart.
 
 import { TRACKING_SINCE } from "./trip-visit";
 
@@ -18,6 +24,7 @@ export type TripEngagementState =
       openCount: number;
     }
   | { kind: "not-opened" }
+  | { kind: "not-measured"; since: string }
   | { kind: "no-recent-data" }
   | { kind: "unavailable" };
 
@@ -30,6 +37,7 @@ export type TripEngagementState =
 export type TripEngagementListState =
   | { kind: "opened"; lastOpenedAt: string; visitCount: number }
   | { kind: "not-opened" }
+  | { kind: "not-measured"; since: string }
   | { kind: "no-recent-data" }
   | { kind: "unavailable" };
 
@@ -146,11 +154,17 @@ export function classifyTripEngagement(input: {
   const tripCreatedAtDate = parseDate(input.tripCreatedAt);
   if (!tripCreatedAtDate) return { kind: "unavailable" };
 
-  const cutoff = computeCutoff(tripCreatedAtDate, parseDate(trackingSince));
+  const trackingSinceDate = parseDate(trackingSince);
+  const cutoff = computeCutoff(tripCreatedAtDate, trackingSinceDate);
 
-  return isAtLeastTwelveMonthsOld(cutoff, now)
-    ? { kind: "no-recent-data" }
-    : { kind: "not-opened" };
+  if (isAtLeastTwelveMonthsOld(cutoff, now)) return { kind: "no-recent-data" };
+
+  // Oprettet FØR målestart og ingen række ⇒ vi ved det ikke (Fase 4, Issue #76):
+  // "ikke åbnet endnu" ville være en påstand systemet ikke kan stå inde for.
+  if (trackingSinceDate && tripCreatedAtDate.getTime() < trackingSinceDate.getTime()) {
+    return { kind: "not-measured", since: trackingSinceDate.toISOString() };
+  }
+  return { kind: "not-opened" };
 }
 
 // ----------------------------------------------------------------------------

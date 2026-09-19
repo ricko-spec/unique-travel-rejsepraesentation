@@ -10,14 +10,20 @@
 // "ingen registreret klik siden DENNE dato" — aldrig siden Fase 1B, og aldrig
 // historisk viden fra før funktionen fandtes.
 //
-// `null` INDTIL release-cutover: vi kender endnu ikke det faktiske production
-// go-live-tidspunkt, og et gættet tidspunkt ville være en falsk påstand i
-// sælger-UI'et. Værdien sættes UDELUKKENDE i den afsluttende release-cutover
-// commit — EFTER migration 012 er kørt i production og umiddelbart FØR
-// merge/deploy — som en fast, hardkodet ISO-8601 UTC-streng (samme princip som
-// Fase 1B: aldrig Date.now(), en env-var, migrationens tidspunkt eller et
-// dynamisk databaseopslag). Release-metadata i kode; ingen ny DB-kolonne.
-export const CONTACT_INTENT_TRACKING_SINCE: string | null = null;
+// Fastlagt (Issue #76, godkendt beslutning #5; cutover-metode B): 2026-09-19T08:21:19Z
+// = det tidspunkt Fase 3-koden blev LIVE i production — Vercel production-
+// deploymenten af main 3e39c87 (dpl_HzNGQfgsg8iPFn8sUDRuALrPtNHd) blev READY
+// 08:21:18,978Z. Værdien ligger dermed IKKE før den faktiske go-live (en tidligere
+// dato ville lade et "—" påstå dækning for en periode uden tracking) og er ALDRIG
+// migrationstidspunktet (07:43:41Z, kun DB-parathed). Den var `null` frem til denne
+// kodeleverance, fordi et gættet tidspunkt før deploy ville have været en falsk
+// påstand i sælger-UI'et.
+//
+// Fast, hardkodet ISO-8601 UTC-streng (aldrig Date.now(), en env-var, migrationens
+// tidspunkt eller et dynamisk databaseopslag). Release-metadata i kode; ingen ny
+// DB-kolonne. Typen forbliver `string | null`, så UI-fallbacken ("registreres fra det
+// tidspunkt funktionen sættes i drift") fortsat er defineret og testet.
+export const CONTACT_INTENT_TRACKING_SINCE: string | null = "2026-09-19T08:21:19Z";
 
 /**
  * Den diskrete forklaring under "Kontakt-intent"-blokken, der scoper hvad et

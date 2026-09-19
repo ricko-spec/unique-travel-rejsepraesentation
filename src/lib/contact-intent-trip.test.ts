@@ -214,6 +214,14 @@ describe("D. CONTACT_INTENT_TRACKING_SINCE (Fase 3 cutover)", () => {
     );
   });
 
+  it("er sat til den godkendte cutover 2026-09-19T08:21:19Z (Fase 3 production READY) — Issue #76 beslutning #5", () => {
+    expect(CONTACT_INTENT_TRACKING_SINCE).toBe("2026-09-19T08:21:19Z");
+    // ≥ go-live (production READY 08:21:18,978Z), > migrationen (07:43:41Z), > Fase 1B.
+    expect(new Date(CONTACT_INTENT_TRACKING_SINCE as string).getTime()).toBeGreaterThanOrEqual(
+      new Date("2026-09-19T08:21:18.978Z").getTime(),
+    );
+  });
+
   it("er (hvis sat) ALDRIG migrationstidspunktet — migrationen er DB-parathed, ikke tracking-start", () => {
     // Migration 012 blev kørt i production 2026-09-19T07:43:41Z
     // (20260919074341_trip_contact_intent). Ingen kode skriver til tabellen før

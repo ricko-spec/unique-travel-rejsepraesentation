@@ -225,7 +225,14 @@ export type SectionSeenState = {
 
 export type SectionEngagementDisplay =
   | { kind: "available"; sections: SectionSeenState[] }
-  | { kind: "unavailable" };
+  /** DB-læsningen (eller destinations-opslaget galleri-eligibility afhænger af) fejlede. */
+  | { kind: "unavailable" }
+  /**
+   * Trip-data kunne ikke valideres (tripSchema/normalizeTrip), så vi ved ikke hvilke
+   * hovedafsnit rejseplanen overhovedet har — og kan hverken påstå "set" eller "ikke set"
+   * (Fase 4, Issue #76: runtime-hardening; samme princip som kontakt-intent).
+   */
+  | { kind: "unassessable" };
 
 /**
  * Bygger sælger-visningen for ÉN trips sektionsengagement. `eligibleSections`
@@ -237,13 +244,19 @@ export type SectionEngagementDisplay =
  * `readFailed: true` giver ALTID "unavailable" — uafhængigt af `rows` —
  * samme fail-open-kontrakt som Fase 1C's classifyTripEngagement(): en fejlet
  * forespørgsel må aldrig vises som "ikke set".
+ *
+ * `eligibleSections: null` (trip-data kan ikke valideres, se
+ * resolveEligibleSections i src/lib/trip-eligibility.ts) giver "unassessable" —
+ * aldrig en tom/"ikke set"-visning.
  */
 export function buildSectionEngagementDisplay(input: {
-  eligibleSections: SectionId[];
+  eligibleSections: SectionId[] | null;
   rows: RawSectionEngagementRow[] | null;
   readFailed: boolean;
 }): SectionEngagementDisplay {
   if (input.readFailed) return { kind: "unavailable" };
+  if (input.eligibleSections === null) return { kind: "unassessable" };
+  const eligibleSections = input.eligibleSections;
 
   const seenBySection = new Map<SectionId, string | null>();
   for (const row of input.rows ?? []) {
@@ -255,7 +268,7 @@ export function buildSectionEngagementDisplay(input: {
     seenBySection.set(row.section, lastSeenAt);
   }
 
-  const sections: SectionSeenState[] = input.eligibleSections.map((section) => {
+  const sections: SectionSeenState[] = eligibleSections.map((section) => {
     const seen = seenBySection.has(section);
     return { section, seen, lastSeenAt: seen ? (seenBySection.get(section) ?? null) : null };
   });

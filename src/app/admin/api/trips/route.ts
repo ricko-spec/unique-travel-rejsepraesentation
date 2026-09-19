@@ -12,12 +12,7 @@ import {
   markUploadEventSaveFailed,
   verifyUploadEventForPublish,
 } from "@/lib/upload-events";
-import { uniqueCreatorIds, resolveCreatedByName, type CreatorProfile } from "@/lib/trip-creator";
-import {
-  classifyTripEngagement,
-  toTripEngagementListState,
-  type RawTripVisitRow,
-} from "@/lib/trip-engagement";
+import { loadSalesOverview, supabaseSalesSources } from "@/lib/sales-overview-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,99 +45,22 @@ function slugify(input: string): string {
     .slice(0, 80);
 }
 
+// Vision 3.0 Fase 4 (Issue #76): GET leverer salgsoversigten som et KOMPAKT DTO
+// (src/lib/sales-overview*.ts). Browseren modtager ALDRIG `data`, `raw_pdf_text`
+// eller `created_by`; kun afledte, observerede fakta. Seks set-baserede,
+// pagineredes læsninger (trips, profiles, trip_visits, trip_section_engagement,
+// trip_contact_intent, destinations) — ingen N+1, ingen `.in()`-URL. Fejl pr.
+// aktivitetskilde er fail-open ("kunne ikke hentes"); kun en fejlet trips-læsning
+// giver 500, som før. Uautentificeret => 401 (uændret).
 export async function GET() {
-  if (!(await getSessionUser())) {
+  const user = await getSessionUser();
+  if (!user) {
     return NextResponse.json({ error: "Ikke logget ind" }, { status: 401 });
   }
 
   try {
-    const supabase = getSupabaseService();
-    const { data, error } = await supabase
-      .from("trips")
-      .select(
-        "id, booking_no, slug, destination, customer_name, hero_photo, active, created_at, updated_at, raw_pdf_text, data, created_by",
-      )
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("[GET /api/trips] Supabase error", error);
-      return NextResponse.json(
-        { error: error.message, code: error.code, details: error.details, hint: error.hint },
-        { status: 500 },
-      );
-    }
-
-    const rows = data ?? [];
-
-    // ISSUE-67: "Oprettet af" — ét samlet profiles-opslag for de unikke
-    // created_by-id'er (aldrig ét opslag pr. trip). Fail-open: fejler
-    // opslaget, viser listen bare "—" for alle i stedet for at fejle hele
-    // GET'en — trip-listen er vigtigere end navnekolonnen.
-    let creatorProfiles: CreatorProfile[] = [];
-    const creatorIds = uniqueCreatorIds(rows.map((row) => row.created_by));
-    if (creatorIds.length > 0) {
-      const { data: profileRows, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, full_name, email")
-        .in("id", creatorIds);
-
-      if (profileError) {
-        console.error("[GET /api/trips] Profiles-opslag (created_by) fejlede", profileError);
-      } else {
-        creatorProfiles = profileRows ?? [];
-      }
-    }
-
-    // ISSUE-69: "Kundeaktivitet" — ét samlet trip_visits-opslag, IKKE
-    // .in("trip_id", tripIds) (review-fund på PR #70): PostgREST lægger en
-    // .in()-liste i selve request-URL'en, og med ~267+ trips (og voksende)
-    // nærmer den sig Supabase/Cloudflares grænse for URL/header-størrelse
-    // (520-fejl ved lange in-clauses, se Supabases eget troubleshooting-doc).
-    // trip_visits har højst én række pr. trip (FK + cascade til trips), og
-    // dette endpoint henter allerede ALLE trips — derfor er hver
-    // trip_visits-række pr. definition relevant, og et almindeligt,
-    // ufiltreret select er både korrekt og det simpleste: fortsat ét
-    // set-baseret opslag, ingen N+1, intet URL-loft. "Ingen række" og
-    // "opslaget fejlede" er bevidst forskellige tilstande (se
-    // src/lib/trip-engagement.ts) — en fejl her må ALDRIG vises som "Ikke
-    // åbnet endnu". Kun de fire kolonner UI'et rent faktisk bruger selectes;
-    // trip_id bruges kun til at matche raden til den rigtige trip herunder,
-    // sendes ikke i svaret.
-    const visitRowsByTripId = new Map<string, RawTripVisitRow>();
-    let visitReadFailed = false;
-    const { data: visitRows, error: visitError } = await supabase
-      .from("trip_visits")
-      .select("trip_id, first_opened_at, last_opened_at, visit_count, open_count");
-
-    if (visitError) {
-      console.error("[GET /api/trips] trip_visits-opslag (Kundeaktivitet) fejlede", visitError);
-      visitReadFailed = true;
-    } else {
-      for (const row of visitRows ?? []) {
-        if (row.trip_id) visitRowsByTripId.set(row.trip_id, row);
-      }
-    }
-
-    // created_by (den interne uuid) sendes aldrig til klienten — kun det
-    // afledte, menneskelæsbare created_by_name. Samme princip for
-    // Kundeaktivitet: kun den afledte, KOMPAKTE list-visningstilstand
-    // (review-fund på PR #70) — hverken den rå trip_visits-række,
-    // firstOpenedAt eller openCount forlader serveren her. Den fulde
-    // TripEngagementState er kun til trip-detaljesiden (som henter sin egen
-    // row server-side, se src/app/admin/trips/[id]/page.tsx).
-    const trips = rows.map(({ created_by, ...rest }) => ({
-      ...rest,
-      created_by_name: resolveCreatedByName(created_by, creatorProfiles),
-      engagement: toTripEngagementListState(
-        classifyTripEngagement({
-          visitRow: visitRowsByTripId.get(rest.id) ?? null,
-          readFailed: visitReadFailed,
-          tripCreatedAt: rest.created_at,
-        }),
-      ),
-    }));
-
-    return NextResponse.json({ trips });
+    const overview = await loadSalesOverview(supabaseSalesSources(getSupabaseService()), user.id);
+    return NextResponse.json(overview);
   } catch (e) {
     const detail = describeFetchError(e);
     console.error("[GET /api/trips] Threw", e);

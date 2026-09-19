@@ -16,7 +16,7 @@
 // telefonlink (et falsk negativt kundesignal).
 
 import { computeEligibleChannels, type ContactChannel } from "./contact-intent";
-import { tripSchema, normalizeTrip } from "./types";
+import { parseNormalizedTrip } from "./trip-eligibility";
 
 /**
  * Eligible kanaler for rå `trips.data`, eller `null` hvis trip-data ikke kan
@@ -25,11 +25,6 @@ import { tripSchema, normalizeTrip } from "./types";
  * kanaler", og sælger-visningen må ikke vise "ikke klikket" for den. Kaster aldrig.
  */
 export function resolveContactChannels(rawTripData: unknown): ContactChannel[] | null {
-  try {
-    const parsed = tripSchema.safeParse(rawTripData);
-    if (!parsed.success) return null;
-    return computeEligibleChannels(normalizeTrip(parsed.data));
-  } catch {
-    return null;
-  }
+  const trip = parseNormalizedTrip(rawTripData);
+  return trip ? computeEligibleChannels(trip) : null;
 }

@@ -211,6 +211,10 @@ export function TripDetail({
                 <div>{engagement.visitCount}</div>
               </div>
             </div>
+          ) : engagement.kind === "not-measured" ? (
+            <p style={{ fontSize: 13, color: "var(--grey-text)", marginBottom: 12 }}>
+              Ingen åbning målt siden {formatDateLongDK(engagement.since)}.
+            </p>
           ) : engagement.kind === "not-opened" ? (
             <p style={{ fontSize: 13, color: "var(--grey-text)", marginBottom: 12 }}>
               Ikke åbnet endnu.
@@ -238,6 +242,10 @@ export function TripDetail({
             {sectionEngagement.kind === "unavailable" ? (
               <p style={{ fontSize: 13, color: "var(--grey-text)" }}>
                 Sektionsaktivitet kunne ikke hentes.
+              </p>
+            ) : sectionEngagement.kind === "unassessable" ? (
+              <p style={{ fontSize: 13, color: "var(--grey-text)" }}>
+                Sektionsaktivitet kunne ikke vurderes.
               </p>
             ) : sectionEngagement.sections.length === 0 ? (
               <p style={{ fontSize: 13, color: "var(--grey-text)" }}>
