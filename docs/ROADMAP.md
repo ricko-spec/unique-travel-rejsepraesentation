@@ -106,8 +106,7 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
    Vision 3.0 Fase 5, Gate B: prospektiv konverteringsmåling uden aktivering** (barn af Gate A/
    Issue #78, som igen er barn af [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
    **Gate B0 (arkitektur A valgt) + Gate B1 (implementering uden aktivering) leveret som ét kapitel**
-   — branch `feat/gate-b0-b1-conversion-measurement-80`, PR reviewklar (se `docs/STATUS.md` for
-   PR-link/head-SHA). Migration `013_conversion_measurement.sql` bygget som fil, **ikke anvendt**.
+   — PR #81 merget (`c140e68`). Migration `013_conversion_measurement.sql` **anvendt i production ved Gate B2** (`20260924193406_conversion_measurement`, Issue #82) — 0 rækker, intet aktiveret.
    Ren sync-/klassifikationsmotor, persistence-adaptere (Supabase + fixture), admin-API/-UI i
    fail-closed "ikke startet"-tilstand, small-cell + komplementær privacy-undertrykkelse. **Review-
    runde 1 (Codex, 7 fund) rettet samlet:** prospektiv snapshot-kvalifikation uden historik,
@@ -133,7 +132,7 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Vision 3.0 Fase 5 — review og Gate B2-godkendelse (Issue #80).** Gate B0 (arkitektur A) + Gate
+- **Vision 3.0 Fase 5 — Gate B2 gennemført (Issue #82); næste er Gate C (Issue #80).** Gate B0 (arkitektur A) + Gate
   B1 (implementering uden aktivering) er leveret som PR. Beslutninger, se
   `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md` + `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`: (1)
   bekræft arkitektur A, (2) review og merge-godkendelse af PR'en, (3) derefter Gate B2 (kør
