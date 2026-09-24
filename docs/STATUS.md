@@ -86,10 +86,12 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Review og merge-godkendelse af PR #81** (Gate B0+B1, Issue #80). Derefter, separat: Gate B2
-(kør migration 013 i production, Rickos eksplicitte godkendelse) → Gate C (aktivering: HubSpot-
-secrets + scheduler) → Gate D (officiel målingsstart). Ingen produktkode/migration/secrets/
-scheduler før hver gate er eksplicit godkendt — se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.
+**Gate B2-migrationen er gennemført** (migration 013 anvendt i production som
+`20260924193406_conversion_measurement`, 0 rækker, intet aktiveret — Issue #82).
+**Næste handling: review og merge af [PR #83](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/83)**
+(schema-baseline + docs). **Derefter fortsætter vi med Gate C** (stage-klassifikation først, dernæst
+HubSpot-adapter, secrets, seed, dry-run og scheduler) og til sidst Gate D (officiel målingsstart) —
+hver med Rickos eksplicitte godkendelse, se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.
 
 Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) — Vision 3.0: Customer Engagement & Sales Intelligence.
 Master-issue/produktkapitel, IKKE én stor PR. Fase 5 (prospektiv konverteringsmåling) er placeret i
