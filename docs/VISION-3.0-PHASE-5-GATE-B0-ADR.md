@@ -208,9 +208,15 @@ modnede deals kan være tilbageholdt, indtil der er nok til en ny blok. Selve de
 en deal er moden, og hvad der tæller som booket) er uændret.
 
 **Resterende, dokumenteret risiko:** (a) antallet af tilbageholdte/umodne tilbud (uden udfald) kan
-udledes som gruppetotal minus en vinduesnævner; (b) hvis en bookingkonflikt opdages, EFTER at en
-blok er publiceret, fjernes dealen fra blokken, og differencen kan afsløre dens udfald. Begge
-kræver intern admin-adgang og er accepteret frem for at holde konfliktdeals i tallene.
+udledes som gruppetotal minus en vinduesnævner; (b) hvis en delt bookingreference opdages, EFTER at
+en blok er publiceret, fjernes den tidligere ENROLLED-deal fra aggregatet; et tidligere vist tal kan
+da falde med 1, og en bruger med daglige snapshots kan udlede dealens udfald.
+
+**Beslutning (Ricko, 2026-09-24, PR #81 review-runde 3):** risiko (b) er **eksplicit accepteret**,
+fordi dashboardet er internt og admin-beskyttet (session-login, 401 før enhver læsning, ingen
+sælgeropdeling). Løsningen udvides bevidst IKKE med stabiliserede/publicerede snapshots. Accepten
+er begrænset til denne interne visning; eksponeres tallene nogensinde uden for admin (eksport,
+deling, andre målgrupper), skal risikoen genvurderes før det sker. Se `docs/DECISIONS.md`.
 
 ## Admin-API — eksplicit wire-DTO (rev. 2, fund 6)
 

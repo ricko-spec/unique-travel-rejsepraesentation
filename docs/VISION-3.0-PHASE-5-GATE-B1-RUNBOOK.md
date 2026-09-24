@@ -113,7 +113,9 @@ kohortedata; efter 30 minutter markeres den `ABANDONED` af næste kørsel.
 - Commit-batchen sendes som ét RPC-kald (~2.600 rækker ≈ 1–2 MB JSON server→Supabase; Vercels
   4,5 MB-grænse gælder kun indgående requests). Skal bekræftes i Gate C's dry-run/første kørsel.
 - Privacy: se ADR'ens "Resterende, dokumenteret risiko" (tilbageholdte tællinger; sent opdagede
-  konflikter i allerede publicerede blokke). Modning er pr. deal (Issue #80); nyligt modnede deals
+  konflikter i allerede publicerede blokke). Risikoen ved sent opdagede konflikter er **eksplicit
+  accepteret af Ricko 2026-09-24** for den interne, admin-beskyttede visning — ingen snapshots.
+  Genvurderes, hvis tallene nogensinde vises uden for admin. Modning er pr. deal (Issue #80); nyligt modnede deals
   kan være tilbageholdt i publiceringslaget, indtil en blok lukker.
 - En deal, der får UT-solgt-status før den observeres i "Tilbud sendt eller senere", udelukkes
   (`BOOKED_BEFORE_QUALIFIED_OBSERVATION`) og vises i datakvalitet.

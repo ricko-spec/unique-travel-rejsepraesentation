@@ -73,8 +73,11 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 - Repo er public — secrets/kundedata-disciplin er procesbåret, ikke teknisk håndhævet.
 - **PR #81 (Gate B0+B1, Issue #80) afventer re-review og merge-godkendelse.** Se åbne beslutninger i
   PR-beskrivelsen og `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md`/`-GATE-B1-RUNBOOK.md`.
-- **GitHub Actions findes ikke i repoet** (ingen `.github/workflows`) — "fuld CI" på GitHub er
-  pt. kun Vercel-checket; test/typecheck/lint/build køres lokalt og dokumenteres i PR'en.
+- **GitHub Actions (PR #81):** `.github/workflows/ci.yml` kører test, typecheck, lint og build på
+  pull requests (`contents: read`, ingen secrets, ingen deploy). Workflowet findes først på `main`,
+  når PR #81 merges; indtil da kører det på PR #81's egen branch.
+- **Privacy-beslutning (Ricko, 2026-09-24):** risikoen ved sent opdagede delte bookingreferencer i
+  konverteringsmålingen er accepteret for den interne admin-visning — se `docs/DECISIONS.md`.
 - Øvrige åbne beslutninger (KRÆVER RICKO): `docs/DECISIONS.md` § Åbne beslutninger.
   Prioriteret backlog: `docs/ROADMAP.md`.
 

@@ -15,6 +15,11 @@ Vitest-suiten dækker bl.a. JSON-salvage/normalisering (`normalize-trip`), dato-
 hotel-alternativer, room-allocations, transport-chips, destination-matching og
 parse-fejl-klassificering — se `src/lib/*.test.ts`.
 
+**GitHub Actions:** `.github/workflows/ci.yml` kører `npm ci`, `npm test`, `npm run typecheck`,
+`npm run lint` og `npm run build` på hver pull request (Node 24, `contents: read`, ingen secrets, ingen
+deploy, actions pinnet til commit-SHA). Schema-/storage-drift og pglite-migrationsverifikationen kræver
+henholdsvis live-credentials og et harness uden for repoet og køres fortsat manuelt.
+
 ## Testniveau efter ændringstype
 
 Kør ikke mere end ændringen kræver:
@@ -357,6 +362,11 @@ dag-til-dag-ændringer i n, b og n−b er 0 eller ≥ 10. TS-mutation (runde 2, 
 `delta >= 0` i `bookedWithin` (ækvivalent — publiceringsfilteret fjerner allerede rækker med negativt interval).
 pglite: nye asserts for `enrolled_booked_order_check` og `booked_before_fields_check` (røde mod `198101b`s
 migration, grønne efter) ⇒ **90/90**; 13 SQL-mutanter (inkl. de to nye CHECKs) alle fanget.
+
+**Review-runde 3 (Codex-review 5308827224 på `011968b`):** trendperioder har unik, stabil `periodIndex`
+(React-nøgle og etiket "Periode n"); 4 regressionstests var røde før rettelsen (to lukkede blokke i samme
+måned fik identisk identitet; ingen "Periode 2" i UI; nøglen var måneden) og er grønne nu. Wire-skemaet
+afviser dublerede `periodIndex`.
 
 **Migration 013 — kørt mod lokal in-memory Postgres (pglite 0.5.8, uden for repoet), ikke kun læst — 87/87 (runde 1; 90/90 efter runde 2):** Supabase-
 lignende roller + default ACL (auto-ALL); migrationen køres to gange (idempotens); grants (kun `service_role`

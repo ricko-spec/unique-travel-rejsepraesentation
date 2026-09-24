@@ -14,6 +14,14 @@
   aktuelle head-SHA og testresultater står i PR-beskrivelsen (hardkodes bevidst ikke her).
   **Reviewklar igen, ikke merget.**
 
+## Færdigt (review-runde 3, Codex-review 5308827224)
+
+- Rickos eksplicitte accept af den begrænsede konflikt-differensrisiko dokumenteret (DECISIONS,
+  ADR, runbook) — ingen snapshots.
+- Trendtabellen: unik, stabil `periodIndex` som React-nøgle og etiket ("Periode n"); regressionstest
+  med to lukkede blokke i samme måned.
+- Minimal GitHub Actions-workflow (`.github/workflows/ci.yml`); status på eksakt head står i PR'en.
+
 ## Færdigt (review-runde 2)
 
 - Booking før første kvalificerede observation ⇒ `BOOKED_BEFORE_QUALIFIED_OBSERVATION` (reducer,
@@ -45,7 +53,7 @@
 3. **Gate C-forudsætning:** klassificér pipelinens øvrige stages fra live-metadata (Ricko), udfyld
    `PIPELINE_STAGE_CONTRACT`, `complete: true`, bump kontraktversion. Byg rigtig HubSpot-adapter.
 4. **Gate C/D** — secrets, cron, dry-run, officiel baseline. Ikke startet.
-5. GitHub Actions findes ikke i repoet — kun Vercel-check på GitHub. Evt. separat beslutning.
+5. CI-workflowet kører på pull requests; det bliver en del af `main` ved merge af PR #81.
 
 ## Næste handling
 
