@@ -23,7 +23,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `010b_trip_visits_retention.sql` | pg_cron-retention for trip_visits (12 mdr.) — bevidst separat fil | **Nej — separat, senere godkendelse (kræver evt. pg_cron-aktivering)** |
 | `011_trip_section_engagement.sql` | trip_section_engagement + eksplicitte table grants + RLS + `record_trip_section_engagement` RPC — sektionsengagement (Issue #71) | 2026-09-18T18:41:05Z (`20260918184105_trip_section_engagement`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
 | `012_trip_contact_intent.sql` | trip_contact_intent + eksplicitte table grants + RLS + `record_trip_contact_intent` RPC — kontakt-intent, max 2 rækker/trip (Issue #73) | 2026-09-19T07:43:41Z (`20260919074341_trip_contact_intent`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
-| `013_conversion_measurement.sql` | conversion_measurement_state (singleton) + conversion_deal_cohort (pseudonymiseret) + conversion_sync_runs, eksplicitte table grants + RLS + guard-triggere + sync-RPC'er (`conversion_begin_sync_run`/`conversion_commit_sync_run`/`conversion_fail_sync_run`/`conversion_parse_batch`) — prospektiv konverteringsmåling, Gate B (Issue #80, barn af Gate A/Issue #78) | **Nej — bygget som fil, IKKE anvendt.** Kræver Gate B2 (Rickos eksplicitte godkendelse), se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md` |
+| `013_conversion_measurement.sql` | conversion_measurement_state (singleton) + conversion_deal_cohort (pseudonymiseret) + conversion_sync_runs, eksplicitte table grants + RLS + guard-triggere + sync-RPC'er (`conversion_begin_sync_run`/`conversion_commit_sync_run`/`conversion_fail_sync_run`/`conversion_parse_batch`) — prospektiv konverteringsmåling, Gate B (Issue #80, barn af Gate A/Issue #78) | 2026-09-24T19:34:06Z (`20260924193406_conversion_measurement`) via Supabase MCP `apply_migration` (Gate B2, Issue #82) — DB kun; koden er merget (PR #81). 0 rækker, ingen seed/aktivering. `schema-baseline.json` opdateret (kun 013-objekter, +606/−0) |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.
@@ -31,7 +31,7 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 ## Regler
 
 1. **Ny DDL = ny nummereret fil.** Rediger aldrig en allerede-kørt migration (undtagen
-   kommentarer); næste fil hedder `013_*.sql`.
+   kommentarer); næste fil hedder `014_*.sql`.
 2. **Kør i Supabase-first, commit i samme ombæring.** Drift opstår når SQL køres i
    SQL Editor/MCP uden at filen lander i repoet — det var præcis hvad der skete med
    003-005 (oprettet maj-juni, først versioneret 2026-07-20).
@@ -138,9 +138,19 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 
 ## Driftsnote: conversion_measurement_state / conversion_deal_cohort / conversion_sync_runs (Issue #80, Gate B)
 
-- **Migration 013 er BYGGET SOM FIL, IKKE ANVENDT.** Ingen kørsel i production er sket. Kræver
-  Gate B2 (Rickos eksplicitte, separate godkendelse) — se den fulde operatør-runbook i
-  `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.
+- **Migration 013 er kørt i production 2026-09-24T19:34:06Z** som `20260924193406_conversion_measurement` (Gate B2, Issue #82, Rickos
+  godkendelse), via Supabase MCP `apply_migration` — samme vej som 010-012, én post i
+  `supabase_migrations.schema_migrations`. Den kørte SQL er byte-identisk med filen (sha256
+  `0e7d1b6d…86b3`, også verificeret på den lagrede migrationstekst). Post-verifikation: tre tabeller,
+  kolonner/typer/defaults/constraints som filen, RLS + én service_role-policy pr. tabel, kun
+  `service_role` SELECT/INSERT/UPDATE (ingen DELETE/TRUNCATE, intet for anon/authenticated/PUBLIC),
+  fire RPC'er SECURITY INVOKER med fast `search_path` og EXECUTE kun for `service_role`, to
+  BEFORE INSERT OR UPDATE guard-triggere, unikt partielt `conversion_sync_runs_single_running_idx`,
+  **0 rækker i alle tre tabeller**. Ingen singleton-seed, ingen sync, ingen aktivering.
+- **Trigger-funktionerne** `conversion_measurement_state_guard`/`conversion_deal_cohort_guard` har
+  EXECUTE for PUBLIC via `public`-skemaets default-ACL (filen tilbagekalder det kun for de fire
+  RPC'er). Ingen eksponering: en `returns trigger`-funktion kan ikke kaldes direkte og eksponeres
+  ikke via PostgREST. Kan evt. strammes i en senere migration.
 - **Arkitektur:** direkte, read-only HubSpot-læsning i dette projekt (ADR A, se
   `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md`) — ingen Marketing Dashboard-afhængighed.
 - **Data:** `conversion_deal_cohort` gemmer ALDRIG et rå HubSpot deal-id eller bookingnummer —
@@ -155,7 +165,7 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 - **`measurement_started_at` sættes kun af baseline-commit og er derefter uforanderlig** —
   håndhævet af triggeren `conversion_measurement_state_guard`, ikke kun applikationskode. Dette er
   den tekniske mekanisme der forhindrer skjult historisk backfill (Gate A's bindende krav).
-- Verificeret lokalt mod pglite (87 asserts + SQL-mutationer), se `docs/TESTING.md`.
+- Verificeret lokalt mod pglite før production (90 asserts + SQL-mutationer), se `docs/TESTING.md`.
 - **Retention** for `conversion_sync_runs`/`conversion_deal_cohort` er, som `010b`/kontakt-intent,
   bevidst IKKE defineret eller aktiveret i denne migration — en separat, fremtidig beslutning.
 
