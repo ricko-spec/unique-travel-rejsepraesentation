@@ -9,6 +9,11 @@
 > privacy-model, konflikt-tilstand, wire-DTO og udfaldsdefinition er redesignet efter et uafhængigt
 > review (syv fund). Arkitekturvalget (A) er uændret. Ændringerne er markeret "(rev. 2)" nedenfor;
 > den tidligere model ligger i git-historikken for denne fil (commit `a5f5e11`).
+>
+> **Revision 3 (2026-09-24, PR #81 review-runde 2, Codex-review 5308506532 på `198101b`):**
+> booking før første kvalificerede observation håndteres fail-closed; 30/60/90-undertrykkelsen
+> koordineres; modning er igen **pr. deal** som i Issue #80 (rev. 2's månedsmodning er trukket
+> tilbage efter Rickos instruks) — privacy ligger udelukkende i publiceringslaget. Markeret "(rev. 3)".
 
 ## Status: **VALGT — arkitektur A (direkte HubSpot-read i dette projekt)**
 
@@ -106,6 +111,16 @@ migrationens kommentarer, runbooken og testene bruger samme tabel.
 BOOKED kan aldrig blive NOT_BOOKED igen. Tabt/afvist og konflikter indgår aldrig i
 konverteringsprocenten.
 
+**Booking før tilbuddet (rev. 3, review-runde 2 fund 1).** UT-solgt-status kan observeres, mens
+dealen stadig står i en `PRE_QUOTE`-stage. Dealen forbliver da `ELIGIBLE_PENDING`, men
+`first_booked_at` huskes. Når den senere observeres i `QUOTE_OR_LATER`, gælder
+`first_booked_at < first_qualified_observation_at` ⇒ **`EXCLUDED/BOOKED_BEFORE_QUALIFIED_OBSERVATION`**
+(aldrig optaget, aldrig en konvertering fra tilbuddet). Observeres booking og kvalifikation i samme
+sync, er intervallet 0 og dealen optages som booket. Håndhævet tre steder: reduceren; DB-CHECK
+`conversion_deal_cohort_enrolled_booked_order_check` (ENROLLED ⇒ `first_booked_at ≥ kohortestart`)
+og `..._booked_before_fields_check`; og aggregeringen (kun `0 ≤ first_booked_at − kohortestart ≤ w`
+tæller, og en række med negativt interval er ikke publicerbar).
+
 ## Persistence — én transaktionel skrivevej (rev. 2, fund 2)
 
 Sync-motoren skriver KUN via tre RPC'er i migration 013 (SECURITY INVOKER, EXECUTE kun
@@ -155,27 +170,47 @@ på alle persisterede rækker og (b) de aktuelle, gyldige bookingnumre i HELE de
   Rækken bevares med sin oprindelige eksponering (revisionsspor), men indgår **aldrig** i
   publicerbare konverteringstal — kun som datakvalitetstal.
 
-## Privacy i adminvisningen (rev. 2, fund 3)
+## Måledefinition og privacy i publiceringslaget (rev. 3)
 
-1. Udfaldsceller publiceres kun når tilbud n, booket b og komplementet n−b alle er ≥ 10;
-   ellers skjules tæller, nævner og procent sammen.
-2. Modning pr. **kohortemåned** (UTC): en måned indgår i vindue w, når hele måneden er ≥ w dage
-   gammel. Dens tal er derefter faste.
-3. Modne måneder samles i rækkefølge til **blokke**, der hver opfylder regel 1. Vinduestal = summen
-   af lukkede blokke; trenden viser præcis blokkene; en lille rest tilbageholdes. Dermed er enhver
-   differens mellem to publicerede udfaldstal (på tværs af måned, gruppe, total — og over tid,
-   dag for dag) en hel blok ≥ tærsklerne. Bevist af en egenskabstest over 150 dages daglig visning.
-4. Tælletal uden udfald (gruppetotaler, datakvalitet) small-cell-undertrykkes (1–9) med sekundær
-   undertrykkelse, så ingen skjult celle kan udledes som totalen minus de synlige; tabt/afvist og
-   outcome-konflikter skjules også ved lille komplement.
-5. Konfliktrækker indgår aldrig i publicerbare tal.
+**Måledefinition (Issue #80, uændret):** modning pr. **deal**. En deal indgår i vindue w
+(30/60/90), når der er gået mindst w dage siden dens kohortestart; den tæller som booket i w, hvis
+`0 ≤ first_booked_at − kohortestart ≤ w` dage. Rev. 2's modning pr. kohortemåned er trukket
+tilbage — den ændrede den godkendte definition og forsinkede deals op til en måned.
 
-**Designændring:** modningsreglen er nu måneds-granulær (Issue #80's "mindst 30 dage gammel" på
-deal-niveau ville lade dag-for-dag-differencer afsløre enkelte deals' udfald). **Resterende,
-dokumenteret risiko:** (a) antallet af umodne/tilbageholdte tilbud (uden udfald) kan udledes som
-gruppetotal minus vinduets nævner; (b) hvis en bookingkonflikt opdages EFTER at en blok er
-publiceret, fjernes dealen fra blokken, og differencen kan afsløre dens udfald. Begge er små,
-kræver intern admin-adgang og er bevidst accepteret frem for at holde konfliktdeals i tallene.
+**Privacy ligger udelukkende i publiceringslaget** (`src/lib/conversion/aggregate.ts`):
+
+1. Udfaldsceller publiceres kun, når tilbud n, booket b og ikke-booket n−b alle er ≥ 10; ellers
+   skjules tæller, nævner og procent sammen.
+2. Modne deals sorteres efter kohortestart (deals fra samme sync holdes altid samlet) og grupperes
+   i **hierarkiske publiceringsblokke**:
+   - **30-blokke** lukker, når n, b30 og n−b30 alle er ≥ 10;
+   - **60-blokke** er sammenhængende 30-blokke, der lukker, når b60 og n−b60 er ≥ 10 **og
+     inkrementet b60−b30 er 0 eller ≥ 10**;
+   - **90-blokke** er sammenhængende 60-blokke, der lukker, når b90 og n−b90 er ≥ 10 **og
+     inkrementet b90−b60 er 0 eller ≥ 10**.
+   Vindue w publiceres som summen af lukkede w-blokke; en åben rest tilbageholdes (vises som
+   "Ikke nok data endnu"/skjult). Trenden viser 30-blokkene.
+3. **Koordinering på tværs af vinduer (review-runde 2 fund 2):** fordi 60-populationen er et præfiks
+   af 30-blokkene og 90-populationen et præfiks af 60-blokkene, er alt, der kan udledes ved
+   differens mellem 30, 60, 90 og trenden, en sum af blokinkrementer, som hver er 0 eller ≥ 10 —
+   for både booket og ikke-booket (inkrementet er det samme tal med modsat fortegn). Eksempel:
+   30 tilbud, 15 booket efter 30 dage, 16 efter 60 ⇒ 30-dages-raten vises, 60-dages-cellen skjules,
+   indtil den slås sammen med en senere kohorte, så inkrementet bliver ≥ 10.
+4. **Over tid:** et vindue vokser kun, når en hel blok lukker, og en moden deals tal er faste, så
+   dag-til-dag-ændringer er også 0 eller ≥ 10. Egenskabstest over 260 dages daglig visning og alle
+   tre vinduer (`aggregate.test.ts`).
+5. Tælletal uden udfald (gruppetotaler, datakvalitet) small-cell-undertrykkes (1–9) med sekundær
+   undertrykkelse; tabt/afvist og outcome-konflikter skjules også ved lille komplement.
+6. Rækker med bookingkonflikt eller booking før kohortestart indgår aldrig i publicerbare tal.
+
+**Konsekvens for læseren:** de publicerede rater dækker alle modne deals i lukkede blokke; nyligt
+modnede deals kan være tilbageholdt, indtil der er nok til en ny blok. Selve definitionen (hvornår
+en deal er moden, og hvad der tæller som booket) er uændret.
+
+**Resterende, dokumenteret risiko:** (a) antallet af tilbageholdte/umodne tilbud (uden udfald) kan
+udledes som gruppetotal minus en vinduesnævner; (b) hvis en bookingkonflikt opdages, EFTER at en
+blok er publiceret, fjernes dealen fra blokken, og differencen kan afsløre dens udfald. Begge
+kræver intern admin-adgang og er accepteret frem for at holde konfliktdeals i tallene.
 
 ## Admin-API — eksplicit wire-DTO (rev. 2, fund 6)
 
@@ -190,7 +225,8 @@ generiske tekster. Freshness (`NO_SYNC`/`FRESH`/`STALE` > 36 t) beregnes server-
 |---|---|
 | `HUBSPOT_PRIVATE_APP_TOKEN` lækket | Read-only scope; server-side-only; aldrig i klientkode/repo/logs; roteres uafhængigt |
 | Rå deal-id/bookingnummer i DB/UI/logs | Kun domæneadskilte HMAC-nøgler (CHECK: 64 hex-tegn); tomme/korte/ens secrets afvises FØR enhver læsning/skrivning; fejl logges kun som kategoriske koder |
-| Lille celle/komplement afsløres | Privacy-model ovenfor, bevist med regressions- og egenskabstests |
+| Lille celle/komplement afsløres (også mellem 30/60/90 og over tid) | Hierarkiske publiceringsblokke (rev. 3), bevist med regressions- og egenskabstests |
+| Booking før tilbuddet tælles som konvertering | `BOOKED_BEFORE_QUALIFIED_OBSERVATION` i reducer + DB-CHECK + ikke-negativt interval i aggregeringen (rev. 3) |
 | Delvist opdateret kohorte / forkert "succes" | Én transaktionel commit-RPC; fejl giver FAILED-run; aldrig `ok: true` efter fejl |
 | Samtidige kørsler overskriver hinanden | Lease + unikt indeks + advisory lock + `sync_generation` |
 | Skjult historisk backfill | Ingen historik i adapter-kontrakten; kohortestart = `observedAt` (DB-håndhævet); `measurement_started_at` sættes kun af baseline-commit og er uforanderlig (trigger) |

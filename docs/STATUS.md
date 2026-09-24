@@ -41,6 +41,10 @@
     kan udledes, heller ikke dag-for-dag), (4) komplet paginerede Supabase-læsninger, (5)
     konflikt-reconciliation for delte bookingreferencer, (6) wire-DTO med ISO-strenge, (7) én
     udfaldssandhedstabel. Testresultater og head-SHA: se PR #81 (hardkodes ikke her).
+  - **Review-runde 2 (Codex-review 5308506532 på `198101b`) rettet:** booking før første
+    kvalificerede observation udelukkes fail-closed (reducer + DB-CHECK + aggregering);
+    30/60/90-undertrykkelse koordineret via hierarkiske publiceringsblokke; modning er igen pr. deal
+    (Issue #80) — privacy ligger kun i publiceringslaget (ADR rev. 3).
   - **Ingen migration anvendt, ingen secrets oprettet/ændret, ingen scheduler, ingen live
     HubSpot-kald, ikke merget.** Runbook til Gate B2/C/D:
     `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.

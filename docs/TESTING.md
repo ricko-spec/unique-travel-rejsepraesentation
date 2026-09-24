@@ -345,7 +345,20 @@ src/lib/conversion src/app/admin/ConversionMeasurement.test.tsx`). `vitest.confi
   oprindelige fund 6-fejl)**, total-check fjernet. To ækvivalente overlevende: `idx.length === 1` i sekundær
   undertrykkelse (redundant — fjernet) og dublet-check i pagineringen (fanges også af deal_key-dublet-værnet).
 
-**Migration 013 — kørt mod lokal in-memory Postgres (pglite 0.5.8, uden for repoet), ikke kun læst — 87/87:** Supabase-
+**Review-runde 2 (Codex-review 5308506532 på `198101b`):** 7 nye kontraeksempler var røde før rettelsen
+(pending-booket → kvalificeret blev ENROLLED ×2; ENROLLED-række med booking før kohortestart talt som booket;
+36 dage gammel deal manglede i 30-dages-nævneren pga. månedsmodning; 30→60-inkrement 1 og 60→90-inkrement 3
+publiceret; egenskabstest på tværs af vinduer) og grønne efter. Dækning: `PRE_QUOTE + BOOKED`, pending→enrolled,
+baseline-pending, samme-sync-interval 0, negativt interval i aggregeringen, end-to-end sync (commit accepteret),
+modning pr. deal (36 vs. 29 dage), 30→60 og 60→90, inkrement 0/≥ 10 publiceres, lille inkrement slås sammen
+med næste kohorte, og en **egenskabstest over 260 dage**: hver publiceret celle har b og n−b ≥ 10; det inkrement,
+en angriber kan udlede af 60/90 minus trendpræfikset, og 90−60 ved samme population, er 0 eller ≥ 10; alle
+dag-til-dag-ændringer i n, b og n−b er 0 eller ≥ 10. TS-mutation (runde 2, 11 mutanter): alle dræbt undtagen
+`delta >= 0` i `bookedWithin` (ækvivalent — publiceringsfilteret fjerner allerede rækker med negativt interval).
+pglite: nye asserts for `enrolled_booked_order_check` og `booked_before_fields_check` (røde mod `198101b`s
+migration, grønne efter) ⇒ **90/90**; 13 SQL-mutanter (inkl. de to nye CHECKs) alle fanget.
+
+**Migration 013 — kørt mod lokal in-memory Postgres (pglite 0.5.8, uden for repoet), ikke kun læst — 87/87 (runde 1; 90/90 efter runde 2):** Supabase-
 lignende roller + default ACL (auto-ALL); migrationen køres to gange (idempotens); grants (kun `service_role`
 SELECT/INSERT/UPDATE), RLS + én policy pr. tabel, funktioner SECURITY INVOKER + `search_path`, EXECUTE kun
 `service_role`; seed med tidsstempler afvist; skrivning af kohorte/friskhed uden for commit afvist; DELETE/TRUNCATE

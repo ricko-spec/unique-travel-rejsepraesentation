@@ -3,16 +3,24 @@
 > Kort hand-off til næste session — **overskrives** ved meningsfulde milepæle (se `docs/WORKING_MODE.md` §5).
 > Ikke en anmodning om godkendelse. Operationel status (hvad er live) står i `docs/STATUS.md`.
 
-**Sidst opdateret:** 2026-09-24 (PR #81 review-runde 1 — alle syv Codex-fund rettet samlet)
+**Sidst opdateret:** 2026-09-24 (PR #81 review-runde 2 — Codex-review 5308506532 rettet)
 
 ## Branch / HEAD
 
 - **Production `main`:** `644269aaf4d534ae3f21379df940a4f822a55c7c` (merge af PR #79 — Gate A).
 - **Gate B0+B1 (Issue #80):** branch `feat/gate-b0-b1-conversion-measurement-80`; PR
   [#81](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/81). Reviewet head
-  var `a8f08fc` (Codex: DO NOT MERGE, 7 fund). Rettelserne ligger i efterfølgende commits — den
+  var `a8f08fc` (runde 1: 7 fund) og `198101b` (runde 2: 2 blokerende + 1 designfund). Rettelserne ligger i efterfølgende commits — den
   aktuelle head-SHA og testresultater står i PR-beskrivelsen (hardkodes bevidst ikke her).
   **Reviewklar igen, ikke merget.**
+
+## Færdigt (review-runde 2)
+
+- Booking før første kvalificerede observation ⇒ `BOOKED_BEFORE_QUALIFIED_OBSERVATION` (reducer,
+  DB-CHECK, aggregering), med røde→grønne regressionstests og pglite 90/90.
+- Koordineret 30/60/90-undertrykkelse via hierarkiske publiceringsblokke; egenskabstest på tværs af
+  vinduer og dage.
+- Modning igen pr. deal (Issue #80); månedsmodning trukket tilbage efter Rickos instruks.
 
 ## Færdigt (review-runde 1)
 
@@ -21,7 +29,7 @@
 2. **Atomisk persistence:** tre RPC'er i migration 013 (begin/commit/fail) med lease, unikt
    RUNNING-indeks, advisory lock, `sync_generation`; DB-triggere håndhæver frosne felter og
    "kun skrivning i commit". Verificeret mod pglite (87/87 + SQL-mutationer).
-3. **Privacy:** blok-baseret månedsmodning; ingen lille celle/komplement kan udledes (egenskabstest
+3. **Privacy:** blok-baseret (månedsmodningen herfra er erstattet af modning pr. deal i runde 2); ingen lille celle/komplement kan udledes (egenskabstest
    over 150 dage); sekundær undertrykkelse af tælletal.
 4. **Komplette læsninger:** `trips` og hele kohorten via `paged-read.ts`; ingen `.in(...)`.
 5. **Delte bookingreferencer:** konflikt-reconciliation (`booking_conflict_detected_at`), alle

@@ -95,6 +95,10 @@
 
 ## Drift: fejlkoder og crash
 
+Udelukkelsesårsager i kohorten: `MISSING_BOOKING_NO`, `INVALID_BOOKING_NO_FORMAT`,
+`SHARED_BOOKING_REFERENCE`, `CLOSED_BEFORE_QUALIFIED_OBSERVATION`,
+`BOOKED_BEFORE_QUALIFIED_OBSERVATION`.
+
 `conversion_sync_runs.error_code` er en af: `CONFIG_INVALID`, `NOT_ACTIVE`,
 `CONTRACT_VERSION_MISMATCH`, `CONTRACT_INCOMPLETE`, `CONTRACT_DRIFT`, `HTTP_401/403/429/5XX`,
 `NETWORK_ERROR`, `PAGE_INCONSISTENT`, `TOTAL_MISMATCH`, `DUPLICATE_DEAL`, `EMPTY_SOURCE`,
@@ -108,7 +112,10 @@ kohortedata; efter 30 minutter markeres den `ABANDONED` af næste kørsel.
 - Den rigtige HubSpot-adapter og den komplette stage-kontrakt er Gate C-arbejde (se ovenfor).
 - Commit-batchen sendes som ét RPC-kald (~2.600 rækker ≈ 1–2 MB JSON server→Supabase; Vercels
   4,5 MB-grænse gælder kun indgående requests). Skal bekræftes i Gate C's dry-run/første kørsel.
-- Privacy: se ADR'ens "Resterende, dokumenteret risiko" (umodne tællinger; sent opdagede konflikter
-  i allerede publicerede blokke).
+- Privacy: se ADR'ens "Resterende, dokumenteret risiko" (tilbageholdte tællinger; sent opdagede
+  konflikter i allerede publicerede blokke). Modning er pr. deal (Issue #80); nyligt modnede deals
+  kan være tilbageholdt i publiceringslaget, indtil en blok lukker.
+- En deal, der får UT-solgt-status før den observeres i "Tilbud sendt eller senere", udelukkes
+  (`BOOKED_BEFORE_QUALIFIED_OBSERVATION`) og vises i datakvalitet.
 - En deal der går fra `PRE_QUOTE` til en tvetydig lukket stage mellem to syncs, udelukkes
   (`CLOSED_BEFORE_QUALIFIED_OBSERVATION`) og vises i datakvalitet.
