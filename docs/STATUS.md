@@ -20,15 +20,20 @@
 - **Aktivt kapitel:** [Issue #78](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/78) —
   **Vision 3.0 Fase 5: prospektiv konverteringsmåling (online rejseplan mod kun PDF)** (barn af
   [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)). Branch
-  `docs/gate-a-conversion-measurement-78`; docs-only PR (Gate A), **ikke merget, må ikke merges**.
-  **Gate A-afgørelse: `MEASUREMENT_BLOCKED`** — se `docs/VISION-3.0-PHASE-5-GATE-A.md`. Ingen
-  godkendt HubSpot-adgang er tilgængelig i dette projekt endnu (`docs/ACCESS_MATRIX.md` dækker ikke
-  HubSpot); ingen af de HubSpot-afhængige verifikationspunkter (pipeline, stage-id'er,
-  bookingnummer-felt, dækning/dubletter, startdato) er derfor bekræftet. Repo-siden af
-  datagrundlaget (Analytics Bridge, `trips.booking_no`/`created_at`/`active`) er verificeret og
-  peger ikke på nogen blokering herfra. To veje til at ophæve blokeringen (Rickos valg) er
-  beskrevet i Gate A-rapportens §5. **Ingen produktkode/migration/HubSpot-integration før Gate A er
-  ophævet med `GO`/`GO MED FORBEHOLD`.**
+  `docs/gate-a-conversion-measurement-78`; docs-only PR [#79](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/79)
+  (Gate A), **ikke merget, må ikke merges**.
+  **Gate A-afgørelse: `GO MED FORBEHOLD`** — kun til Gate B-designarbejde af den PROSPEKTIVE måling;
+  historisk backfill forbliver blokeret. Se `docs/VISION-3.0-PHASE-5-GATE-A.md`. Ricko kørte selv
+  (Private App-token, read-only) `Invoke-QuoteSignalLiveEvidence.ps1` (dk-wanderlust-spy) 2026-09-24.
+  Pipeline `754595640` + stage-kontrakten (`1098732868` "Tilbud sendt", `1169407502` "Opdateret
+  tilbud") er live bekræftet uden uoverensstemmelser. Historisk rekonstruktion fra HubSpots
+  dealstage-historik er `UNUSABLE` (6,2 % dækning; 0 % i ni sammenhængende måneder sep. 2025–maj
+  2026 — et dokumenteret dataartefakt, ikke reel mangel på aktivitet), men blokerer **ikke**
+  automatisk den prospektive løsning. Et endnu ikke forklaret fund (51,2 % af detekterede
+  "Tilbud sendt"-events er tidsstemplet efter deal-udfaldet) skal adresseres i Gate B's design.
+  Nulpunkt for den officielle måling = første succesfulde daglige synkronisering (fast, dokumenteret
+  dato, ikke bagudskuende). **Ingen produktkode/migration/HubSpot-integration før Gate B er
+  eksplicit godkendt af Ricko** (se åbne beslutninger i Gate A-rapportens §6).
 - **Kendt driftsopfølgning (ikke en blocker):** production UI-smoketest af Fase 1C, 2, 3 og 4 er
   udsat (Ricko kan ikke teste lige nu).
 
@@ -53,8 +58,9 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
   (mod prod-DB) eller på production efter merge.
 - **Storage bucket-config uden for drift-tjekket** (kendt blind vinkel).
 - Repo er public — secrets/kundedata-disciplin er procesbåret, ikke teknisk håndhævet.
-- **Ingen godkendt HubSpot-adgang i `docs/ACCESS_MATRIX.md`** — blokerer Gate A (Issue #78). Se
-  `docs/VISION-3.0-PHASE-5-GATE-A.md` §5 for de to veje til at ophæve dette.
+- **Gate A (Issue #78) er `GO MED FORBEHOLD` — Gate B endnu ikke startet.** `afterOutcomeRatio`-fundet
+  (§3.2 i Gate A-rapporten) skal adresseres i Gate B's design, og et fast, dokumenteret nulpunkt for
+  den prospektive måling skal fastlægges (første succesfulde daglige sync).
 - Øvrige åbne beslutninger (KRÆVER RICKO): `docs/DECISIONS.md` § Åbne beslutninger.
   Prioriteret backlog: `docs/ROADMAP.md`.
 
@@ -64,11 +70,11 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Ophæv Gate A-blokeringen** (Issue #78): Ricko vælger en af de to veje i
-`docs/VISION-3.0-PHASE-5-GATE-A.md` §5 (godkend HubSpot-MCP-adgang, eller kør det vedlagte
-lokale read-only script og del kun aggregat-JSON'en). Når stage-kontrakt, bookingnummer-felt og
-aggregater er verificeret, kan Gate A afsluttes med `GO`/`GO MED FORBEHOLD`, og Gate B
-(migrations-/persistence-design) kan planlægges.
+**Gate A er afsluttet `GO MED FORBEHOLD`.** Næste skridt (afventer Rickos beslutning, se Gate
+A-rapportens §6): start Gate B som eget kapitel/issue — design af den prospektive daglige
+synkronisering, migration og pseudonymiseret persistence. Gate B skal eksplicit adressere
+`afterOutcomeRatio`-fundet og fastlægge det formelle nulpunkt (første succesfulde sync). Ingen
+migration/produktkode før Gate B er godkendt.
 
 Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) — Vision 3.0: Customer Engagement & Sales Intelligence.
 Master-issue/produktkapitel, IKKE én stor PR. **Fase 5 (prospektiv konverteringsmåling / HubSpot-kobling)

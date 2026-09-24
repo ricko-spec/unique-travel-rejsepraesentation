@@ -4,281 +4,262 @@
 > [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41). Gate A er en
 > read-only data- og arkitekturgennemgang — **ingen produktkode, migration, database-write,
 > HubSpot-write, secretændring, scheduler eller deploy** i denne runde. Denne rapport er selve
-> Gate A-leverancen. Opdateret 2026-09-24 (runde 2): adgangsvej ændret fra HubSpot-MCP/OAuth til en
-> godkendt HubSpot Private App-token, og eksisterende, allerede verificeret reference-arbejde fra
-> Marketing Dashboard-projektet (`ricko-spec/dk-wanderlust-spy`, privat repo) er inddraget — kun som
-> reference/operatørværktøj, jf. Rickos eksplicitte, snævre godkendelse (se §5).
+> Gate A-leverancen. Opdateret 2026-09-24 (runde 3): Ricko har selv kørt den eneste udestående
+> kommando (`Invoke-QuoteSignalLiveEvidence.ps1`, seneste mergede/reviewede version på
+> `origin/integration/marketing-dashboard-google-ads-v1` i `ricko-spec/dk-wanderlust-spy`) og delt
+> det fulde, aggregerede output. Denne runde dokumenterer resultatet og skelner eksplicit mellem
+> historisk og prospektiv måling, som Ricko bad om.
 
 ## Afgørelse
 
-## **MEASUREMENT_BLOCKED**
+## **GO MED FORBEHOLD** — men KUN til den prospektive måling. Historisk backfill forbliver blokeret.
 
-Uændret fra runde 1, men markant tættere på ophævelse. Ingen live HubSpot-kald er foretaget **af
-en agent** i nogen runde — kun read-only research af allerede eksisterende, tidligere Ricko-kørte
-og reviewede arbejde i et andet, privat repo. Pipeline-, property- og stage-kontrakten er nu
-**dokumenteret og forklaret** (§3), men er **reference-evidens fra et andet projekts tidligere
-live-kørsler** (2026-09-21 og tidligere), ikke en ny, live-verificeret måling for **dette**
-kapitel. Issue #78's eget punkt 8 ("historisk stage-history blev tidligere vurderet utilstrækkelig
-— genbrug ikke den som sandhed uden ny dokumenteret evidens") betyder konkret her: den **nyeste**
-og mest robuste kandidat til stage-kontrakten (dealstage-*historik*-baseret "Tilbud sendt"-læsning,
-§3.3) er bygget og enhedstestet i Marketing Dashboard-projektet, men **er selv i det projekt aldrig
-kørt live** — dens egen Gate M står stadig som `MEASUREMENT_BLOCKED` per seneste kendte status
-(PR #140, merget 2026-09-23). Der findes derfor ingen frisk, live-bekræftet evidens at læne denne
-rapports afgørelse op ad endnu.
+To adskilte spørgsmål, to adskilte svar:
 
-**Hvad der nu udestår er præcist afgrænset til: én kommando, kørt af Ricko selv, med det nyligt
-udstedte Private App-token.** Alt forberedende arbejde — kontrakt-dokumentation, sikkerhedsgrænser,
-hvilken kommando, hvorfor hvert felt er nødvendigt — er gjort i denne runde (§3-§4).
+1. **Kan HubSpots historik bruges til at rekonstruere fortidens "Tilbud sendt"?** **Nej.**
+   Live-målt dækning er 6,2 % over al historik, og dækningen er **0 % i hver eneste måned fra
+   september 2025 til og med maj 2026** (1.538 af de 2.386 deals i scope). Dette bekræfter — med ny,
+   dokumenteret live-evidens, ikke en antagelse — Issue #78's eget punkt 8's forbehold: historisk
+   stage-history er ikke en sandhedskilde. **Historisk backfill af kohorten er derfor blokeret,
+   fuldt stop.**
+2. **Kan en prospektiv, fremadrettet måling starte pålideligt fra nu?** **Ja, med forbehold.**
+   Pipeline- og stage-kontrakten er live-bekræftet uden uoverensstemmelser (`allConfirmed: true`),
+   og selve læsemekanismen er fuldt pålidelig (100 % `complete_and_reconciled` historik). Et
+   ubegrundet fund (`afterOutcomeRatio` 51,2 %, se §3.2) skal adresseres i Gate B's design af selve
+   den daglige synkronisering, før den aktiveres — men blokerer ikke at gå videre til det
+   designarbejde. Den historiske `UNUSABLE`-dom blokerer **ikke automatisk** den prospektive løsning
+   (Rickos eksplicitte instruks) — den blokerer specifikt **kun** brug af HubSpots retrospektive
+   historik som datagrundlag, og medfører at målingen skal starte fra en fast, dokumenteret
+   startdato (§4) i stedet.
+
+**Scope af "GO MED FORBEHOLD":** tilladelse til at gå videre til **Gate B — design af
+migration/persistence for den prospektive daglige synkronisering**. **Ikke** en godkendelse af
+migration, secrets, scheduler eller nogen live produktionsmåling — de har hver deres egen gate
+(B, C, D) og kræver Rickos særskilte godkendelse, uændret fra Issue #78's egen arbejdsform.
 
 ---
 
 ## 1. Hvad ER verificeret (dette repo, read-only, ingen HubSpot)
 
-Uændret fra runde 1 — se §1.1-§1.4 nedenfor for de fire underpunkter.
-
 ### 1.1 Repository- og arkitekturgate
 ```
 Repo:         ricko-spec/unique-travel-rejsepraesentation  ✓
 Branch:       docs/gate-a-conversion-measurement-78 (fra frisk origin/main)
-origin/main:  c407d6264b7c75848787c557e67d30a59a8f4c3b (identisk med daværende HEAD, hentet før branch)
+origin/main:  c407d6264b7c75848787c557e67d30a59a8f4c3b (uændret gennem alle tre runder)
 ```
-Genbekræftet ved start af denne runde (2026-09-24): samme resultat.
 
 ### 1.2 Fase 4/Issue #76/PR #77 — bekræftet MERGED (rettelse af stale docs)
 `docs/STATUS.md`, `docs/ROADMAP.md` og `docs/CHECKPOINT.md` indeholdt før runde 1 formuleringer om
 at Fase 4/PR #77 "ikke er merget". Verificeret mod GitHub: **PR #77 blev merget
 2026-09-19T09:24:56Z, merge-commit `c407d626`, base `main`** — identisk med nuværende `main`/HEAD.
-Salgsoversigten (Åbnet/Set/Kontakt/Seneste aktivitet i `/admin`) er altså **live i production**,
-ikke kun implementeret og afventende. Rettet i runde 1.
+Salgsoversigten (Åbnet/Set/Kontakt/Seneste aktivitet i `/admin`) er altså **live i production**.
+Rettet i runde 1.
 
 ### 1.3 Data der allerede findes i dette repo til brug for online/PDF-only-kohorten
 | Felt | Kilde | Pålidelighed |
 |---|---|---|
 | `booking_no` | `trips.booking_no` (unique, NOT NULL) | Stabil identitet — bruges allerede som upsert-nøgle og kundens adgangskode |
-| Oprettelsestidspunkt for online rejseplan | `trips.created_at` | Sat én gang, ændres **aldrig** ved re-upload (ikke med i upsert-payload) |
+| Oprettelsestidspunkt for online rejseplan | `trips.created_at` | Sat én gang, ændres **aldrig** ved re-upload |
 | Aktiv/inaktiv | `trips.active` | Soft-delete; re-upload sætter altid `true` |
-| Sikker matchnøgle uden bookingnummer i klartekst | `booking_match_key = HMAC-SHA256(BOOKING_MATCH_SECRET, booking_no.trim())` | Live siden Issue #45/PR #46 (2026-09-16), testet, dokumenteret `docs/ANALYTICS-BRIDGE-API.md` |
-| Målt kundeaktivitet (sekundært signal, ikke del af Gate A's kernemåling) | `trip_visits` / `trip_section_engagement` / `trip_contact_intent` | Live siden hhv. 2026-09-18 og 2026-09-19 (Fase 1B/1C/2/3) |
-
-`trips` har eksisteret siden initial commit (2026-05-23). **`created_at` er teknisk pålidelig hele
-vejen tilbage** — men det er IKKE det samme som at vide hvornår Online Rejseplan reelt gik i
-production-brug over for kunder (se §4).
+| Sikker matchnøgle uden bookingnummer i klartekst | `booking_match_key = HMAC-SHA256(BOOKING_MATCH_SECRET, booking_no.trim())` | Live siden Issue #45/PR #46 (2026-09-16) |
+| Målt kundeaktivitet (sekundært signal) | `trip_visits` / `trip_section_engagement` / `trip_contact_intent` | Live siden hhv. 2026-09-18 og 2026-09-19 |
 
 ### 1.4 Eksisterende genbrugeligt fundament i dette repo
-- Analytics Bridge API (`GET /api/internal/analytics/travel-plans`, Issue #45) — server-to-server,
-  Bearer-auth, HMAC-matchnøgle-mønster kan genbruges 1:1 til den nye kohorte-synkronisering.
-  Marketing Dashboard-projektets eget join-arbejde (§3) konsumerer allerede netop dette API som
-  ekstern klient — samme kontrakt, ingen ændring nødvendig her.
+- Analytics Bridge API (`GET /api/internal/analytics/travel-plans`, Issue #45) — genbruges 1:1 til
+  den nye kohorte-synkronisering. Marketing Dashboards eget join-arbejde konsumerer allerede netop
+  dette API.
 - `toTravelPlanRecord()`-mønstret (aldrig `...row`-spredning) — direkte genbrugeligt skabelon.
-- `paged-read.ts` (count-baseret, ingen tavs afkortning) — samme mønster bør genbruges til den
-  daglige HubSpot-synkroniserings paginering.
+- `paged-read.ts` (count-baseret, ingen tavs afkortning) — bør genbruges til den daglige
+  HubSpot-synkroniserings paginering.
 
 ---
 
-## 2. Adgangsvej — rettelse fra runde 1
+## 2. Adgangsvej (uændret fra runde 2)
 
-**Runde 1** undersøgte OAuth/HubSpot-MCP-forbindelse. Ricko stoppede dette spor eksplicit
-(2026-09-24): "IT har allerede udstedt en godkendt HubSpot Private App-nøgle til read-only brug."
-Al efterfølgende adgang bruger **udelukkende**:
-
-- Miljøvariablen `HUBSPOT_PRIVATE_APP_TOKEN` — sat **kun** midlertidigt i Rickos eget shell, læst
-  via `Read-Host -AsSecureString` (ingen skærmekko), ryddet i en `finally`-blok uanset udfald.
-- **Aldrig** indsat i Claude Code-chatten, en fil, `.env`, GitHub, en log eller et commit.
-- Ingen HubSpot-MCP-forbindelse er forsøgt godkendt i denne runde. De to tidligere undersøgte
-  MCP-forbindelser (`claude.ai HubSpot`, `plugin:marketing:hubspot`) er **ikke** brugt eller
-  autoriseret — det spor er droppet, ikke kun sat i baggrunden.
-- `docs/ACCESS_MATRIX.md` er rettet (samme commit som denne rapport) til at beskrive
-  Private App-operatørvejen i stedet for OAuth/MCP — se diffen i PR #79.
+HubSpot-MCP/OAuth-sporet er droppet. Al adgang sker via en IT-udstedt Private App-token, sat
+**kun** midlertidigt i Rickos eget shell (`HUBSPOT_PRIVATE_APP_TOKEN`, `Read-Host -AsSecureString`,
+ryddet i `finally`). Ingen agent har set eller håndteret tokenet. `docs/ACCESS_MATRIX.md` afspejler
+dette.
 
 ---
 
-## 3. Reference-evidens: eksisterende, allerede verificeret arbejde i Marketing Dashboard
+## 3. Live-evidens (2026-09-24, kørt af Ricko selv, read-only)
 
-**Ricko godkendte eksplicit** (2026-09-24) at dette kapitel må bruge `ricko-spec/dk-wanderlust-spy`
-(privat repo, "Marketing Dashboard") **read-only, kun som reference og operatørværktøj** — ingen
-ændringer, ingen nye issues/PR'er/commits dér, intet projektarbejde flyttes dertil. Undersøgt
-read-only i denne runde: **PR #101** (merget 2026-09-21, Issue #100 "Vision 3.0 Fase 5A —
-join-bevis rejseplan × HubSpot") og **PR #140** (merget 2026-09-23, Issue #139 "Fase 5B-3 —
-live-valideret dealstage-history-reader for 'Tilbud sendt'"), samt de to filer Ricko navngav:
-`scripts/travelplan-join-dry-run.ts` og `scripts/operator/Invoke-QuoteSignalLiveEvidence.ps1`
-(begge på branchen `integration/marketing-dashboard-google-ads-v1`, ikke endnu på `main` i det
-repo). Ingen filer fra dette repo er kopieret ind i `unique-travel-rejsepraesentation` — kun de
-konfigurationsfakta (ID'er/navne) og konklusioner der er nødvendige for at dokumentere **dette**
-kapitels egen stage-/feltkontrakt, jf. Issue #78's acceptkriterium 1.
+Kommando: `Invoke-QuoteSignalLiveEvidence.ps1` (`--mode=quote-history-evidence`), **seneste
+mergede/reviewede version på `origin/integration/marketing-dashboard-google-ads-v1`** i
+`ricko-spec/dk-wanderlust-spy`. Output er allerede rent aggregeret (scriptets egen
+`assertReportIsAggregateOnly`-vagt forhindrer andet) — gengivet her i sin helhed, som Issue #78's
+eget acceptkriterium kræver ("Gate A dokumenterer live-valideret stage- og feltkontrakt med kun
+aggregater").
 
-### 3.1 Hvad er allerede bekræftet dér (og genbruges her som kontrakt, ikke som Gate A-tal)
+### 3.1 Stage-/pipelinekontrakt — bekræftet, ingen uoverensstemmelser
 
-| Fakta | Status i Marketing Dashboard | Hvordan bekræftet |
+```
+PHASE5B3_STAGE_CONTRACT {"version":1,"pipelineConfirmed":true,"quoteSent":"confirmed",
+"updatedQuote":"confirmed","allConfirmed":true,"reasonsDa":[]}
+```
+
+Pipeline `754595640` og de to stage-id'er (`1098732868` = "Tilbud sendt", `1169407502` =
+"Opdateret tilbud") er **live bekræftet mod HubSpot i selve denne kørsel** — ikke kun genbrugt fra
+et ældre PR. Dette lukker Issue #78's krav 1-3 for denne kandidat fuldt ud.
+
+### 3.2 Gate M-vurdering: `UNUSABLE` for **historisk rekonstruktion** — kandidat `dealstage-history-quote-milestone`
+
+```json
+{
+  "assessment": {
+    "verdict": "UNUSABLE",
+    "reasonsDa": ["dækning 6.2% er under brugbarhedsgrænsen"],
+    "measurement": {
+      "coverageRatio": 0.0620,
+      "temporalConsistencyRatio": 0.4884,
+      "missingUnknownRatio": 0.8730,
+      "afterOutcomeRatio": 0.5116,
+      "semanticChangeAtCutover": false,
+      "sampleSize": 2386
+    }
+  },
+  "dataHealth": {
+    "dealsInScope": 2386,
+    "established": 148,
+    "byReasonCode": {
+      "ok": 148, "history-not-usable": 0, "no-quote-event": 2083,
+      "quote-event-before-createdate": 0, "quote-event-after-outcome": 155
+    },
+    "byHistoryState": { "complete_and_reconciled": 2386 },
+    "multipleQuoteEvents": 24,
+    "updatedQuoteWithoutFirstOffer": null,
+    "updatedQuoteObservedAmongEstablished": 23
+  },
+  "recommendedProcessReliableFromMonth": null
+}
+```
+
+**Læsning:**
+- **Læsemekanismen selv er 100 % pålidelig** — alle 2.386 deals har `complete_and_reconciled`
+  historik (ingen huller/inkonsistens i selve dataindsamlingen). Problemet er ikke scriptet; det er
+  hvad HubSpots historik faktisk indeholder for ældre deals.
+- **87,3 % af deals (2.083/2.386) har intet registreret "Tilbud sendt"-event overhovedet**
+  (`no-quote-event`) — kun 148 (6,2 %) har et brugbart, tidsmæssigt konsistent event
+  (`established`/`ok`).
+- **`afterOutcomeRatio` 51,2 %** — af de 303 deals der HAR et detekteret quote-event (148 `ok` +
+  155 `quote-event-after-outcome`), er **over halvdelen** tidsstemplet EFTER at deal-udfaldet
+  allerede var afgjort. Dette er logisk usammenhængende for "Tilbud sendt" som et ledende signal og
+  er **ikke forklaret af denne måling alene** — kan skyldes retroaktive rettelser af ældre,
+  allerede lukkede deals, eller gen-quotede/genåbnede sager. **Skal adresseres i Gate B's design**
+  (se §5), men er en egenskab ved den RETROSPEKTIVE historik-læsning — ikke nødvendigvis noget der
+  gentager sig i en prospektiv, dag-for-dag-observerende synkronisering.
+- `history-not-usable: 0` og `quote-event-before-createdate: 0` — ingen fund i disse kategorier.
+- `multipleQuoteEvents: 24` — 24 deals har mere end ét "Tilbud sendt"-event i historikken (adskilt
+  fra "Opdateret tilbud", som er en egen stage og ikke tæller som endnu et tilbud).
+- `recommendedProcessReliableFromMonth: null` — scriptet gætter bevidst ikke selv en cutovermåned;
+  det er en menneskelig vurdering ud fra den månedlige fordeling nedenfor.
+
+### 3.3 Månedlig fordeling — den konkrete evidens bag "ingen historisk backfill"
+
+| Måned | Deals i alt | Etableret ("Tilbud sendt" pålideligt fundet) | Andel |
+|---|---|---|---|
+| 2025-09 | 67 | 0 | 0,0 % |
+| 2025-10 | 81 | 0 | 0,0 % |
+| 2025-11 | 85 | 0 | 0,0 % |
+| 2025-12 | 95 | 0 | 0,0 % |
+| 2026-01 | 203 | 0 | 0,0 % |
+| 2026-02 | 252 | 0 | 0,0 % |
+| 2026-03 | 171 | 0 | 0,0 % |
+| 2026-04 | 464 | 0 | 0,0 % |
+| 2026-05 | 120 | 0 | 0,0 % |
+| 2026-06 | 126 | 7 | 5,6 % |
+| 2026-07 | 206 | 47 | 22,8 % |
+| 2026-08 | 335 | 77 | 23,0 % |
+| 2026-09 (delvis, til 24/9) | 181 | 17 | 9,4 % |
+
+**Læsning:** 0,0 % etableret i **ni sammenhængende måneder** (sep. 2025 – maj 2026, 1.538 deals),
+efterfulgt af et klart, brat spring fra juni 2026. Dette er ikke "der var ingen tilbud dengang"
+(usandsynligt for en rejsebureau-pipeline med hundredvis af deals/måned) — det er et **dataartefakt**
+i HubSpots egen historik for ældre/importerede deals, præcis den kontaminationsrisiko Issue #78's
+forretningsdefinition advarer imod. Springet i juni 2026 er ikke i sig selv årsagsforklaret af denne
+måling (kan være en proces-, migrations- eller konfigurationsændring) — kun tidspunktet er observeret.
+
+**Konsekvens (Rickos instruks, denne runde):** et `UNUSABLE`-resultat for historisk rekonstruktion
+blokerer **ikke automatisk** den prospektive løsning. Det blokerer **specifikt historisk backfill**
+og betyder at målingen skal starte fra en **fast, dokumenteret startdato** — se §4.
+
+### 3.4 Hvad IKKE er målt i denne runde
+
+- **Match-/dæknings-/dublet-tal mod Online Rejseplan (join-mode) er ikke genmålt.** Kun de 3+ dage
+  gamle referencetal fra Marketing Dashboards egen Gate 3 (2026-09-21, "271 rejseplaner, 197
+  matchet") findes — se det tidligere afsnit i denne rapports historik (nu fjernet som selvstændig
+  sektion for at holde rapporten fokuseret på den bekræftede live-evidens; tallene kan genfindes i
+  PR #101 hvis Ricko ønsker dem citeret igen).
+- Screened-deal-antal er ikke separat talt (mekanismen definerer Screened som "aldrig passeret
+  stage 1098732868" — indirekte dækket af `no-quote-event`-bucket'en, men ikke isoleret som eget tal
+  i denne kørsel).
+
+---
+
+## 4. Startdato — nu et dokumenteret, evidensbaseret krav, ikke kun en præference
+
+- Fase 1B/1C's `TRACKING_SINCE` og Fase 3's `CONTACT_INTENT_TRACKING_SINCE` er **engagement-
+  målingens** start — stadig irrelevante for Fase 5's kohorte-nulpunkt.
+- **Bindende for den officielle prospektive måling (Rickos instruks + nu understøttet af §3.3's
+  evidens):** kohorten starter fra en **fast, dokumenteret startdato** — konkret defineret som
+  **første succesfulde daglige synkronisering**, ikke en bagudskuende dato udledt af HubSpot- eller
+  `trips`-historik. Dette er ikke længere kun en "foreløbig præference" — §3.3 viser konkret, at en
+  bagudskuende rekonstruktion for perioden før juni 2026 ville være baseret på et kendt, målt
+  dataartefakt (0 % dækning), ikke manglende reel aktivitet.
+- Historiske tal (§3.2-§3.3, samt Marketing Dashboards egne 2026-09-21-tal) må vises som
+  **eksplorative** i et separat afsnit af et fremtidigt dashboard, men indgår **aldrig** i den
+  officielle konverteringsmåling uden en fremtidig, selvstændig, stærkere evidensbasis end denne
+  rapport.
+- Den præcise kalenderdato for "første succesfulde daglige synkronisering" kendes naturligvis
+  først når Gate C (scheduler) aktiveres — det er korrekt og forventet, at dette nulpunkt er
+  fremadrettet defineret, ikke en dato, der findes i dag.
+
+---
+
+## 5. Historisk vs. prospektiv måling — eksplicit adskilt, som bedt om
+
+| | **Historisk måling (retrospektiv)** | **Prospektiv måling (fremadrettet)** |
 |---|---|---|
-| Pipeline-id `754595640` | Bekræftet, live-valideret gentagne gange (`confirmQuoteStageContract` kører denne kontrol FØR enhver klassifikation, i både join- og quote-history-evidence-læsevejen) | Live, read-only, af Ricko |
-| Bookingnummer-property: internt navn `unique_travel_bookingno`, label "Unique Travel BookingNO" | **Gate 2 PASS** (2026-09-21) — bekræftet at det ER TravelWire-bookingnummeret, kan være udfyldt **før** salgets udfald, verificeret manuelt på åbne/solgte/afviste deals | Ricko, manuel semantisk bekræftelse, ikke kun feltnavn |
-| Stage "Tilbud sendt" = stage-id `1098732868` | Del af kontrakten der live-bekræftes ved hver kørsel | `confirmQuoteStageContract` mod `GET /crm/v3/pipelines/deals` |
-| Stage "Opdateret tilbud" = stage-id `1169407502` | Samme | Samme — **starter aldrig en ny kohorte, nulstiller aldrig tiden, tæller aldrig som endnu et tilbud** (eksplicit testet i begge rækkefølger) |
-| UT's eget salgs-status-felt: `unique_travel_dealstatus` (værdier inkl. "Solgt", "Billetter sendt" = solgt-bucket) | Bekræftet property, brugt som **eneste** kilde til Solgt/booket — bevidst IKKE dealstage-id, for at undgå to potentielt modstridende udfaldskilder | Dokumenteret designbeslutning, reviewet |
-| Outcome-klassifikation (WON/LOST/UNKNOWN) | Bygger på `unique_travel_dealstatus` + HubSpots egne `hs_is_closed`/`hs_is_closed_won`-flag — **aldrig** dealstage-id | Samme |
+| Spørgsmål | Kan HubSpots historik bruges til at rekonstruere fortidens "Tilbud sendt"? | Kan en daglig, fremadrettet synkronisering måle det pålideligt fra nu? |
+| Afgørelse | **Nej — `UNUSABLE`** (6,2 % dækning, 0 % i 9 sammenhængende måneder) | **Ja, med forbehold** — pipeline/stage-kontrakt bekræftet ren; ét ubegrundet fund skal adresseres i designet (`afterOutcomeRatio`, se §3.2) |
+| Konsekvens | **Backfill af kohorten fra HubSpot-historik er blokeret, fuldt stop.** Bruges kun til eksplorativ kontekst, aldrig officielle tal | **GO MED FORBEHOLD til Gate B** — design af den daglige synkronisering, migration/persistence. Ikke en godkendelse til at aktivere selve målingen (kræver Gate C/D) |
+| Nulpunkt | N/A — findes ikke, og skal ikke findes | Fast, dokumenteret dato = første succesfulde daglige sync (§4) |
 
-### 3.2 Hvordan dette besvarer Issue #78's stage-kontrakt-krav — og hvorfor det AFVIGER fra den bogstavelige formulering
+**Kohorte-/udfaldsdefinition for den prospektive måling** (Rickos præcisering denne runde):
 
-Issue #78 beder om en **stage-id for "Screened"** og en eksplicit liste af "øvrige stages hvor
-kunden allerede har fået tilbud". Marketing Dashboard-arbejdet besvarer det samme spørgsmål med en
-**strengere, mere robust mekanisme**, som **ikke kræver disse enkelt-ID'er**:
-
-- Kvalifikation til tilbudskohorten afgøres af **dealstage-*historik*** (er stage `1098732868`
-  **nogensinde** passeret for denne deal — ikke kun dealens **nuværende** stage). En deal der
-  aldrig har passeret `1098732868` er per definition "Screened eller tidligere" — der er ikke
-  brug for et separat Screened-id, fordi mekanismen er en tærskel i historikken, ikke en liste af
-  kategorier.
-- Fordi kvalifikationen er historik-baseret, dækker den **automatisk** alle efterfølgende stages
-  (Opdateret tilbud, Solgt, Tabt, enhver anden sen stage) — en deal der engang nåede
-  "Tilbud sendt" forbliver kvalificeret uanset hvor den er nu. Det opfylder Issue #78's krav 2's
-  sidste led ("øvrige stages, hvor kunden allerede må have fået første tilbud") uden en udtømmende
-  stage-liste.
-- Solgt/booket vs. tabt/afvist afgøres **bevidst ikke** af dealstage-id, men af det separate,
-  UT-ejede statusfelt + HubSpots lukke-flag — en dokumenteret, reviewet beslutning i Marketing
-  Dashboard-projektet for at undgå to kilder til samme udfald, der kan komme i modstrid.
-
-**Konsekvens for dette kapitel:** stage-/feltkontrakten kan dokumenteres som ovenfor, men den
-konkrete, **friske** live-måling (antal deals pr. tilstand, dækning, dubletter, delte referencer,
-match mod Online Rejseplan, månedlig fordeling) for **dette** kapitel er **ikke** foretaget endnu —
-kun de ældre 2026-09-21-tal fra Marketing Dashboards egen Gate 3 findes (se §3.3), og de er en
-**anden populations snapshot** (deres egen definerede periode/scope), ikke nødvendigvis den
-periode/det scope Online Rejseplans Gate A skal bruge (jf. Rickos prospektive præference, §4).
-
-### 3.3 Tidligere målte tal i Marketing Dashboard (2026-09-21, EKSPLORATIVE — ikke denne rapports Gate A-tal)
-
-Gengivet **udelukkende som kontekst/reference**, ikke som en afgørelse for dette kapitel. Alle tal
-er allerede aggregater (ingen bookingnumre/kundedata), offentliggjort af Marketing Dashboard-teamet
-i deres eget PR #101 efter Rickos egen live, read-only kørsel:
-
-- Rejseplaner: 271 i alt, **197 matchet (72,7 %)** mod Analytics Bridge; 265 aktive (194 matchet,
-  73,2 %), 6 inaktive (3 matchet, 50,0 %).
-- Deals (2.606 i alt, al historik, ingen `createdate`-filtrering): referencetilstand `single`
-  1.940/2.606 (74,4 %), `empty` 666, `multiple`/`invalid-format`/`field-missing` alle 0; `matched`
-  197, `noPlan` 1.456, **`conflictSharedReference` 287 deals fordelt på 142 grupper**.
-- Outcome: OPEN 254 (142 med reference, 41 matchet) · WON 777 (576 med reference, 76 matchet) ·
-  LOST 1.548 (1.198 med reference, 78 matchet) · UNKNOWN 27 (24 med reference, 2 matchet). *Forbehold
-  fra Marketing Dashboard selv: OPEN/UNKNOWN-fordelingen blev målt før en senere outcome-regelrettelse
-  — en ny kørsel kan flytte nogle fra OPEN til UNKNOWN; antallet er ikke genmålt.*
-- **Marketing Dashboards egen bindende anbefaling dengang: "GO MED FORBEHOLD til Fase 5B"**, med
-  seks eksplicitte forbehold — herunder at de 142 delte-reference-grupper (287 deals) skal
-  undersøges før automatisk kobling, de 71 rejseplaner uden deal skal behandles som dækningsgab, og
-  at resultaterne **ikke** må bruges som bevis for kausal effekt.
-- **Gate M (dealstage-*historik*-baseret "Tilbud sendt"-evidens, den nyeste og mest robuste
-  kandidat) er selv i Marketing Dashboard-projektet ALDRIG kørt live** — bygget og enhedstestet
-  (629/629 tests, PR #140), men blokeret på nøjagtig samme ting som dette kapitel:
-  `HUBSPOT_PRIVATE_APP_TOKEN` var ikke tilgængeligt i en agent-session. Status der: `MEASUREMENT_BLOCKED`.
+- Kvalifikation: deal når stage `1098732868` ("Tilbud sendt") **eller senere**. `Screened`
+  (aldrig passeret denne stage) tæller **aldrig** som tilbud sendt.
+- `Opdateret tilbud` (`1169407502`) starter **aldrig** en ny kohorte — samme kohorte, samme
+  tidsstempel for første kvalificerede observation.
+- Eksponeringsgruppe ved første kvalificerede observation: **PDF + online rejseplan** (matchende
+  online rejseplan eksisterede allerede) vs. **Kun PDF** (ingen matchende online rejseplan på det
+  tidspunkt). Gruppen fryses permanent — ændres aldrig bagudrettet, heller ikke hvis der senere
+  oprettes en online rejseplan for samme booking.
+- Udfald: **Booket** vs. **Ikke booket endnu**. Mellemstadier (Opdateret tilbud, øvrige interne
+  stages) ændrer **ikke** udfaldsdefinitionen — kun overgangen til det UT-ejede
+  "solgt/booket"-signal (`unique_travel_dealstatus`, ikke dealstage-id, jf. §3.1's tidligere
+  dokumenterede designvalg) tæller som Booket.
+  *Note til Ricko:* denne to-tilstands-udfaldsmodel (Booket/Ikke booket endnu) erstatter det
+  tidligere udkasts firedeling (OPEN/WON/LOST/UNKNOWN) for selve **hovedmålingen**. Om et
+  eksplicit tabt/afvist-udfald (adskilt fra "endnu ikke booket") skal vises separat i
+  data-kvalitets-/statusrapportering, er ikke afklaret her — flagget i §6, ikke antaget.
 
 ---
 
-## 4. Startdato — uændret fra runde 1, nu med Rickos præference tilføjet
+## 6. Åbne beslutninger til Ricko
 
-- Fase 1B/1C's `TRACKING_SINCE = 2026-09-18T12:20:18Z` og Fase 3's
-  `CONTACT_INTENT_TRACKING_SINCE = 2026-09-19T08:21:19Z` er **engagement-målingens** start — ikke
-  relevante for om en online rejseplan overhovedet blev oprettet, og må ikke genbruges som Fase 5's
-  kohorte-nulpunkt.
-- **Rickos eksplicitte, foreløbige præference (2026-09-24): en ren prospektiv start ved første
-  succesfulde daglige synkronisering.** Historiske tal (inkl. §3.3's 2026-09-21-tal fra Marketing
-  Dashboard, og enhver `trips.created_at`-baseret bagudskuende optælling) må vises som
-  **eksplorative**, men blandes ikke ind i den officielle konverteringsmåling uden stærk evidens.
-  Dette er den foretrukne af de to muligheder Issue #78 selv stiller op (officiel start ved første
-  sync vs. en tidligere, dokumenteret pålidelig historisk kohorte).
-- Konsekvens: den **officielle** Gate A/Fase 5-måling behøver ikke en bagudskuende cutoverdato
-  udledt af `trips.created_at` eller HubSpot-historik — nulpunktet er teknisk defineret som "første
-  gang den daglige synkronisering kører succesfuldt", hvilket fjerner behovet for at gætte en dato.
-  Dette afgøres endeligt, når Gate A i øvrigt kan ophæves.
-
----
-
-## 5. Den ene kommando der udestår
-
-**Ingen ny PowerShell-blok er skrevet i denne runde** — Ricko bad eksplicit om at genbruge den
-eksisterende, allerede reviewede og testede operatør-procedure i stedet for at opfinde en ny
-HubSpot-klient. Den findes i `ricko-spec/dk-wanderlust-spy` (privat repo), branch
-`integration/marketing-dashboard-google-ads-v1`:
-
-```
-scripts/operator/Invoke-QuoteSignalLiveEvidence.ps1
-```
-
-**Hvad den gør (læst read-only, ikke ændret):** beder om `HUBSPOT_PRIVATE_APP_TOKEN` via
-`Read-Host -AsSecureString` (ingen ekko), sætter den **kun** som miljøvariabel for barneprocessen,
-kører `bun scripts/travelplan-join-dry-run.ts --mode=quote-history-evidence` (read-only: ingen
-HubSpot-writes, ingen filer skrives, ingen Supabase-adgang), og rydder token/SecureString/
-udklipsholder i en `finally`-blok der kører uanset udfald (også ved fejl/Ctrl-C).
-
-**Hvorfor netop denne kommando, og ikke en anden:** den er den **eneste** af Marketing
-Dashboard-projektets fire-fem modes, der (a) kun kræver ét credential
-(`HUBSPOT_PRIVATE_APP_TOKEN` — ikke også `ANALYTICS_BRIDGE_API_KEY`/`BOOKING_MATCH_SECRET`), (b)
-**aldrig er kørt live før** (så resultatet er reel ny evidens, ikke en gentagelse af §3.3's
-3 dage gamle tal), og (c) direkte besvarer Issue #78's stage-kontrakt-krav
-(`confirmQuoteStageContract` + dealstage-historik for "Tilbud sendt"/"Opdateret tilbud") — den
-allerede identificerede, dokumenterede erstatning for en litterær Screened-stage-liste (§3.2).
-
-**Hvad den udskriver:** kun aggregater — stage-kontrakt-bekræftelse (pipeline-id + de to
-stage-id'er, live bekræftet mod HubSpot i selve kørslen), en Gate M-vurdering
-(`STRONG`/`USABLE_WITH_CAVEATS`/`UNUSABLE`), en Data Health-rapport og en månedlig
-dæknings-/fordelingsoversigt — **aldrig** deal-id'er, bookingreferencer eller andre
-identifikatorer. Scriptets egen `assertReportIsAggregateOnly`-vagt kaster og forhindrer output, hvis
-det ikke er tilfældet.
-
-**Kørsel (Ricko, i sit eget shell, i en checkout af `dk-wanderlust-spy` på branchen
-`integration/marketing-dashboard-google-ads-v1`):**
-
-```
-.\scripts\operator\Invoke-QuoteSignalLiveEvidence.ps1
-```
-
-Valgfrit: `-OutFile <sti>` for at gemme output (samme aggregat-only-indhold) til en lokal fil.
-
-**Efter kørsel:** del kun konsol-/fil-outputtet (tal, verdict, stage-kontrakt-bekræftelse) tilbage
-— aldrig en anden eksport fra HubSpot. Jeg opdaterer denne rapport, Issue #78-kommentaren og PR
-#79 med resultatet og den endelige Gate A-afgørelse, når det foreligger.
-
-**Valgfrit, ikke krævet nu:** en frisk kørsel af `--mode=join --property=unique_travel_bookingno`
-(kræver også `ANALYTICS_BRIDGE_API_KEY` + `BOOKING_MATCH_SECRET`) ville opdatere §3.3's 3 dage
-gamle match-/dæknings-tal. Ikke nødvendigt for at ophæve blokeringen — kun for at friske
-allerede-god evidens op. Ricko vælger.
-
----
-
-## 6. Foreslået kohortemodel (udkast — IKKE endelig, afventer Gate A-data)
-
-Uændret fra runde 1, nu med den bekræftede stage-mekanisme (§3.2) indarbejdet:
-
-- Prospektiv, frossen kohorte pr. deal ved **første kvalificerede observation** — første gang
-  dealens stage-historik viser en overgang til stage `1098732868` ("Tilbud sendt") eller senere.
-  `Opdateret tilbud` (`1169407502`) starter aldrig en ny kohorte.
-- `Screened` (aldrig passeret `1098732868`) udelukkes altid fra nævneren — automatisk, af
-  mekanismen selv, ikke af en vedligeholdt stage-liste.
-- `ONLINE` hvis en matchende online rejseplan (via `booking_match_key`) eksisterede på
-  observationstidspunktet — ellers `PDF_ONLY`. Gruppen ændres **aldrig** bagudrettet, selv hvis der
-  senere oprettes en online rejseplan for samme booking (Issue #78's eksplicitte krav). Senere
-  oprettelse kan logges som sekundær info, ikke som kohorte-omskrivning.
-- Outcome (`WON`/`LOST`/`UNKNOWN`) afgøres af `unique_travel_dealstatus` + HubSpots
-  `hs_is_closed`/`hs_is_closed_won` — **ikke** dealstage-id — og opdateres løbende uden at ændre
-  kohortetilhørsforholdet.
-- Officielt nulpunkt = første succesfulde daglige synkronisering (§4, Rickos præference) —
-  historiske tal (inkl. §3.3) vises kun eksplorativt, ikke som del af den officielle måling.
-- Ny, pseudonymiseret Supabase-tabel — pseudonym-nøgle afledt af HubSpot-deal-id (aldrig
-  bookingnummer, kundenavn, e-mail i klartekst), samme princip som `booking_match_key`.
-- Daglig, idempotent, read-only HubSpot-synkronisering; ingen HubSpot-writes nogensinde.
-- Fail-closed-visning: stale/fejlet sync, ændret pipeline/stage-kontrakt, tom nævner eller for
-  små celler ⇒ "utilstrækkeligt datagrundlag", aldrig et falsk 0%- eller nul-tal.
-- Ingen kausalitetspåstand i UI-tekst — kun observeret forskel, samme sprogprincip som Fase 4's
-  ordliste-regel (aldrig "hot"/"lead"/"årsag").
-
-Dette udkast kræver et separat, eksplicit design-review efter Gate A er ophævet, før Gate B
-(migration) kan startes — jf. Issue #78's egen fire-gate-arbejdsform.
-
----
-
-## 7. Åbne beslutninger til Ricko
-
-1. **Kør `Invoke-QuoteSignalLiveEvidence.ps1`** (§5) — den ene resterende handling for at kunne
-   afslutte Gate A. Del kun aggregat-outputtet tilbage.
-2. **Bekræft startdato-modellen** (§4): officielt nulpunkt = første succesfulde daglige
-   synkronisering, historiske tal kun eksplorative — eller angiv en anden model, hvis du ønsker det.
-3. Valgfrit: skal `--mode=join` køres frisk for at opdatere §3.3's 3 dage gamle match-/
-   dæknings-tal, eller er de tilstrækkelige som eksplorativ reference?
-4. Når (1) foreligger: gennemgå resultatet sammen, før Gate A kan afsluttes med `GO`/`GO MED
-   FORBEHOLD`.
+1. **Bekræft GO MED FORBEHOLD-scopet** (§"Afgørelse"): tilladelse til Gate B-design, ikke til at
+   aktivere nogen live måling.
+2. **`afterOutcomeRatio` (51,2 %, §3.2)** — skal undersøges/forklares, eller er det acceptabelt at
+   Gate B's design blot undgår retrospektiv historik-læsning helt (observér kun dagens faktiske
+   stage ved hver sync, byg egen historik fremadrettet) og dermed sandsynligvis omgår problemet?
+3. **Booket/Ikke booket endnu vs. et separat tabt/afvist-udfald** (§5, note) — skal "Ikke booket
+   endnu" også dække deals HubSpot selv har lukket som tabt, eller skal tabt vises som en tredje,
+   synlig tilstand i datakvalitetsrapporteringen (uden at være del af selve
+   konverteringsprocent-hovedtallet)?
+4. Valgfrit, ikke blokerende: skal `--mode=join` køres frisk for at opdatere Marketing Dashboards
+   3+ dage gamle match-/dæknings-tal (271 rejseplaner/197 matchet), eller er de tilstrækkelige som
+   eksplorativ reference indtil Gate B?
+5. Godkend/juster kohortemodellens Gate B-startpunkt: skal Gate B-designarbejdet startes som eget
+   issue nu, eller afvente et separat oplæg først?
