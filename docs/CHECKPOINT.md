@@ -11,7 +11,9 @@
   Issue #78, afsluttet `GO MED FORBEHOLD`). Fase 1B/1C/2/3/4 fortsat live derudover.
 - **Gate B0+B1 (Issue #80):** branch `feat/gate-b0-b1-conversion-measurement-80` fra frisk `main`
   (`644269a`); PR [#81](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/81),
-  head-SHA `a5f5e11d8e0aad033961aab52cc1e03ade01c012`, **reviewklar, ikke merget**.
+  head-SHA `2638ada2c98f80d5374001314cae8f4f5d9bd362` (kode-komplet på `a5f5e11...`; `2638ada` er
+  et efterfølgende docs-only STATUS/CHECKPOINT/DECISIONS-commit, ingen kodeændring),
+  **reviewklar, ikke merget**.
 
 ## Færdigt
 
@@ -33,7 +35,7 @@
      `AdminDashboard.tsx`.
   4. 75 nye tests, alle grønne. `npm test` 836/836 · `npm run typecheck` 0 fejl · `npm run lint`
      0 fejl (2 kendte, uændrede advarsler) · `npm run build` success · `git diff --check` ren ·
-     Vercel preview-check **pass** på head `a5f5e11`.
+     Vercel preview-check **pass** på det kode-komplette head `a5f5e11`.
   5. `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md` — operatør-procedure til Gate B2/C/D.
   6. Dokumentation opdateret: `SYSTEM-ARKITEKTUR.md`, `ACCESS_MATRIX.md`, `ROADMAP.md`,
      `supabase/README.md`.
@@ -51,7 +53,7 @@
 4. **Gate C/D** — HubSpot-secrets, scheduler, officiel målingsstart — hver sin egen, separate
    godkendelse. Ikke startet.
 
-## Teststatus (denne branch, head `a5f5e11`)
+## Teststatus (denne branch, kode-komplet head `a5f5e11`)
 
 `npm test` 836/836 bestået · `npm run typecheck` 0 fejl · `npm run lint` 0 fejl (2 kendte
 `<img>`-advarsler) · `npm run build` success (`/admin/api/conversion` registreret) ·
