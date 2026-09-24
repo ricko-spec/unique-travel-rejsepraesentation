@@ -304,6 +304,7 @@ Verificeret ved gennemlæsning af samtlige 12 `route.ts`-filer under `src/app/` 
 | `/admin/api/profile` | PATCH | Ja (implicit via RLS) | Opdater egne felter | JSON `{ full_name?, phone?, advisor_match_name? }` | `{ profile }` / 400 / 401 / 500 |
 | `/admin/api/health` | GET | Ja | Driftsdiagnostik: env-sanity + Supabase-probe | — | `{ env, supabaseReachable, supabaseError, nodeVersion }` |
 | `/admin/api/usage` | GET | Ja | Brugsoverblik (Issue #38, live): uploads/publiceret/fejl pr. sælger, inkl. 0-brugere | Query `?period=7d\|30d\|all` | `{ period, totalUploads, activeUsers, zeroUploadUsers, trackingSince, stalledEvents, historicalActorEvents, users: [...] }` / 500 (aldrig falske nul-tal) |
+| `/admin/api/conversion` | GET | Ja | Konverteringsmåling (Gate B, Issue #80, IKKE aktiveret i production — se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`): aggregater kun, blok-baseret small-cell/komplement-privacy. Manglende tabel behandles fail-closed som "ikke startet", aldrig som fejl | — | `ConversionWire` (ISO-strenge, `src/lib/conversion/wire.ts`) / 401 / 500 (generisk tekst) |
 | `/api/internal/analytics/travel-plans` | GET | **Bearer-token** (`ANALYTICS_BRIDGE_API_KEY`, ikke Supabase-session) | Analytics Bridge (Issue #45, se `docs/ANALYTICS-BRIDGE-API.md`) — read-only server-to-server-eksport af online rejseplaner til Marketing Dashboard. v1: fuld eksport hvert kald, intet `since`. Ingen kundedata; bookingnummer aldrig i klartekst (kun HMAC-SHA256 med separat `BOOKING_MATCH_SECRET`) | Query `?cursor?&limit?` | `{ schema_version, data: [{ trip_id, booking_match_key, online_plan_created_at, active, destination }], pagination: { next_cursor, has_more } }` / 400 / 401 / 500 |
 
 **Særlige noter:**
@@ -687,6 +688,44 @@ release-cutover); Fase 1B's `TRACKING_SINCE` gælder kun åbninger ("Åbningsmå
 | 2026-06-02 | `profiles` + `handle_new_user`-trigger (auth-cutover) |
 | 2026-06-15 | `audit_log`, `rate_limits`, `increment_rate_limit` (security-featuren `d660f0c`) |
 | ~2026-06/07 | `parse_failures` (ubrugt) og `trips.created_by` (ubrugt på main) — præcis dato ukendt, ingen migrations-historik |
+
+### Konverteringsmåling — Gate B (Issue #80, barn af Gate A/Issue #78)
+
+`supabase/013_conversion_measurement.sql` — **bygget som fil, IKKE anvendt i production**
+(kræver Gate B2, se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`). Arkitektur A (direkte,
+read-only HubSpot-læsning i dette projekt). Fuldt design: `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md`
+(rev. 2, efter PR #81 review-runde 1).
+
+Tre tabeller, alle service-role-only (RLS + eksplicitte table grants, samme mønster som 010-012):
+
+- **`conversion_measurement_state`** — singleton (id=1): status (`NOT_STARTED`/`ACTIVE`/`PAUSED`),
+  `contract_version` (skal = runtime `CONTRACT_VERSION`, pt. 2), `measurement_started_at` (sættes
+  KUN af baseline-commit, derefter uforanderlig), `last_successful_sync_at`, `sync_generation`.
+  Guard-trigger: de tre sidste kan kun ændres inde i commit-RPC'en.
+- **`conversion_deal_cohort`** — én pseudonymiseret række pr. HubSpot-deal (`deal_key` =
+  domæneadskilt HMAC; `booking_match_key` = Analytics Bridge-kontrakten). Eligibility
+  (`PRE_START_EXISTING`/`ELIGIBLE_PENDING`/`ENROLLED`/`EXCLUDED` med årsag), frosset eksponering,
+  `booking_conflict_detected_at` (reconciliation), `BOOKED`/`NOT_BOOKED`, `lost_observed_at` og
+  `outcome_conflict_observed_at` (kun datakvalitet). Guard-trigger: skrivning kun inde i
+  commit-RPC'en; terminale/frosne felter kan aldrig ændres.
+- **`conversion_sync_runs`** — én revisionsrække pr. kørsel med lease, kategorisk fejlkode
+  (CHECK-liste) og tællere. Højst én `RUNNING` (unikt partielt indeks).
+
+RPC'er (SECURITY INVOKER, EXECUTE kun `service_role`): `conversion_begin_sync_run`,
+`conversion_commit_sync_run` (ÉN transaktion: kohorte + SUCCEEDED + friskhed),
+`conversion_fail_sync_run`, `conversion_parse_batch`.
+
+**Kodearkitektur** (`src/lib/conversion/`): `contract.ts` (versioneret stage-kontrakt +
+udfaldssandhedstabel) → `dealKey.ts` (HMAC + secret-validering) → `classify.ts` (ren reducer:
+snapshot-kvalifikation, eksponering, delte referencer, udfald) → `hubspotAdapter.ts`
+(snapshot-kontrakt + fixture — INGEN rigtig klient i Gate B1) → `syncEngine.ts` (secrets → state →
+lease → fail-closed læsning → klassifikation → commit/fail; dry-run) → `persistence.ts`
+(RPC-adapter, komplette paginerede læsninger, in-memory fake med samme regler) → `aggregate.ts`
+(blok-baseret privacy, 30/60/90-dages vinduer, trend, datakvalitet, freshness) → `wire.ts`
+(ISO-wire-DTO + zod) → `adminServer.ts`. Admin-UI: `src/app/admin/ConversionMeasurement.tsx`.
+API: `GET /admin/api/conversion` (401 før læsning).
+
+Gate B1's tilstand i production: tabellerne findes ikke; målingen er altid "ikke startet".
 
 ---
 

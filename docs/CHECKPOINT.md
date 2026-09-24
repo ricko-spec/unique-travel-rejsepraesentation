@@ -3,59 +3,59 @@
 > Kort hand-off til næste session — **overskrives** ved meningsfulde milepæle (se `docs/WORKING_MODE.md` §5).
 > Ikke en anmodning om godkendelse. Operationel status (hvad er live) står i `docs/STATUS.md`.
 
-**Sidst opdateret:** 2026-09-24 (Gate A for Issue #78 afsluttet `GO MED FORBEHOLD`, kun til Gate B-design;
-runde 4 rettede to fund fra et uafhængigt review af PR #79)
+**Sidst opdateret:** 2026-09-24 (PR #81 review-runde 2 — Codex-review 5308506532 rettet)
 
 ## Branch / HEAD
 
-- **Production `main`:** `c407d6264b7c75848787c557e67d30a59a8f4c3b` (Fase 1B/1C/2/3/4 live; migration
-  010–012 kørt; Fase 4-koden (salgsoversigt) live siden PR #77, 2026-09-19T09:24:56Z).
-- **Fase 5, Gate A:** Issue [#78](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/78) —
-  branch `docs/gate-a-conversion-measurement-78` fra frisk `main` (`c407d626`); docs-only PR
-  [#79](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/79), **draft, må ikke
-  merges**. HEAD = seneste commit på branchen (se PR).
+- **Production `main`:** `644269aaf4d534ae3f21379df940a4f822a55c7c` (merge af PR #79 — Gate A).
+- **Gate B0+B1 (Issue #80):** branch `feat/gate-b0-b1-conversion-measurement-80`; PR
+  [#81](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/81). Reviewet head
+  var `a8f08fc` (runde 1: 7 fund) og `198101b` (runde 2: 2 blokerende + 1 designfund). Rettelserne ligger i efterfølgende commits — den
+  aktuelle head-SHA og testresultater står i PR-beskrivelsen (hardkodes bevidst ikke her).
+  **Reviewklar igen, ikke merget.**
 
-## Færdigt
+## Færdigt (review-runde 3, Codex-review 5308827224)
 
-- **Gate A gennemført over tre runder, afsluttet `GO MED FORBEHOLD`** (kun til Gate B-designarbejde
-  af den PROSPEKTIVE måling — ikke en godkendelse til at aktivere nogen live måling):
-  1. Repo-/arkitekturgate; Fase 4/PR #77's stale "ikke merget"-status rettet i STATUS/ROADMAP/
-     CHECKPOINT/DECISIONS.
-  2. Adgangsvej ændret fra HubSpot-MCP/OAuth (droppet) til en IT-udstedt Private App-token, brugt
-     udelukkende i Rickos eget shell; `docs/ACCESS_MATRIX.md` opdateret. Read-only reference-brug af
-     `ricko-spec/dk-wanderlust-spy` (Marketing Dashboard, privat repo) godkendt af Ricko — kun de to
-     navngivne PR'er/scripts, ingen ændringer dér.
-  3. **Ricko kørte selv live, read-only** `Invoke-QuoteSignalLiveEvidence.ps1` (seneste mergede
-     version) og delte det fulde aggregerede resultat. Pipeline `754595640` + stage-kontrakten
-     (`1098732868` "Tilbud sendt", `1169407502` "Opdateret tilbud") bekræftet live uden
-     uoverensstemmelser. Historisk rekonstruktion `UNUSABLE` (0 % dækning i ni sammenhængende
-     måneder sep. 2025–maj 2026 — dokumenteret dataartefakt), men blokerer ikke den prospektive
-     løsning (Rickos eksplicitte instruks). Se `docs/VISION-3.0-PHASE-5-GATE-A.md` for fuld rapport.
-- **Ikke gjort (bevidst, inden for Gate A's read-only scope):** ingen HubSpot-kald fra en agent
-  (kun Ricko selv, i eget shell), ingen ny agent-adgang til dk-wanderlust-spy ud over read-only
-  reference, ingen Supabase-writes, ingen produktkode/migration.
+- Rickos eksplicitte accept af den begrænsede konflikt-differensrisiko dokumenteret (DECISIONS,
+  ADR, runbook) — ingen snapshots.
+- Trendtabellen: unik, stabil `periodIndex` som React-nøgle og etiket ("Periode n"); regressionstest
+  med to lukkede blokke i samme måned.
+- Minimal GitHub Actions-workflow (`.github/workflows/ci.yml`); status på eksakt head står i PR'en.
+
+## Færdigt (review-runde 2)
+
+- Booking før første kvalificerede observation ⇒ `BOOKED_BEFORE_QUALIFIED_OBSERVATION` (reducer,
+  DB-CHECK, aggregering), med røde→grønne regressionstests og pglite 90/90.
+- Koordineret 30/60/90-undertrykkelse via hierarkiske publiceringsblokke; egenskabstest på tværs af
+  vinduer og dage.
+- Modning igen pr. deal (Issue #80); månedsmodning trukket tilbage efter Rickos instruks.
+
+## Færdigt (review-runde 1)
+
+1. **Prospektiv kvalifikation uden historik:** adapteren leverer kun aktuelt snapshot; versioneret
+   stage-kontrakt (`CONTRACT_VERSION` 2); baseline ⇒ PRE_START/PENDING; kohortestart = `observedAt`.
+2. **Atomisk persistence:** tre RPC'er i migration 013 (begin/commit/fail) med lease, unikt
+   RUNNING-indeks, advisory lock, `sync_generation`; DB-triggere håndhæver frosne felter og
+   "kun skrivning i commit". Verificeret mod pglite (87/87 + SQL-mutationer).
+3. **Privacy:** blok-baseret (månedsmodningen herfra er erstattet af modning pr. deal i runde 2); ingen lille celle/komplement kan udledes (egenskabstest
+   over 150 dage); sekundær undertrykkelse af tælletal.
+4. **Komplette læsninger:** `trips` og hele kohorten via `paged-read.ts`; ingen `.in(...)`.
+5. **Delte bookingreferencer:** konflikt-reconciliation (`booking_conflict_detected_at`), alle
+   berørte deals ude af publicerbare tal.
+6. **Wire-DTO** (ISO-strenge + zod) + komponent/route-test af de fire UI-tilstande.
+7. **Én udfaldssandhedstabel** (kun `unique_travel_dealstatus` ⇒ BOOKED).
+- Docs: ADR rev. 2, runbook, STATUS, DECISIONS, ROADMAP, SYSTEM-ARKITEKTUR, TESTING, supabase/README.
 
 ## Udestående
 
-1. **Gate B** — design af den prospektive daglige synkronisering, migration og pseudonymiseret
-   persistence, samt fastlæggelse af det formelle nulpunkt (første succesfulde sync).
-   `afterOutcomeRatio`-fundet (51,2 %) er **ikke** en Gate B-reparationsopgave — kun evidens mod
-   historisk backfill (se Gate A-rapporten §3.2/§"Afgørelse"). Ikke startet — afventer Rickos
-   beslutning om at oprette et eget Gate B-issue, se Gate A-rapportens §6.
-2. Uafklaret: Booket/Ikke booket endnu vs. et separat, synligt tabt/afvist-udfald i
-   datakvalitetsrapportering (Gate A-rapporten §5, note).
-3. Valgfrit, ikke blokerende: frisk `--mode=join`-kørsel for at opdatere Marketing Dashboards 3+
-   dage gamle match-/dæknings-tal (271 rejseplaner/197 matchet).
-4. Separat opfølgning (uden detaljer i det offentlige repo): eksisterende sikkerhedsadvarsler uden
-   for Fase 3/4/5 — uændret fra tidligere.
-
-## Teststatus (denne branch)
-
-Docs-only ⇒ `git diff --check` (jf. `docs/TESTING.md` "Testniveau efter ændringstype"). Ingen
-kode-/DB-ændring ⇒ ingen `npm test`/`typecheck`/`lint`/`build`/schema-drift-kørsel nødvendig eller
-udført.
+1. **Re-review og merge-godkendelse af PR #81** — Rickos eksplicitte OK.
+2. **Gate B2** — migration 013 i production + schema-baseline (separat godkendelse).
+3. **Gate C-forudsætning:** klassificér pipelinens øvrige stages fra live-metadata (Ricko), udfyld
+   `PIPELINE_STAGE_CONTRACT`, `complete: true`, bump kontraktversion. Byg rigtig HubSpot-adapter.
+4. **Gate C/D** — secrets, cron, dry-run, officiel baseline. Ikke startet.
+5. CI-workflowet kører på pull requests; det bliver en del af `main` ved merge af PR #81.
 
 ## Næste handling
 
-Afvent Rickos beslutning om at starte Gate B som eget kapitel/issue (Gate A-rapportens §6, punkt 4).
-Ingen Gate B-kode, migration eller implementering før det er eksplicit godkendt.
+Afvent Rickos re-review af PR #81. Ingen merge, migration, secrets, scheduler eller live
+HubSpot-kald før hver er eksplicit godkendt.

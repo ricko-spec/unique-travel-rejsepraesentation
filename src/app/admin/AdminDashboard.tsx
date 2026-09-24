@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Trip } from "@/lib/types";
 import { SalesOverviewTable } from "./SalesOverviewTable";
+import { ConversionMeasurement } from "./ConversionMeasurement";
 import type { SalesOverview } from "@/lib/sales-overview-types";
 
 // Vision 3.0 Fase 4 (Issue #76): listen er nu salgsoversigten — et kompakt DTO fra
@@ -446,6 +447,7 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
             />
           )}
         </div>
+        <ConversionMeasurement />
       </div>
 
       {toast && <div className="admin-toast">{toast}</div>}
