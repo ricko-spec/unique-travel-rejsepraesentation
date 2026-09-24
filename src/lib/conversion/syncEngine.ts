@@ -29,10 +29,19 @@ import {
 import { computeBookingKeyForConversion, computeDealKey, secretsAreUsable, validateBookingNumber } from "./dealKey";
 import type { AdapterFailureReason, HubSpotReadAdapter } from "./hubspotAdapter";
 import type { CommitCounts, ConversionPersistence } from "./persistence";
-import type { ClassifiedDealResult, HubSpotDealObservation, SyncRunErrorCode } from "./types";
+import { EXCLUSION_REASONS } from "./types";
+import type { ClassifiedDealResult, EligibilityStatus, ExclusionReason, HubSpotDealObservation, SyncRunErrorCode } from "./types";
+
+/** Rene aggregater fra en dry-run (Gate C1) — ingen id'er, nøgler eller rækker. */
+export type DryRunSummary = {
+  byEligibility: Record<EligibilityStatus, number>;
+  byExclusionReason: Record<ExclusionReason, number>;
+  lostObserved: number;
+  outcomeConflicts: number;
+};
 
 export type SyncRunOutcome =
-  | { ok: true; dryRun: boolean; isBaseline: boolean; counts: CommitCounts }
+  | { ok: true; dryRun: boolean; isBaseline: boolean; counts: CommitCounts; dryRunSummary?: DryRunSummary }
   | {
       ok: false;
       errorCode: SyncRunErrorCode;
@@ -166,7 +175,7 @@ export async function runConversionSync(
     if (!result.ok) return await fail(result.code);
 
     if (dryRun || runId === null) {
-      return { ok: true, dryRun: true, isBaseline, counts: countRows(result.rows, now) };
+      return { ok: true, dryRun: true, isBaseline, counts: countRows(result.rows, now), dryRunSummary: summarize(result.rows) };
     }
 
     const commit = await persistence.commitSyncRun({
@@ -184,6 +193,26 @@ export async function runConversionSync(
     // halv tilstand: commit er atomisk, så kohorten er urørt.
     return await fail("UNKNOWN");
   }
+}
+
+function summarize(rows: ClassifiedDealResult[]): DryRunSummary {
+  const byEligibility: Record<EligibilityStatus, number> = {
+    PRE_START_EXISTING: 0,
+    ELIGIBLE_PENDING: 0,
+    ENROLLED: 0,
+    EXCLUDED: 0,
+  };
+  const byExclusionReason = Object.fromEntries(EXCLUSION_REASONS.map((r) => [r, 0])) as Record<ExclusionReason, number>;
+  for (const r of rows) {
+    byEligibility[r.eligibilityStatus] += 1;
+    if (r.exclusionReason) byExclusionReason[r.exclusionReason] += 1;
+  }
+  return {
+    byEligibility,
+    byExclusionReason,
+    lostObserved: rows.filter((r) => r.lostObservedAt !== null && r.outcomeStatus === "NOT_BOOKED").length,
+    outcomeConflicts: rows.filter((r) => r.outcomeConflictObservedAt !== null).length,
+  };
 }
 
 function countRows(rows: ClassifiedDealResult[], observedAt: Date): CommitCounts {
