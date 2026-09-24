@@ -8,46 +8,50 @@
 
 - **Production:** Vision 2.0 fase 1-5 + Issue #38 + **Vision 3.0 Fase 1B (kundeåbninger), 1C
   ("Kundeaktivitet"), Fase 2 (sektionsengagement, migration 011), Fase 3 (kontakt-intent, migration
-  012) og Fase 4 (salgsoversigt, Issue #76) live.** Fase 4-koden blev merget via
-  [PR #77](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/77) **2026-09-19T09:24:56Z**
-  (merge-commit `c407d626`) — **rettelse:** denne fil sagde tidligere fejlagtigt at PR #77 ikke var
-  merget; verificeret mod GitHub 2026-09-24 at `c407d626` = `main`. Salgsoversigten
-  (Åbnet/Set/Kontakt/Seneste aktivitet i `/admin`) er altså live, ikke kun implementeret. Aktuel
-  main/deploy verificeres i GitHub/Vercel (denne fil hardcoder bevidst ikke en SHA løbende — den
-  bliver stale ved næste merge):
+  012) og Fase 4 (salgsoversigt, Issue #76) live.** Aktuel main/deploy verificeres i GitHub/Vercel
+  (denne fil hardcoder bevidst ikke en SHA løbende — den bliver stale ved næste merge):
   [commits på main](https://github.com/ricko-spec/unique-travel-rejsepraesentation/commits/main) ·
   [Vercel-deploys](https://vercel.com/unique-travel/unique-travel-rejsepraesentation/deployments).
-- **Aktivt kapitel:** [Issue #78](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/78) —
-  **Vision 3.0 Fase 5: prospektiv konverteringsmåling (online rejseplan mod kun PDF)** (barn af
-  [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)). Branch
-  `docs/gate-a-conversion-measurement-78`; docs-only PR [#79](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/79)
-  (Gate A), **ikke merget, må ikke merges**.
-  **Gate A-afgørelse: `GO MED FORBEHOLD`** — kun til Gate B-designarbejde af den PROSPEKTIVE måling;
-  historisk backfill forbliver blokeret. Se `docs/VISION-3.0-PHASE-5-GATE-A.md`. Ricko kørte selv
-  (Private App-token, read-only) `Invoke-QuoteSignalLiveEvidence.ps1` (dk-wanderlust-spy) 2026-09-24.
-  Pipeline `754595640` + stage-kontrakten (`1098732868` "Tilbud sendt", `1169407502` "Opdateret
-  tilbud") er live bekræftet uden uoverensstemmelser. Historisk rekonstruktion fra HubSpots
-  dealstage-historik er `UNUSABLE` (6,2 % dækning; 0 % i ni sammenhængende måneder sep. 2025–maj
-  2026 — et dokumenteret dataartefakt, ikke reel mangel på aktivitet), men blokerer **ikke**
-  automatisk den prospektive løsning. 51,2 % af detekterede "Tilbud sendt"-events er tidsstemplet
-  efter deal-udfaldet — **yderligere evidens mod historisk rekonstruktion, ikke en åben Gate
-  B-opgave**. Nulpunkt for den officielle måling = første succesfulde daglige synkronisering (fast,
-  dokumenteret dato, ikke bagudskuende). **Ingen produktkode/migration/HubSpot-integration før Gate
-  B er eksplicit godkendt af Ricko** (se åbne beslutninger i Gate A-rapportens §6).
+- **Gate A afsluttet og merget:** [Issue #78](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/78)
+  (nu **lukket**) — [PR #79](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/79)
+  merget til `main` (merge-commit `644269a`). Gate A-afgørelse: **`GO MED FORBEHOLD`** — kun til
+  Gate B-designarbejde af den PROSPEKTIVE måling; historisk backfill forbliver blokeret. Pipeline
+  `754595640` + stage-kontrakten (`1098732868` "Tilbud sendt", `1169407502` "Opdateret tilbud") er
+  live bekræftet. Historisk rekonstruktion er `UNUSABLE` (dokumenteret dataartefakt i ældre deals),
+  men blokerer ikke den prospektive løsning. Se `docs/VISION-3.0-PHASE-5-GATE-A.md`.
+- **Aktivt kapitel:** [Issue #80](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/80) —
+  **Vision 3.0 Fase 5, Gate B: prospektiv konverteringsmåling uden aktivering** (barn af Gate A).
+  Branch `feat/gate-b0-b1-conversion-measurement-80`; PR
+  [#81](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/81), head-SHA
+  `a5f5e11d8e0aad033961aab52cc1e03ade01c012`, **reviewklar, ikke merget** — stopper bevidst ved
+  review-/migrationsgaten.
+  - **Gate B0 (ADR):** arkitektur **A** valgt — direkte, read-only HubSpot-læsning i dette projekt,
+    ingen Marketing Dashboard-afhængighed. Se `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md`.
+  - **Gate B1 (implementering uden aktivering):** `supabase/013_conversion_measurement.sql`
+    (tre tabeller, **bygget som fil, IKKE anvendt**), ren klassifikationsmotor
+    (`src/lib/conversion/classify.ts`), fail-closed sync-motor (`syncEngine.ts`, "fuld kilde eller
+    ingen commit af kørslen"), HubSpot-adapter-KONTRAKT + fixture (ingen live klient/kald),
+    small-cell + komplementær privacy-undertrykkelse (`aggregate.ts`), admin-API/-UI i fail-closed
+    "ikke startet"-tilstand (`/admin/api/conversion`, `ConversionMeasurement.tsx`).
+  - **Verificeret på head `a5f5e11`:** `npm test` 836/836 (761 eksisterende + 75 nye) · `npm run
+    typecheck` 0 fejl · `npm run lint` 0 fejl (2 kendte `<img>`-advarsler, uændret) · `npm run
+    build` success · `git diff --check` ren · Vercel preview-check **pass** på eksakt head-SHA.
+  - **Ingen migration anvendt, ingen secrets oprettet/ændret, ingen scheduler, ingen live
+    HubSpot-kald, ikke merget.** Runbook til Gate B2/C/D:
+    `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.
 - **Kendt driftsopfølgning (ikke en blocker):** production UI-smoketest af Fase 1C, 2, 3 og 4 er
   udsat (Ricko kan ikke teste lige nu).
 
 ## Seneste 3 relevante ændringer
 
-1. **[PR #77](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/77) — Issue #76: Vision 3.0 Fase 4, salgsoversigt med målt kundeaktivitet, 2026-09-19.**
+1. **[PR #79](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/79) — Issue #78: Vision 3.0 Fase 5, Gate A, 2026-09-24.**
+   Read-only datagrundlagsverifikation, afgjort `GO MED FORBEHOLD`. Merge-commit `644269a`. Docs-only.
+2. **[PR #77](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/77) — Issue #76: Vision 3.0 Fase 4, salgsoversigt med målt kundeaktivitet, 2026-09-19.**
    Kompakt server-side DTO (`GET /admin/api/trips`), seks set-baserede pagineredes læsninger, kolonnerne
    Åbnet/Set/Kontakt/Seneste aktivitet, filtre/sortering/klient-side pagination, `not-measured`-tilstand.
    Ingen migration.
-2. **[PR #75](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/75) — Docs: fast arbejdsform (`docs/WORKING_MODE.md`), checkpoint og Fase 4-beslutningsgrundlag,
+3. **[PR #75](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/75) — Docs: fast arbejdsform (`docs/WORKING_MODE.md`), checkpoint og Fase 4-beslutningsgrundlag,
    2026-09-19.** Docs-only.
-3. **[PR #74](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/74) — Issue #73: Vision 3.0 Fase 3, kontakt-intent, 2026-09-19.** Ny `trip_contact_intent`-tabel
-   + RPC (migration 012, kørt/verificeret, baseline opdateret), `POST /[bookingId]/intent`, tracked mailto:/tel:-links,
-   "Kontakt-intent" i admin, opdateret transparenstekst.
 
 Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pulls?q=is%3Apr+is%3Amerged).
 
@@ -58,10 +62,8 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
   (mod prod-DB) eller på production efter merge.
 - **Storage bucket-config uden for drift-tjekket** (kendt blind vinkel).
 - Repo er public — secrets/kundedata-disciplin er procesbåret, ikke teknisk håndhævet.
-- **Gate A (Issue #78) er `GO MED FORBEHOLD` — Gate B endnu ikke startet.** Et fast, dokumenteret
-  nulpunkt for den prospektive måling skal fastlægges (første succesfulde daglige sync).
-  `afterOutcomeRatio`-fundet (§3.2 i Gate A-rapporten) er afklaret som evidens mod historisk
-  rekonstruktion, ikke en åben Gate B-opgave.
+- **PR #81 (Gate B0+B1, Issue #80) afventer review og merge-godkendelse.** Se åbne beslutninger i
+  PR-beskrivelsen og `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md`/`-GATE-B1-RUNBOOK.md`.
 - Øvrige åbne beslutninger (KRÆVER RICKO): `docs/DECISIONS.md` § Åbne beslutninger.
   Prioriteret backlog: `docs/ROADMAP.md`.
 
@@ -71,14 +73,11 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Gate A er afsluttet `GO MED FORBEHOLD`.** Næste skridt (afventer Rickos beslutning, se Gate
-A-rapportens §6): start Gate B som eget kapitel/issue — design af den prospektive daglige
-synkronisering, migration og pseudonymiseret persistence, samt fastlæggelse af det formelle
-nulpunkt (første succesfulde sync). `afterOutcomeRatio`-fundet er ikke en Gate B-reparationsopgave
-— kun evidens mod historisk backfill. Ingen migration/produktkode før Gate B er godkendt.
+**Review og merge-godkendelse af PR #81** (Gate B0+B1, Issue #80). Derefter, separat: Gate B2
+(kør migration 013 i production, Rickos eksplicitte godkendelse) → Gate C (aktivering: HubSpot-
+secrets + scheduler) → Gate D (officiel målingsstart). Ingen produktkode/migration/secrets/
+scheduler før hver gate er eksplicit godkendt — se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.
 
 Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) — Vision 3.0: Customer Engagement & Sales Intelligence.
-Master-issue/produktkapitel, IKKE én stor PR. **Fase 5 (prospektiv konverteringsmåling / HubSpot-kobling)
-er, per Issue #78, besluttet placeret i dette repo** — server-side, ingen HubSpot i browseren. Dette
-opdaterer et tidligere notat her om at Fase 5 hørte hjemme i "Marketing Dashboard-projektet"; se
-`docs/DECISIONS.md` for begrundelsen.
+Master-issue/produktkapitel, IKKE én stor PR. Fase 5 (prospektiv konverteringsmåling) er placeret i
+dette repo — server-side, ingen HubSpot i browseren; se `docs/DECISIONS.md` for begrundelsen.
