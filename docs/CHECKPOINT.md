@@ -3,37 +3,59 @@
 > Kort hand-off til næste session — **overskrives** ved meningsfulde milepæle (se `docs/WORKING_MODE.md` §5).
 > Ikke en anmodning om godkendelse. Operationel status (hvad er live) står i `docs/STATUS.md`.
 
-**Sidst opdateret:** 2026-09-19 (Fase 4 færdigt og afleveret til review)
+**Sidst opdateret:** 2026-09-24 (Gate A for Issue #78 afsluttet `GO MED FORBEHOLD`, kun til Gate B-design;
+runde 4 rettede to fund fra et uafhængigt review af PR #79)
 
 ## Branch / HEAD
 
-- **Production `main`:** `ff59354de980e78414bec8d497eca37815d47204` (Fase 1B/1C/2/3 live; migration 010–012 kørt; Fase 3-koden
-  live siden 2026-09-19T08:21:19Z).
-- **Fase 4:** Issue [#76](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/76) — branch
-  `feat/sales-overview-76` fra frisk `main`; PR lukker #76. **Ikke merget.** HEAD = seneste commit på branchen (se PR).
+- **Production `main`:** `c407d6264b7c75848787c557e67d30a59a8f4c3b` (Fase 1B/1C/2/3/4 live; migration
+  010–012 kørt; Fase 4-koden (salgsoversigt) live siden PR #77, 2026-09-19T09:24:56Z).
+- **Fase 5, Gate A:** Issue [#78](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/78) —
+  branch `docs/gate-a-conversion-measurement-78` fra frisk `main` (`c407d626`); docs-only PR
+  [#79](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/79), **draft, må ikke
+  merges**. HEAD = seneste commit på branchen (se PR).
 
 ## Færdigt
 
-- **Fase 4 implementeret som ét kapitel:** kompakt server-side DTO (ingen `data`/`raw_pdf_text`/`created_by`), seks set-baserede,
-  pagineredes læsninger (`paged-read.ts`), kolonnerne Åbnet/Set/Kontakt/Seneste aktivitet, filtre + sortering + klient-side
-  pagination, fejl pr. kilde, `not-measured`, delt `resolveEligibleSections` (liste, admin-detalje, Fase 2-endpoint),
-  `CONTACT_INTENT_TRACKING_SINCE = "2026-09-19T08:21:19Z"`. Ingen migration, ingen nye tabeller/tracking.
-- **Verificeret:** fuld suite, typecheck, lint, build; 16 mutationer; lokal end-to-end kontrol af den byggede app (20/20,
-  ingen skrivninger); read-only kørsel af den rigtige loader mod produktion (6 HTTP-kald, ≈ 0,7 s, 111,5 KB, 0 ugyldige).
+- **Gate A gennemført over tre runder, afsluttet `GO MED FORBEHOLD`** (kun til Gate B-designarbejde
+  af den PROSPEKTIVE måling — ikke en godkendelse til at aktivere nogen live måling):
+  1. Repo-/arkitekturgate; Fase 4/PR #77's stale "ikke merget"-status rettet i STATUS/ROADMAP/
+     CHECKPOINT/DECISIONS.
+  2. Adgangsvej ændret fra HubSpot-MCP/OAuth (droppet) til en IT-udstedt Private App-token, brugt
+     udelukkende i Rickos eget shell; `docs/ACCESS_MATRIX.md` opdateret. Read-only reference-brug af
+     `ricko-spec/dk-wanderlust-spy` (Marketing Dashboard, privat repo) godkendt af Ricko — kun de to
+     navngivne PR'er/scripts, ingen ændringer dér.
+  3. **Ricko kørte selv live, read-only** `Invoke-QuoteSignalLiveEvidence.ps1` (seneste mergede
+     version) og delte det fulde aggregerede resultat. Pipeline `754595640` + stage-kontrakten
+     (`1098732868` "Tilbud sendt", `1169407502` "Opdateret tilbud") bekræftet live uden
+     uoverensstemmelser. Historisk rekonstruktion `UNUSABLE` (0 % dækning i ni sammenhængende
+     måneder sep. 2025–maj 2026 — dokumenteret dataartefakt), men blokerer ikke den prospektive
+     løsning (Rickos eksplicitte instruks). Se `docs/VISION-3.0-PHASE-5-GATE-A.md` for fuld rapport.
+- **Ikke gjort (bevidst, inden for Gate A's read-only scope):** ingen HubSpot-kald fra en agent
+  (kun Ricko selv, i eget shell), ingen ny agent-adgang til dk-wanderlust-spy ud over read-only
+  reference, ingen Supabase-writes, ingen produktkode/migration.
 
 ## Udestående
 
-1. **Rickos PR-specifikke merge-godkendelse** af Fase 4-PR'en (ikke givet). Ingen migration er nødvendig.
-2. Efter merge/deploy: **autentificeret production-smoketest** af salgsoversigten (plan i `docs/TESTING.md`; må ikke oprette
-   kunstige events). Kan udskydes; blokerer ikke merge.
-3. Separat opfølgning (uden detaljer i det offentlige repo): eksisterende sikkerhedsadvarsler uden for Fase 3/4.
+1. **Gate B** — design af den prospektive daglige synkronisering, migration og pseudonymiseret
+   persistence, samt fastlæggelse af det formelle nulpunkt (første succesfulde sync).
+   `afterOutcomeRatio`-fundet (51,2 %) er **ikke** en Gate B-reparationsopgave — kun evidens mod
+   historisk backfill (se Gate A-rapporten §3.2/§"Afgørelse"). Ikke startet — afventer Rickos
+   beslutning om at oprette et eget Gate B-issue, se Gate A-rapportens §6.
+2. Uafklaret: Booket/Ikke booket endnu vs. et separat, synligt tabt/afvist-udfald i
+   datakvalitetsrapportering (Gate A-rapporten §5, note).
+3. Valgfrit, ikke blokerende: frisk `--mode=join`-kørsel for at opdatere Marketing Dashboards 3+
+   dage gamle match-/dæknings-tal (271 rejseplaner/197 matchet).
+4. Separat opfølgning (uden detaljer i det offentlige repo): eksisterende sikkerhedsadvarsler uden
+   for Fase 3/4/5 — uændret fra tidligere.
 
-## Teststatus (Fase 4-branchen)
+## Teststatus (denne branch)
 
-`npm test` 761 passed (38 filer) · `npm run typecheck` grøn · `npm run lint` 0 fejl (2 kendte `<img>`-advarsler) ·
-`npm run build` success (`/admin` +2 kB, ingen zod i admin-bundlet) · `git diff --check` ren · schema-drift "Ingen drift"
-(ingen DB-ændring).
+Docs-only ⇒ `git diff --check` (jf. `docs/TESTING.md` "Testniveau efter ændringstype"). Ingen
+kode-/DB-ændring ⇒ ingen `npm test`/`typecheck`/`lint`/`build`/schema-drift-kørsel nødvendig eller
+udført.
 
 ## Næste handling
 
-Review af Fase 4-PR'en og Rickos merge-godkendelse. Fase 5 (HubSpot) hører hjemme i Marketing Dashboard-projektet.
+Afvent Rickos beslutning om at starte Gate B som eget kapitel/issue (Gate A-rapportens §6, punkt 4).
+Ingen Gate B-kode, migration eller implementering før det er eksplicit godkendt.
