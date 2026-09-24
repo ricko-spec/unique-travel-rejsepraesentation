@@ -691,8 +691,9 @@ release-cutover); Fase 1B's `TRACKING_SINCE` gælder kun åbninger ("Åbningsmå
 
 ### Konverteringsmåling — Gate B (Issue #80, barn af Gate A/Issue #78)
 
-`supabase/013_conversion_measurement.sql` — **bygget som fil, IKKE anvendt i production**
-(kræver Gate B2, se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`). Arkitektur A (direkte,
+`supabase/013_conversion_measurement.sql` — **anvendt i production 2026-09-24T19:34:06Z** som `20260924193406_conversion_measurement`
+(Gate B2, Issue #82); alle tre tabeller har 0 rækker, og målingen er ikke startet (se
+`docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md` for Gate C/D). Arkitektur A (direkte,
 read-only HubSpot-læsning i dette projekt). Fuldt design: `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md`
 (rev. 2, efter PR #81 review-runde 1).
 
@@ -725,7 +726,7 @@ lease → fail-closed læsning → klassifikation → commit/fail; dry-run) → 
 (ISO-wire-DTO + zod) → `adminServer.ts`. Admin-UI: `src/app/admin/ConversionMeasurement.tsx`.
 API: `GET /admin/api/conversion` (401 før læsning).
 
-Gate B1's tilstand i production: tabellerne findes ikke; målingen er altid "ikke startet".
+Tilstand i production efter Gate B2: tabeller og RPC'er findes, 0 rækker, ingen singleton-række — admin viser "ikke startet".
 
 ---
 

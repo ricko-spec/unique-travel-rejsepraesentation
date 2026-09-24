@@ -11,7 +11,7 @@
 
 ## Hvad Gate B1 har leveret (PR #81)
 
-- `supabase/013_conversion_measurement.sql` — migration, **bygget som fil, IKKE anvendt**: tre
+- `supabase/013_conversion_measurement.sql` — migration, **anvendt i production ved Gate B2** (`20260924193406_conversion_measurement`): tre
   tabeller, frys-/guard-triggere, tre sync-RPC'er (`conversion_begin_sync_run`,
   `conversion_commit_sync_run`, `conversion_fail_sync_run`) + `conversion_parse_batch`.
 - `src/lib/conversion/*` — kontrakt (v2), pseudonymisering, ren klassifikation, HubSpot-
@@ -22,16 +22,28 @@
 
 ## Hvad der IKKE er aktiveret (eksplicit liste)
 
-- Migrationen er **ikke** kørt i production — ingen af de tre tabeller eller RPC'erne findes live.
+- Migration 013 **er** kørt i production (Gate B2) — tabeller og RPC'er findes, men alle tre tabeller
+  har **0 rækker**: ingen singleton-seed, ingen sync-kørsel, målingen er ikke startet.
 - **Ingen** secrets er oprettet eller ændret (`HUBSPOT_PRIVATE_APP_TOKEN`,
   `HUBSPOT_DEAL_KEY_SECRET` findes ikke i Vercel).
 - **Ingen** scheduler/cron, **ingen** rigtig HubSpot-klient, **ingen** live HubSpot-kald.
 - Stage-kontrakten er **ufuldstændig** (`PIPELINE_STAGE_CONTRACT.complete = false`) — en officiel
   sync kan derfor ikke gennemføres, selv hvis alt andet blev aktiveret (fejler `CONTRACT_INCOMPLETE`).
 - Admin-UI'et viser "Målingen er ikke startet endnu" i production indtil Gate D.
-- PR'en er **ikke merget**.
+- PR #81 er merget (`c140e68`); Gate B2 er leveret i en separat PR (Issue #82).
 
-## Gate B2 — migrationsgodkendelse (kræver Rickos eksplicitte go)
+## Gate B2 — migrationsgodkendelse — ✅ GENNEMFØRT 2026-09-24T19:34:06Z (Issue #82)
+
+**Resultat:** preflight PASS (ingen drift, ingen 013-objekter, 010–012 registreret 1:1, production-
+deploy af `c140e68` READY); migrationen anvendt præcis én gang som `20260924193406_conversion_measurement` via Supabase MCP
+`apply_migration` (ikke SQL Editor, ikke `supabase db push` — sidstnævnte ville kræve
+`migration repair`); alle post-verifikationspunkter grønne; 0 rækker; baseline opdateret (kun
+013-objekter). Drift-tjekket blev kørt som den dokumenterede MCP-ækvivalent (samme
+`schema_snapshot()`, kanonisk element-for-element-sammenligning), fordi `.env.local` med
+service-role-nøglen ikke findes i agentens worktree. **Forbehold:** backup/PITR-status var ikke
+synlig via de read-only værktøjer — accepteret af Ricko for denne rent additive migration.
+
+Den oprindelige procedure (bevaret som reference):
 
 **Forudsætning:** PR #81 er reviewet og merget efter Rickos OK.
 

@@ -57,6 +57,286 @@
       "type": "jsonb"
     },
     {
+      "column": "deal_key",
+      "default": null,
+      "nullable": "NO",
+      "table": "conversion_deal_cohort",
+      "type": "text"
+    },
+    {
+      "column": "booking_match_key",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_deal_cohort",
+      "type": "text"
+    },
+    {
+      "column": "first_seen_at",
+      "default": null,
+      "nullable": "NO",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "last_observed_at",
+      "default": null,
+      "nullable": "NO",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "first_qualified_observation_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "exposure_group",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_deal_cohort",
+      "type": "text"
+    },
+    {
+      "column": "exposure_frozen_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "eligibility_status",
+      "default": null,
+      "nullable": "NO",
+      "table": "conversion_deal_cohort",
+      "type": "text"
+    },
+    {
+      "column": "exclusion_reason",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_deal_cohort",
+      "type": "text"
+    },
+    {
+      "column": "booking_conflict_detected_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "outcome_status",
+      "default": "'NOT_BOOKED'::text",
+      "nullable": "NO",
+      "table": "conversion_deal_cohort",
+      "type": "text"
+    },
+    {
+      "column": "first_booked_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "lost_observed_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "outcome_conflict_observed_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "contract_version",
+      "default": null,
+      "nullable": "NO",
+      "table": "conversion_deal_cohort",
+      "type": "integer"
+    },
+    {
+      "column": "last_sync_run_id",
+      "default": null,
+      "nullable": "NO",
+      "table": "conversion_deal_cohort",
+      "type": "uuid"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "conversion_deal_cohort",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "id",
+      "default": "1",
+      "nullable": "NO",
+      "table": "conversion_measurement_state",
+      "type": "integer"
+    },
+    {
+      "column": "status",
+      "default": "'NOT_STARTED'::text",
+      "nullable": "NO",
+      "table": "conversion_measurement_state",
+      "type": "text"
+    },
+    {
+      "column": "contract_version",
+      "default": "2",
+      "nullable": "NO",
+      "table": "conversion_measurement_state",
+      "type": "integer"
+    },
+    {
+      "column": "measurement_started_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_measurement_state",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "last_successful_sync_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_measurement_state",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "sync_generation",
+      "default": "0",
+      "nullable": "NO",
+      "table": "conversion_measurement_state",
+      "type": "bigint"
+    },
+    {
+      "column": "updated_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "conversion_measurement_state",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "id",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "table": "conversion_sync_runs",
+      "type": "uuid"
+    },
+    {
+      "column": "started_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "conversion_sync_runs",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "finished_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_sync_runs",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "lease_expires_at",
+      "default": null,
+      "nullable": "NO",
+      "table": "conversion_sync_runs",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "status",
+      "default": "'RUNNING'::text",
+      "nullable": "NO",
+      "table": "conversion_sync_runs",
+      "type": "text"
+    },
+    {
+      "column": "contract_version",
+      "default": null,
+      "nullable": "NO",
+      "table": "conversion_sync_runs",
+      "type": "integer"
+    },
+    {
+      "column": "is_baseline",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_sync_runs",
+      "type": "boolean"
+    },
+    {
+      "column": "observed_at",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_sync_runs",
+      "type": "timestamp with time zone"
+    },
+    {
+      "column": "error_code",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_sync_runs",
+      "type": "text"
+    },
+    {
+      "column": "deals_observed_count",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_sync_runs",
+      "type": "integer"
+    },
+    {
+      "column": "deals_enrolled_count",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_sync_runs",
+      "type": "integer"
+    },
+    {
+      "column": "deals_excluded_count",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_sync_runs",
+      "type": "integer"
+    },
+    {
+      "column": "deals_booked_count",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_sync_runs",
+      "type": "integer"
+    },
+    {
+      "column": "deals_conflict_count",
+      "default": null,
+      "nullable": "YES",
+      "table": "conversion_sync_runs",
+      "type": "integer"
+    },
+    {
+      "column": "created_at",
+      "default": "now()",
+      "nullable": "NO",
+      "table": "conversion_sync_runs",
+      "type": "timestamp with time zone"
+    },
+    {
       "column": "name",
       "default": null,
       "nullable": "NO",
@@ -505,6 +785,91 @@
     },
     {
       "column": null,
+      "comment": "Én pseudonymiseret række pr. HubSpot-deal (Gate B, Issue #80). ALDRIG rå deal-id, bookingnummer i klartekst, kundenavn, e-mail eller payloads. Kan KUN skrives inde i conversion_commit_sync_run (trigger). Frosne felter (eligibility, årsag, kohortestart, eksponering, bookingnøgle, booket, tabt, konflikter) håndhæves af triggeren conversion_deal_cohort_guard.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "booking_conflict_detected_at",
+      "comment": "Reconciliation-tilstand: sat én gang, når en ENROLLED deals frosne bookingreference senere viser sig delt med en anden deal. Rækken bevares (revisionsspor, oprindelig eksponering uændret), men indgår ALDRIG i publicerbare konverteringstal.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "booking_match_key",
+      "comment": "Samme HMAC-kontrakt som Analytics Bridge (Issue #45). Sat for ENROLLED og for EXCLUDED/SHARED_BOOKING_REFERENCE (så senere konflikter kan opdages); ellers NULL.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "deal_key",
+      "comment": "HMAC-SHA256(HUBSPOT_DEAL_KEY_SECRET, \"dealkey:v1:\" || hubspot_deal_id) — aldrig det rå deal-id.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "eligibility_status",
+      "comment": "PRE_START_EXISTING = ved baseline allerede kvalificeret/lukket. ELIGIBLE_PENDING = åben PRE_QUOTE-deal; kan optages senere. ENROLLED = optaget præcis én gang med frosset eksponering. EXCLUDED = permanent udelukket med årsag (aldrig stiltiende PDF_ONLY).",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "exclusion_reason",
+      "comment": "MISSING_BOOKING_NO / INVALID_BOOKING_NO_FORMAT / SHARED_BOOKING_REFERENCE = bookingnummeret kan ikke afgøre ONLINE/PDF_ONLY entydigt. CLOSED_BEFORE_QUALIFIED_OBSERVATION = dealen blev første gang observeret i en lukket stage, der kan nås både før og efter et tilbud. BOOKED_BEFORE_QUALIFIED_OBSERVATION = UT-solgt-status blev observeret FØR første kvalificerede observation — kan aldrig tælle som konvertering fra tilbuddet.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "exposure_group",
+      "comment": "ONLINE = en matchende online rejseplan eksisterede (tidligste trips.created_at <= kohortestart). PDF_ONLY = ingen. Frosset permanent.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "first_booked_at",
+      "comment": "observed_at for den første sync, der så UT-solgt-status. Ændres aldrig. For ENROLLED gælder first_booked_at >= first_qualified_observation_at (CHECK); en tidligere booking giver EXCLUDED/BOOKED_BEFORE_QUALIFIED_OBSERVATION.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "first_qualified_observation_at",
+      "comment": "Kohortestart = observed_at for den FØRSTE sync, der så dealen i en QUOTE_OR_LATER-stage efter baseline. Aldrig et historisk HubSpot-tidsstempel. Ændres aldrig.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "lost_observed_at",
+      "comment": "Datakvalitet: første observation af hs_is_closed=true, hs_is_closed_won=false og ikke UT-solgt. Indgår aldrig i konverteringsprocenten.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "outcome_conflict_observed_at",
+      "comment": "Datakvalitet: første observation af modstrid mellem UT-solgt-status og HubSpots lukke-flag (solgt men lukket-tabt, eller won uden UT-solgt). Ændrer ikke outcome_status.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": "outcome_status",
+      "comment": "BOOKED hvis og kun hvis unique_travel_dealstatus på et tidspunkt er observeret i {Solgt, Billetter sendt}. hs_is_closed_won afgør ikke BOOKED. Kan kun gå NOT_BOOKED → BOOKED.",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "column": null,
+      "comment": "Singleton (id=1) driftsstatus for Vision 3.0 Fase 5 konverteringsmåling (Gate B, Issue #80). Ingen secrets, ingen kundedata. status=ACTIVE med measurement_started_at=NULL betyder \"aktiveret, afventer baseline\". measurement_started_at, last_successful_sync_at og sync_generation kan KUN ændres af conversion_commit_sync_run (trigger).",
+      "table": "conversion_measurement_state"
+    },
+    {
+      "column": "contract_version",
+      "comment": "Skal være lig runtime CONTRACT_VERSION i src/lib/conversion/contract.ts (pt. 2). Uoverensstemmelse ⇒ sync afvises (CONTRACT_VERSION_MISMATCH).",
+      "table": "conversion_measurement_state"
+    },
+    {
+      "column": "measurement_started_at",
+      "comment": "Sættes ÉN gang af den officielle baseline-kørsel (= dens observed_at). Uforanderlig herefter (trigger).",
+      "table": "conversion_measurement_state"
+    },
+    {
+      "column": "sync_generation",
+      "comment": "Optimistisk samtidighedsværn: returneres af conversion_begin_sync_run og skal være uændret ved commit; øges med 1 pr. succesfuld commit.",
+      "table": "conversion_measurement_state"
+    },
+    {
+      "column": null,
+      "comment": "Revisionsrække pr. sync-kørsel (Gate B, Issue #80). Kun kategoriske fejlkoder og tal — aldrig credentials, bookingnumre, deal-id'er, kundedata, payloads eller fritekst-fejlbeskeder. Højst én RUNNING ad gangen (unikt partielt indeks). En kørsel, der crasher, efterlades RUNNING uden kohortedata og markeres FAILED/ABANDONED, når leasen udløber.",
+      "table": "conversion_sync_runs"
+    },
+    {
+      "column": null,
       "comment": "Dead-letter for fejlede PDF-parses. Rå-svaret kan indeholde kundedata — service-role-only, oprydes > 30 dage.",
       "table": "parse_failures"
     },
@@ -676,6 +1041,161 @@
       "table": "audit_log"
     },
     {
+      "def": "CHECK (((exclusion_reason IS DISTINCT FROM 'BOOKED_BEFORE_QUALIFIED_OBSERVATION'::text) OR ((first_qualified_observation_at IS NOT NULL) AND (booking_match_key IS NULL) AND (first_booked_at IS NOT NULL) AND (first_booked_at < first_qualified_observation_at))))",
+      "name": "conversion_deal_cohort_booked_before_fields_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((outcome_status = 'BOOKED'::text) = (first_booked_at IS NOT NULL)))",
+      "name": "conversion_deal_cohort_booked_pair_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((booking_match_key IS NULL) OR (booking_match_key ~ '^[0-9a-f]{64}$'::text)))",
+      "name": "conversion_deal_cohort_booking_key_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((exclusion_reason <> ALL (ARRAY['MISSING_BOOKING_NO'::text, 'INVALID_BOOKING_NO_FORMAT'::text])) OR (exclusion_reason IS NULL) OR ((first_qualified_observation_at IS NOT NULL) AND (booking_match_key IS NULL))))",
+      "name": "conversion_deal_cohort_booking_problem_fields_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((exclusion_reason IS DISTINCT FROM 'CLOSED_BEFORE_QUALIFIED_OBSERVATION'::text) OR ((first_qualified_observation_at IS NULL) AND (booking_match_key IS NULL))))",
+      "name": "conversion_deal_cohort_closed_before_fields_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((booking_conflict_detected_at IS NULL) OR (eligibility_status = 'ENROLLED'::text)))",
+      "name": "conversion_deal_cohort_conflict_requires_enrolled_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK ((deal_key ~ '^[0-9a-f]{64}$'::text))",
+      "name": "conversion_deal_cohort_deal_key_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK ((eligibility_status = ANY (ARRAY['PRE_START_EXISTING'::text, 'ELIGIBLE_PENDING'::text, 'ENROLLED'::text, 'EXCLUDED'::text])))",
+      "name": "conversion_deal_cohort_eligibility_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((eligibility_status <> 'ENROLLED'::text) OR (first_booked_at IS NULL) OR (first_booked_at >= first_qualified_observation_at)))",
+      "name": "conversion_deal_cohort_enrolled_booked_order_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((eligibility_status <> 'ENROLLED'::text) OR ((exposure_group IS NOT NULL) AND (first_qualified_observation_at IS NOT NULL) AND (booking_match_key IS NOT NULL))))",
+      "name": "conversion_deal_cohort_enrolled_fields_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((eligibility_status = 'EXCLUDED'::text) = (exclusion_reason IS NOT NULL)))",
+      "name": "conversion_deal_cohort_excluded_reason_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((exclusion_reason IS NULL) OR (exclusion_reason = ANY (ARRAY['MISSING_BOOKING_NO'::text, 'INVALID_BOOKING_NO_FORMAT'::text, 'SHARED_BOOKING_REFERENCE'::text, 'CLOSED_BEFORE_QUALIFIED_OBSERVATION'::text, 'BOOKED_BEFORE_QUALIFIED_OBSERVATION'::text]))))",
+      "name": "conversion_deal_cohort_exclusion_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK ((exposure_group = ANY (ARRAY['ONLINE'::text, 'PDF_ONLY'::text])))",
+      "name": "conversion_deal_cohort_exposure_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((exposure_frozen_at IS NULL) OR (exposure_frozen_at = first_qualified_observation_at)))",
+      "name": "conversion_deal_cohort_exposure_frozen_at_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((exposure_group IS NULL) = (exposure_frozen_at IS NULL)))",
+      "name": "conversion_deal_cohort_exposure_pair_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((exposure_group IS NULL) OR (eligibility_status = 'ENROLLED'::text)))",
+      "name": "conversion_deal_cohort_exposure_requires_enrolled_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK ((outcome_status = ANY (ARRAY['NOT_BOOKED'::text, 'BOOKED'::text])))",
+      "name": "conversion_deal_cohort_outcome_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((eligibility_status <> ALL (ARRAY['ELIGIBLE_PENDING'::text, 'PRE_START_EXISTING'::text])) OR ((first_qualified_observation_at IS NULL) AND (booking_match_key IS NULL))))",
+      "name": "conversion_deal_cohort_pending_prestart_fields_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "PRIMARY KEY (deal_key)",
+      "name": "conversion_deal_cohort_pkey",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK (((exclusion_reason IS DISTINCT FROM 'SHARED_BOOKING_REFERENCE'::text) OR ((first_qualified_observation_at IS NOT NULL) AND (booking_match_key IS NOT NULL))))",
+      "name": "conversion_deal_cohort_shared_fields_check",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CHECK ((sync_generation >= 0))",
+      "name": "conversion_measurement_state_generation_check",
+      "table": "conversion_measurement_state"
+    },
+    {
+      "def": "CHECK (((status <> 'NOT_STARTED'::text) OR (measurement_started_at IS NULL)))",
+      "name": "conversion_measurement_state_not_started_check",
+      "table": "conversion_measurement_state"
+    },
+    {
+      "def": "PRIMARY KEY (id)",
+      "name": "conversion_measurement_state_pkey",
+      "table": "conversion_measurement_state"
+    },
+    {
+      "def": "CHECK ((id = 1))",
+      "name": "conversion_measurement_state_singleton",
+      "table": "conversion_measurement_state"
+    },
+    {
+      "def": "CHECK ((status = ANY (ARRAY['NOT_STARTED'::text, 'ACTIVE'::text, 'PAUSED'::text])))",
+      "name": "conversion_measurement_state_status_check",
+      "table": "conversion_measurement_state"
+    },
+    {
+      "def": "CHECK (((error_code IS NULL) OR (error_code = ANY (ARRAY['CONFIG_INVALID'::text, 'NOT_ACTIVE'::text, 'CONTRACT_VERSION_MISMATCH'::text, 'CONTRACT_INCOMPLETE'::text, 'CONTRACT_DRIFT'::text, 'HTTP_401'::text, 'HTTP_403'::text, 'HTTP_429'::text, 'HTTP_5XX'::text, 'NETWORK_ERROR'::text, 'PAGE_INCONSISTENT'::text, 'TOTAL_MISMATCH'::text, 'DUPLICATE_DEAL'::text, 'EMPTY_SOURCE'::text, 'SOURCE_READ_FAILED'::text, 'SYNC_ALREADY_RUNNING'::text, 'COMMIT_REJECTED'::text, 'ABANDONED'::text, 'UNKNOWN'::text]))))",
+      "name": "conversion_sync_runs_error_code_check",
+      "table": "conversion_sync_runs"
+    },
+    {
+      "def": "CHECK (((status = 'FAILED'::text) = (error_code IS NOT NULL)))",
+      "name": "conversion_sync_runs_failed_requires_error_check",
+      "table": "conversion_sync_runs"
+    },
+    {
+      "def": "CHECK (((status = 'RUNNING'::text) = (finished_at IS NULL)))",
+      "name": "conversion_sync_runs_finished_check",
+      "table": "conversion_sync_runs"
+    },
+    {
+      "def": "PRIMARY KEY (id)",
+      "name": "conversion_sync_runs_pkey",
+      "table": "conversion_sync_runs"
+    },
+    {
+      "def": "CHECK ((status = ANY (ARRAY['RUNNING'::text, 'SUCCEEDED'::text, 'FAILED'::text])))",
+      "name": "conversion_sync_runs_status_check",
+      "table": "conversion_sync_runs"
+    },
+    {
+      "def": "CHECK (((status <> 'SUCCEEDED'::text) OR ((observed_at IS NOT NULL) AND (is_baseline IS NOT NULL) AND (deals_observed_count IS NOT NULL))))",
+      "name": "conversion_sync_runs_succeeded_fields_check",
+      "table": "conversion_sync_runs"
+    },
+    {
       "def": "PRIMARY KEY (name)",
       "name": "destinations_pkey",
       "table": "destinations"
@@ -793,6 +1313,30 @@
   ],
   "functions": [
     {
+      "def": "CREATE OR REPLACE FUNCTION public.conversion_begin_sync_run(p_contract_version integer, p_lease_seconds integer)\n RETURNS TABLE(run_id uuid, sync_generation bigint)\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\n#variable_conflict use_column\ndeclare\n  v_state public.conversion_measurement_state%rowtype;\n  v_now timestamptz := clock_timestamp();\n  v_id uuid;\nbegin\n  perform pg_advisory_xact_lock(hashtext('public.conversion_sync'));\n\n  select * into v_state from public.conversion_measurement_state where id = 1 for update;\n  if not found or v_state.status <> 'ACTIVE' then\n    raise exception 'CONVERSION_NOT_ACTIVE';\n  end if;\n  if v_state.contract_version <> p_contract_version then\n    raise exception 'CONVERSION_CONTRACT_VERSION_MISMATCH';\n  end if;\n  if p_lease_seconds is null or p_lease_seconds < 60 or p_lease_seconds > 7200 then\n    raise exception 'CONVERSION_LEASE_INVALID';\n  end if;\n\n  update public.conversion_sync_runs\n     set status = 'FAILED', error_code = 'ABANDONED', finished_at = v_now\n   where status = 'RUNNING' and lease_expires_at < v_now;\n\n  if exists (select 1 from public.conversion_sync_runs where status = 'RUNNING') then\n    raise exception 'CONVERSION_SYNC_ALREADY_RUNNING';\n  end if;\n\n  insert into public.conversion_sync_runs (status, contract_version, lease_expires_at, started_at)\n  values ('RUNNING', p_contract_version, v_now + make_interval(secs => p_lease_seconds), v_now)\n  returning id into v_id;\n\n  return query select v_id, v_state.sync_generation;\nend;\n$function$\n",
+      "name": "conversion_begin_sync_run"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.conversion_commit_sync_run(p_run_id uuid, p_sync_generation bigint, p_contract_version integer, p_observed_at timestamp with time zone, p_is_baseline boolean, p_rows jsonb)\n RETURNS TABLE(observed_count integer, enrolled_count integer, excluded_count integer, booked_count integer, conflict_count integer)\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\n#variable_conflict use_column\ndeclare\n  v_state public.conversion_measurement_state%rowtype;\n  v_run public.conversion_sync_runs%rowtype;\n  v_now timestamptz := clock_timestamp();\n  v_len integer;\n  v_distinct integer;\n  v_observed integer;\n  v_enrolled integer;\n  v_excluded integer;\n  v_booked integer;\n  v_conflicts integer;\nbegin\n  perform pg_advisory_xact_lock(hashtext('public.conversion_sync'));\n\n  select * into v_state from public.conversion_measurement_state where id = 1 for update;\n  if not found or v_state.status <> 'ACTIVE' then\n    raise exception 'CONVERSION_NOT_ACTIVE';\n  end if;\n  if v_state.contract_version <> p_contract_version then\n    raise exception 'CONVERSION_CONTRACT_VERSION_MISMATCH';\n  end if;\n  if v_state.sync_generation <> p_sync_generation then\n    raise exception 'CONVERSION_STALE_GENERATION';\n  end if;\n\n  select * into v_run from public.conversion_sync_runs where id = p_run_id for update;\n  if not found or v_run.status <> 'RUNNING' then\n    raise exception 'CONVERSION_RUN_NOT_RUNNING';\n  end if;\n  if v_run.lease_expires_at < v_now then\n    raise exception 'CONVERSION_LEASE_EXPIRED';\n  end if;\n  if v_run.contract_version <> p_contract_version then\n    raise exception 'CONVERSION_CONTRACT_VERSION_MISMATCH';\n  end if;\n\n  if p_observed_at is null or p_observed_at > v_now + interval '5 minutes' then\n    raise exception 'CONVERSION_OBSERVED_AT_INVALID';\n  end if;\n  if v_state.last_successful_sync_at is not null and p_observed_at <= v_state.last_successful_sync_at then\n    raise exception 'CONVERSION_OBSERVED_AT_NOT_AFTER_LAST_SYNC';\n  end if;\n  if p_is_baseline is distinct from (v_state.measurement_started_at is null) then\n    raise exception 'CONVERSION_BASELINE_MISMATCH';\n  end if;\n  if p_is_baseline and exists (select 1 from public.conversion_deal_cohort) then\n    raise exception 'CONVERSION_BASELINE_REQUIRES_EMPTY_COHORT';\n  end if;\n\n  if p_rows is null or jsonb_typeof(p_rows) <> 'array' then\n    raise exception 'CONVERSION_ROWS_INVALID';\n  end if;\n  v_len := jsonb_array_length(p_rows);\n  if v_len = 0 then\n    raise exception 'CONVERSION_EMPTY_BATCH';\n  end if;\n\n  select count(distinct b.deal_key) into v_distinct from public.conversion_parse_batch(p_rows) b;\n  if v_distinct <> v_len or exists (select 1 from public.conversion_parse_batch(p_rows) b where b.deal_key is null) then\n    raise exception 'CONVERSION_DUPLICATE_DEAL_KEY';\n  end if;\n  if exists (select 1 from public.conversion_parse_batch(p_rows) b where b.contract_version is distinct from p_contract_version) then\n    raise exception 'CONVERSION_ROW_CONTRACT_VERSION';\n  end if;\n  if exists (select 1 from public.conversion_parse_batch(p_rows) b where b.last_observed_at > p_observed_at) then\n    raise exception 'CONVERSION_ROW_OBSERVED_AT';\n  end if;\n  if p_is_baseline and exists (\n       select 1 from public.conversion_parse_batch(p_rows) b\n        where b.eligibility_status not in ('ELIGIBLE_PENDING', 'PRE_START_EXISTING')\n           or b.last_observed_at <> p_observed_at) then\n    raise exception 'CONVERSION_BASELINE_STATUS';\n  end if;\n  -- Nye/pending rækker: ingen PRE_START efter baseline, og kohortestart skal\n  -- være præcis denne kørsels observed_at (aldrig et historisk tidspunkt).\n  if exists (\n       select 1\n         from public.conversion_parse_batch(p_rows) b\n         left join public.conversion_deal_cohort c on c.deal_key = b.deal_key\n        where (c.deal_key is null or c.eligibility_status = 'ELIGIBLE_PENDING')\n          and ((not p_is_baseline and b.eligibility_status = 'PRE_START_EXISTING')\n               or (b.first_qualified_observation_at is not null\n                   and b.first_qualified_observation_at <> p_observed_at))) then\n    raise exception 'CONVERSION_COHORT_START_INVALID';\n  end if;\n\n  perform set_config('conversion.active_run', p_run_id::text, true);\n\n  insert into public.conversion_deal_cohort as c (\n    deal_key, booking_match_key, first_seen_at, last_observed_at, first_qualified_observation_at,\n    exposure_group, exposure_frozen_at, eligibility_status, exclusion_reason,\n    booking_conflict_detected_at, outcome_status, first_booked_at, lost_observed_at,\n    outcome_conflict_observed_at, contract_version, last_sync_run_id\n  )\n  select deal_key, booking_match_key, first_seen_at, last_observed_at, first_qualified_observation_at,\n         exposure_group, exposure_frozen_at, eligibility_status, exclusion_reason,\n         booking_conflict_detected_at, outcome_status, first_booked_at, lost_observed_at,\n         outcome_conflict_observed_at, contract_version, p_run_id\n    from public.conversion_parse_batch(p_rows)\n  on conflict (deal_key) do update set\n    booking_match_key              = excluded.booking_match_key,\n    first_seen_at                  = excluded.first_seen_at,\n    last_observed_at               = excluded.last_observed_at,\n    first_qualified_observation_at = excluded.first_qualified_observation_at,\n    exposure_group                 = excluded.exposure_group,\n    exposure_frozen_at             = excluded.exposure_frozen_at,\n    eligibility_status             = excluded.eligibility_status,\n    exclusion_reason               = excluded.exclusion_reason,\n    booking_conflict_detected_at   = excluded.booking_conflict_detected_at,\n    outcome_status                 = excluded.outcome_status,\n    first_booked_at                = excluded.first_booked_at,\n    lost_observed_at               = excluded.lost_observed_at,\n    outcome_conflict_observed_at   = excluded.outcome_conflict_observed_at,\n    contract_version               = excluded.contract_version,\n    last_sync_run_id               = excluded.last_sync_run_id;\n\n  select count(*) filter (where last_observed_at = p_observed_at),\n         count(*) filter (where eligibility_status = 'ENROLLED'),\n         count(*) filter (where eligibility_status = 'EXCLUDED'),\n         count(*) filter (where outcome_status = 'BOOKED'),\n         count(*) filter (where booking_conflict_detected_at is not null)\n    into v_observed, v_enrolled, v_excluded, v_booked, v_conflicts\n    from public.conversion_parse_batch(p_rows);\n\n  update public.conversion_sync_runs\n     set status = 'SUCCEEDED', finished_at = clock_timestamp(), observed_at = p_observed_at,\n         is_baseline = p_is_baseline, deals_observed_count = v_observed,\n         deals_enrolled_count = v_enrolled, deals_excluded_count = v_excluded,\n         deals_booked_count = v_booked, deals_conflict_count = v_conflicts\n   where id = p_run_id;\n\n  update public.conversion_measurement_state\n     set measurement_started_at  = coalesce(measurement_started_at, p_observed_at),\n         last_successful_sync_at = p_observed_at,\n         sync_generation         = sync_generation + 1\n   where id = 1;\n\n  return query select v_observed, v_enrolled, v_excluded, v_booked, v_conflicts;\nend;\n$function$\n",
+      "name": "conversion_commit_sync_run"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.conversion_deal_cohort_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\nbegin\n  if coalesce(current_setting('conversion.active_run', true), '') = '' then\n    raise exception 'CONVERSION_COHORT_WRITE_OUTSIDE_SYNC';\n  end if;\n\n  if tg_op = 'UPDATE' then\n    if new.deal_key is distinct from old.deal_key\n       or new.first_seen_at is distinct from old.first_seen_at\n       or new.created_at is distinct from old.created_at then\n      raise exception 'CONVERSION_COHORT_IDENTITY_FROZEN';\n    end if;\n    if old.eligibility_status <> 'ELIGIBLE_PENDING' and (\n         new.eligibility_status is distinct from old.eligibility_status\n         or new.exclusion_reason is distinct from old.exclusion_reason\n         or new.first_qualified_observation_at is distinct from old.first_qualified_observation_at\n         or new.exposure_group is distinct from old.exposure_group\n         or new.exposure_frozen_at is distinct from old.exposure_frozen_at\n         or new.booking_match_key is distinct from old.booking_match_key) then\n      raise exception 'CONVERSION_COHORT_TERMINAL_FROZEN';\n    end if;\n    if old.booking_conflict_detected_at is not null\n       and new.booking_conflict_detected_at is distinct from old.booking_conflict_detected_at then\n      raise exception 'CONVERSION_COHORT_CONFLICT_FROZEN';\n    end if;\n    if old.outcome_status = 'BOOKED' and (new.outcome_status <> 'BOOKED'\n         or new.first_booked_at is distinct from old.first_booked_at) then\n      raise exception 'CONVERSION_COHORT_BOOKED_FROZEN';\n    end if;\n    if old.lost_observed_at is not null and new.lost_observed_at is distinct from old.lost_observed_at then\n      raise exception 'CONVERSION_COHORT_LOST_FROZEN';\n    end if;\n    if old.outcome_conflict_observed_at is not null\n       and new.outcome_conflict_observed_at is distinct from old.outcome_conflict_observed_at then\n      raise exception 'CONVERSION_COHORT_OUTCOME_CONFLICT_FROZEN';\n    end if;\n    if new.last_observed_at < old.last_observed_at then\n      raise exception 'CONVERSION_COHORT_LAST_OBSERVED_BACKWARDS';\n    end if;\n  end if;\n\n  new.updated_at := now();\n  return new;\nend;\n$function$\n",
+      "name": "conversion_deal_cohort_guard"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.conversion_fail_sync_run(p_run_id uuid, p_error_code text)\n RETURNS void\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\nbegin\n  update public.conversion_sync_runs\n     set status = 'FAILED', error_code = p_error_code, finished_at = clock_timestamp()\n   where id = p_run_id and status = 'RUNNING';\n  if not found then\n    raise exception 'CONVERSION_RUN_NOT_RUNNING';\n  end if;\nend;\n$function$\n",
+      "name": "conversion_fail_sync_run"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.conversion_measurement_state_guard()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\ndeclare\n  v_in_sync boolean := coalesce(current_setting('conversion.active_run', true), '') <> '';\nbegin\n  if tg_op = 'INSERT' then\n    if new.measurement_started_at is not null or new.last_successful_sync_at is not null or new.sync_generation <> 0 then\n      raise exception 'CONVERSION_STATE_SEED_INVALID';\n    end if;\n    new.updated_at := now();\n    return new;\n  end if;\n\n  if old.measurement_started_at is not null\n     and new.measurement_started_at is distinct from old.measurement_started_at then\n    raise exception 'CONVERSION_STARTED_AT_IMMUTABLE';\n  end if;\n  if not v_in_sync and (\n       new.measurement_started_at is distinct from old.measurement_started_at\n       or new.last_successful_sync_at is distinct from old.last_successful_sync_at\n       or new.sync_generation is distinct from old.sync_generation) then\n    raise exception 'CONVERSION_STATE_WRITE_OUTSIDE_SYNC';\n  end if;\n  if new.sync_generation < old.sync_generation then\n    raise exception 'CONVERSION_GENERATION_BACKWARDS';\n  end if;\n  if old.last_successful_sync_at is not null and new.last_successful_sync_at < old.last_successful_sync_at then\n    raise exception 'CONVERSION_LAST_SYNC_BACKWARDS';\n  end if;\n  new.updated_at := now();\n  return new;\nend;\n$function$\n",
+      "name": "conversion_measurement_state_guard"
+    },
+    {
+      "def": "CREATE OR REPLACE FUNCTION public.conversion_parse_batch(p_rows jsonb)\n RETURNS TABLE(deal_key text, booking_match_key text, first_seen_at timestamp with time zone, last_observed_at timestamp with time zone, first_qualified_observation_at timestamp with time zone, exposure_group text, exposure_frozen_at timestamp with time zone, eligibility_status text, exclusion_reason text, booking_conflict_detected_at timestamp with time zone, outcome_status text, first_booked_at timestamp with time zone, lost_observed_at timestamp with time zone, outcome_conflict_observed_at timestamp with time zone, contract_version integer)\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'public', 'pg_catalog'\nAS $function$\n  select *\n    from jsonb_to_recordset(p_rows) as r(\n      deal_key text,\n      booking_match_key text,\n      first_seen_at timestamptz,\n      last_observed_at timestamptz,\n      first_qualified_observation_at timestamptz,\n      exposure_group text,\n      exposure_frozen_at timestamptz,\n      eligibility_status text,\n      exclusion_reason text,\n      booking_conflict_detected_at timestamptz,\n      outcome_status text,\n      first_booked_at timestamptz,\n      lost_observed_at timestamptz,\n      outcome_conflict_observed_at timestamptz,\n      contract_version integer\n    );\n$function$\n",
+      "name": "conversion_parse_batch"
+    },
+    {
       "def": "CREATE OR REPLACE FUNCTION public.handle_new_user()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  insert into public.profiles (id, email, full_name)\n  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'full_name', ''))\n  on conflict (id) do nothing;\n  return new;\nend;\n$function$\n",
       "name": "handle_new_user"
     },
@@ -841,6 +1385,34 @@
     {
       "def": "CREATE INDEX audit_log_resource_idx ON public.audit_log USING btree (resource)",
       "name": "audit_log_resource_idx"
+    },
+    {
+      "def": "CREATE INDEX conversion_deal_cohort_booking_key_idx ON public.conversion_deal_cohort USING btree (booking_match_key) WHERE (booking_match_key IS NOT NULL)",
+      "name": "conversion_deal_cohort_booking_key_idx"
+    },
+    {
+      "def": "CREATE INDEX conversion_deal_cohort_eligibility_idx ON public.conversion_deal_cohort USING btree (eligibility_status)",
+      "name": "conversion_deal_cohort_eligibility_idx"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX conversion_deal_cohort_pkey ON public.conversion_deal_cohort USING btree (deal_key)",
+      "name": "conversion_deal_cohort_pkey"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX conversion_measurement_state_pkey ON public.conversion_measurement_state USING btree (id)",
+      "name": "conversion_measurement_state_pkey"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX conversion_sync_runs_pkey ON public.conversion_sync_runs USING btree (id)",
+      "name": "conversion_sync_runs_pkey"
+    },
+    {
+      "def": "CREATE UNIQUE INDEX conversion_sync_runs_single_running_idx ON public.conversion_sync_runs USING btree ((true)) WHERE (status = 'RUNNING'::text)",
+      "name": "conversion_sync_runs_single_running_idx"
+    },
+    {
+      "def": "CREATE INDEX conversion_sync_runs_started_at_idx ON public.conversion_sync_runs USING btree (started_at DESC)",
+      "name": "conversion_sync_runs_started_at_idx"
     },
     {
       "def": "CREATE UNIQUE INDEX destinations_pkey ON public.destinations USING btree (name)",
@@ -945,6 +1517,30 @@
       "with_check": "true"
     },
     {
+      "cmd": "ALL",
+      "policy": "service_role full access conversion_deal_cohort",
+      "roles": "{service_role}",
+      "table": "conversion_deal_cohort",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access conversion_measurement_state",
+      "roles": "{service_role}",
+      "table": "conversion_measurement_state",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
+      "cmd": "ALL",
+      "policy": "service_role full access conversion_sync_runs",
+      "roles": "{service_role}",
+      "table": "conversion_sync_runs",
+      "using": "true",
+      "with_check": "true"
+    },
+    {
       "cmd": "SELECT",
       "policy": "Anyone can read destinations",
       "roles": "{public}",
@@ -1034,6 +1630,16 @@
     }
   ],
   "triggers": [
+    {
+      "def": "CREATE TRIGGER conversion_deal_cohort_guard BEFORE INSERT OR UPDATE ON public.conversion_deal_cohort FOR EACH ROW EXECUTE FUNCTION conversion_deal_cohort_guard()",
+      "name": "conversion_deal_cohort_guard",
+      "table": "conversion_deal_cohort"
+    },
+    {
+      "def": "CREATE TRIGGER conversion_measurement_state_guard BEFORE INSERT OR UPDATE ON public.conversion_measurement_state FOR EACH ROW EXECUTE FUNCTION conversion_measurement_state_guard()",
+      "name": "conversion_measurement_state_guard",
+      "table": "conversion_measurement_state"
+    },
     {
       "def": "CREATE TRIGGER destinations_set_updated_at BEFORE UPDATE ON public.destinations FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
       "name": "destinations_set_updated_at",

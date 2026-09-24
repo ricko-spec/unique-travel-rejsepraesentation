@@ -3,16 +3,24 @@
 > Kort hand-off til næste session — **overskrives** ved meningsfulde milepæle (se `docs/WORKING_MODE.md` §5).
 > Ikke en anmodning om godkendelse. Operationel status (hvad er live) står i `docs/STATUS.md`.
 
-**Sidst opdateret:** 2026-09-24 (PR #81 review-runde 2 — Codex-review 5308506532 rettet)
+**Sidst opdateret:** 2026-09-24 (Gate B2 — migration 013 anvendt i production, Issue #82)
 
 ## Branch / HEAD
 
-- **Production `main`:** `644269aaf4d534ae3f21379df940a4f822a55c7c` (merge af PR #79 — Gate A).
-- **Gate B0+B1 (Issue #80):** branch `feat/gate-b0-b1-conversion-measurement-80`; PR
-  [#81](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/81). Reviewet head
-  var `a8f08fc` (runde 1: 7 fund) og `198101b` (runde 2: 2 blokerende + 1 designfund). Rettelserne ligger i efterfølgende commits — den
-  aktuelle head-SHA og testresultater står i PR-beskrivelsen (hardkodes bevidst ikke her).
-  **Reviewklar igen, ikke merget.**
+- **Production `main`:** `c140e681ff333204f7addf58b068d29d294159ed` (merge af PR #81 — Gate B0+B1),
+  production-deploy READY.
+- **Gate B2 (Issue #82):** branch `chore/gate-b2-migration-013-82` fra `c140e68` — kun baseline + docs.
+  Head-SHA og CI står i PR'en. **Ikke merget.**
+
+## Færdigt (Gate B2)
+
+- Preflight PASS: ingen drift, ingen 013-objekter, migrationshistorik 010–012 1:1, deploy READY.
+- Migration 013 anvendt præcis én gang: `20260924193406_conversion_measurement`, SQL byte-identisk med filen.
+- Post-verifikation grøn (skema, RLS, policies, grants, RPC'er, triggere, indekser), **0 rækker**.
+- Advisors: ingen nye sikkerhedsfund; 3 nye INFO "unused index" på de tomme 013-tabeller (forventet).
+- Schema-baseline opdateret fra live (kun 013-objekter, +606/−0); drift-tjek bagefter: ingen drift.
+- Forbehold: backup/PITR-status ikke synlig for agenten (accepteret af Ricko); drift-tjek kørt som
+  dokumenteret MCP-ækvivalent (ingen service-role-nøgle i worktree).
 
 ## Færdigt (review-runde 3, Codex-review 5308827224)
 
@@ -48,8 +56,10 @@
 
 ## Udestående
 
-1. **Re-review og merge-godkendelse af PR #81** — Rickos eksplicitte OK.
-2. **Gate B2** — migration 013 i production + schema-baseline (separat godkendelse).
+0. **Review og merge af Gate B2-PR'en** (kun baseline/docs). Derefter **Gate C**.
+
+1. ~~Merge af PR #81~~ — merget (`c140e68`).
+2. ~~Gate B2~~ — gennemført (Issue #82).
 3. **Gate C-forudsætning:** klassificér pipelinens øvrige stages fra live-metadata (Ricko), udfyld
    `PIPELINE_STAGE_CONTRACT`, `complete: true`, bump kontraktversion. Byg rigtig HubSpot-adapter.
 4. **Gate C/D** — secrets, cron, dry-run, officiel baseline. Ikke startet.
