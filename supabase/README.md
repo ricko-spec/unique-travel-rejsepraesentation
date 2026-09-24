@@ -23,6 +23,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `010b_trip_visits_retention.sql` | pg_cron-retention for trip_visits (12 mdr.) — bevidst separat fil | **Nej — separat, senere godkendelse (kræver evt. pg_cron-aktivering)** |
 | `011_trip_section_engagement.sql` | trip_section_engagement + eksplicitte table grants + RLS + `record_trip_section_engagement` RPC — sektionsengagement (Issue #71) | 2026-09-18T18:41:05Z (`20260918184105_trip_section_engagement`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
 | `012_trip_contact_intent.sql` | trip_contact_intent + eksplicitte table grants + RLS + `record_trip_contact_intent` RPC — kontakt-intent, max 2 rækker/trip (Issue #73) | 2026-09-19T07:43:41Z (`20260919074341_trip_contact_intent`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
+| `013_conversion_measurement.sql` | conversion_measurement_state (singleton) + conversion_deal_cohort (pseudonymiseret) + conversion_sync_runs, eksplicitte table grants + RLS + uforanderlighedstrigger — prospektiv konverteringsmåling, Gate B (Issue #80, barn af Gate A/Issue #78) | **Nej — bygget som fil, IKKE anvendt.** Kræver Gate B2 (Rickos eksplicitte godkendelse), se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md` |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.
@@ -134,6 +135,24 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
   source/surface. Se kommentarerne i `012_trip_contact_intent.sql`.
 - **Retention er IKKE aktiveret** og er en separat, fremtidig release-/policy-beslutning
   (samme princip som `010b`). Max 2 rækker/trip giver intet teknisk lagringspres.
+
+## Driftsnote: conversion_measurement_state / conversion_deal_cohort / conversion_sync_runs (Issue #80, Gate B)
+
+- **Migration 013 er BYGGET SOM FIL, IKKE ANVENDT.** Ingen kørsel i production er sket. Kræver
+  Gate B2 (Rickos eksplicitte, separate godkendelse) — se den fulde operatør-runbook i
+  `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.
+- **Arkitektur:** direkte, read-only HubSpot-læsning i dette projekt (ADR A, se
+  `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md`) — ingen Marketing Dashboard-afhængighed.
+- **Data:** `conversion_deal_cohort` gemmer ALDRIG et rå HubSpot deal-id eller bookingnummer —
+  kun domæneadskilte HMAC-nøgler (`deal_key` via en ny, uafhængig `HUBSPOT_DEAL_KEY_SECRET`;
+  `booking_match_key` via den eksisterende `BOOKING_MATCH_SECRET`-kontrakt, Issue #45).
+  `conversion_sync_runs` gemmer kun sikre aggregater og kategoriske fejlkoder. Ingen kundedata i
+  nogen af de tre tabeller.
+- **`measurement_started_at` er uforanderlig, når den først er sat** — håndhævet af en Postgres-
+  trigger (`conversion_measurement_state_guard_started_at`), ikke kun applikationskode. Dette er
+  selve den tekniske mekanisme der forhindrer skjult historisk backfill (Gate A's bindende krav).
+- **Retention** for `conversion_sync_runs`/`conversion_deal_cohort` er, som `010b`/kontakt-intent,
+  bevidst IKKE defineret eller aktiveret i denne migration — en separat, fremtidig beslutning.
 
 ## Drift-tjek
 
