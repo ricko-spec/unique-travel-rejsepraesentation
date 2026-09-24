@@ -1,24 +1,41 @@
 // Vision 3.0 Fase 5, Gate B (Issue #80) — ren aggregeringsfunktion til
 // adminvisningen. Tager KUN allerede-pseudonymiserede kohorterækker (ingen
-// deal-id'er, ingen bookingnumre) og bygger et privacy-sikkert DTO: celler
-// under SMALL_CELL_THRESHOLD undertrykkes, og KOMPLEMENTÆR undertrykkelse
-// forhindrer at man kan udlede en lille skjult celle fra de andre synlige
-// tal (fx tæller skjult, men nævner og "de andre" antal afslører den alligevel).
+// deal-id'er, ingen bookingnumre) og bygger et privacy-sikkert DTO.
 //
-// INGEN database-/HubSpot-imports her — ren funktion af et array rækker +
-// et "as of"-tidspunkt, fuldt unit-testbar.
+// PRIVACY-MODEL (PR #81 review-runde 1, fund 3 — se ADR §Privacy):
+//
+//  1. Udfaldsceller (tilbud n, booket b) publiceres kun når n, b OG
+//     komplementet n−b alle er ≥ SMALL_CELL_THRESHOLD. Ellers skjules
+//     tæller, nævner og procent SAMMEN.
+//  2. Modning sker pr. KOHORTEMÅNED (UTC): en måned indgår i vindue w først
+//     når hele måneden er mindst w dage gammel. Dens tal er derefter faste.
+//  3. Modne måneder samles i rækkefølge til BLOKKE, der hver for sig opfylder
+//     regel 1. Vinduestal = summen af lukkede blokke; trenden viser netop
+//     blokkene. Dermed er (a) trendrækkerne præcis de tilvækster vinduestallet
+//     vokser med, (b) enhver differens mellem to publicerede tal en hel blok
+//     ≥ tærsklen, og (c) en umoden/lille rest-periode tilbageholdes helt.
+//  4. Tælletal uden udfald (gruppetotaler, datakvalitet) small-cell-
+//     undertrykkes (1–9), og en sekundær undertrykkelse sikrer at ingen
+//     skjult celle kan udledes som totalen minus de synlige celler.
+//  5. Rækker med en senere opdaget bookingkonflikt indgår aldrig i
+//     publicerbare konverteringstal — kun i datakvalitet.
+//
+// INGEN database-/HubSpot-imports her — ren funktion af rækker + "as of".
 
-import { MATURITY_WINDOWS_DAYS, SMALL_CELL_THRESHOLD, type MaturityWindowDays } from "./contract";
-import type { ExposureGroup, MeasurementState, OutcomeStatus } from "./types";
+import { MATURITY_WINDOWS_DAYS, SMALL_CELL_THRESHOLD, STALE_AFTER_HOURS, type MaturityWindowDays } from "./contract";
+import { EXCLUSION_REASONS } from "./types";
+import type { EligibilityStatus, ExclusionReason, ExposureGroup, MeasurementState, OutcomeStatus } from "./types";
 
 export type CohortAggregateRow = {
-  eligibilityStatus: "PRE_START_EXISTING" | "ELIGIBLE_PENDING" | "ENROLLED" | "EXCLUDED";
-  exclusionReason: "MISSING_BOOKING_NO" | "INVALID_BOOKING_NO_FORMAT" | "SHARED_BOOKING_REFERENCE" | "CONTRACT_DRIFT" | null;
+  eligibilityStatus: EligibilityStatus;
+  exclusionReason: ExclusionReason | null;
   firstQualifiedObservationAt: Date | null;
   exposureGroup: ExposureGroup | null;
+  bookingConflictDetectedAt: Date | null;
   outcomeStatus: OutcomeStatus;
   firstBookedAt: Date | null;
   lostObservedAt: Date | null;
+  outcomeConflictObservedAt: Date | null;
 };
 
 export type WindowCell = {
@@ -28,159 +45,153 @@ export type WindowCell = {
   suppressed: boolean;
 };
 
-export type GroupStats = {
-  /** Totalt antal ENROLLED deals i gruppen — null hvis under tærsklen (small-cell). */
-  totalEnrolled: number | null;
-  windows: Record<MaturityWindowDays, WindowCell>;
+/** Én publiceret trend-periode (én eller flere sammenhængende kohortemåneder), 30-dages-udfald. */
+export type TrendPeriod = {
+  fromMonth: string; // "YYYY-MM"
+  toMonth: string; // "YYYY-MM"
+  enrolled: number;
+  booked: number;
+  ratePercent: number;
 };
 
-export type MonthlyTrendPoint = {
-  month: string; // "YYYY-MM", kohortemåned (baseret på first_qualified_observation_at)
-  online: { enrolled: number | null; booked: number | null };
-  pdfOnly: { enrolled: number | null; booked: number | null };
+export type GroupStats = {
+  /** Antal publicerbare ENROLLED deals i gruppen (inkl. umodne) — null hvis undertrykt. */
+  totalEnrolled: number | null;
+  windows: Record<MaturityWindowDays, WindowCell>;
+  /** Trend pr. kohorteperiode for 30-dages-udfaldet — kun lukkede, publicerbare blokke. */
+  trend30: TrendPeriod[];
 };
 
 export type DataQuality = {
-  totalObserved: number;
-  excludedByReason: Record<"MISSING_BOOKING_NO" | "INVALID_BOOKING_NO_FORMAT" | "SHARED_BOOKING_REFERENCE" | "CONTRACT_DRIFT", number>;
-  preStartExistingCount: number;
-  eligiblePendingCount: number;
-  lostObservedCount: number;
+  totalObserved: number | null;
+  eligiblePending: number | null;
+  preStartExisting: number | null;
+  bookingConflicts: number | null;
+  excludedByReason: Record<ExclusionReason, number | null>;
+  /** Tabt/afvist observeret og ikke booket — kun datakvalitet, aldrig i konverteringsprocenten. */
+  lostObserved: number | null;
+  /** Modstrid mellem UT-status og HubSpots lukke-flag — kun datakvalitet. */
+  outcomeConflicts: number | null;
 };
+
+export type Freshness = "NO_SYNC" | "FRESH" | "STALE";
 
 export type ConversionAggregate = {
   measurement: MeasurementState;
+  freshness: Freshness;
   hasPublishableComparison: boolean;
   groups: { ONLINE: GroupStats; PDF_ONLY: GroupStats };
   differencePercentPoints: Record<MaturityWindowDays, number | null>;
-  monthlyTrend: MonthlyTrendPoint[];
   dataQuality: DataQuality;
 };
 
-function daysBetween(a: Date, b: Date): number {
-  return (b.getTime() - a.getTime()) / (24 * 60 * 60 * 1000);
-}
+const DAY_MS = 24 * 60 * 60 * 1000;
+const T = SMALL_CELL_THRESHOLD;
 
-function isMature(cohortStart: Date, asOf: Date, windowDays: number): boolean {
-  return daysBetween(cohortStart, asOf) >= windowDays;
-}
-
-function bookedWithinWindow(cohortStart: Date, firstBookedAt: Date | null, windowDays: number): boolean {
-  if (!firstBookedAt) return false;
-  return daysBetween(cohortStart, firstBookedAt) <= windowDays;
-}
-
-/**
- * Anvender small-cell + KOMPLEMENTÆR undertrykkelse på én (tæller, nævner)-
- * celle. Komplementær: hvis enten tælleren ELLER dens komplement (nævner −
- * tæller) er under tærsklen, skjules BÅDE tæller, nævner og procent — ellers
- * kunne den skjulte lille celle udledes fra den synlige nævner minus den
- * synlige komplement-tæller.
- */
-function suppressCell(numerator: number, denominator: number): WindowCell {
-  if (denominator === 0) {
-    return { denominator: null, numerator: null, ratePercent: null, suppressed: true };
-  }
-  const complement = denominator - numerator;
-  if (numerator < SMALL_CELL_THRESHOLD || complement < SMALL_CELL_THRESHOLD) {
-    return { denominator: null, numerator: null, ratePercent: null, suppressed: true };
-  }
-  return {
-    denominator,
-    numerator,
-    ratePercent: (numerator / denominator) * 100,
-    suppressed: false,
-  };
-}
-
-function buildGroupStats(rows: CohortAggregateRow[], asOf: Date): GroupStats {
-  const enrolled = rows.filter((r) => r.eligibilityStatus === "ENROLLED");
-  const totalEnrolledRaw = enrolled.length;
-
-  const windows = {} as Record<MaturityWindowDays, WindowCell>;
-  for (const windowDays of MATURITY_WINDOWS_DAYS) {
-    const mature = enrolled.filter(
-      (r) => r.firstQualifiedObservationAt && isMature(r.firstQualifiedObservationAt, asOf, windowDays),
-    );
-    const bookedWithin = mature.filter((r) =>
-      bookedWithinWindow(r.firstQualifiedObservationAt!, r.firstBookedAt, windowDays),
-    );
-    windows[windowDays] = suppressCell(bookedWithin.length, mature.length);
-  }
-
-  return {
-    totalEnrolled: totalEnrolledRaw < SMALL_CELL_THRESHOLD ? null : totalEnrolledRaw,
-    windows,
-  };
+function isSmall(n: number): boolean {
+  return n > 0 && n < T;
 }
 
 function monthKey(d: Date): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
-function buildMonthlyTrend(rows: CohortAggregateRow[]): MonthlyTrendPoint[] {
-  const enrolled = rows.filter((r) => r.eligibilityStatus === "ENROLLED" && r.firstQualifiedObservationAt);
-  const months = new Set<string>();
-  for (const r of enrolled) months.add(monthKey(r.firstQualifiedObservationAt!));
-
-  const sortedMonths = Array.from(months).sort();
-  return sortedMonths.map((month) => {
-    const inMonth = enrolled.filter((r) => monthKey(r.firstQualifiedObservationAt!) === month);
-    const online = inMonth.filter((r) => r.exposureGroup === "ONLINE");
-    const pdfOnly = inMonth.filter((r) => r.exposureGroup === "PDF_ONLY");
-    const smallCell = (n: number) => (n < SMALL_CELL_THRESHOLD ? null : n);
-    return {
-      month,
-      online: {
-        enrolled: smallCell(online.length),
-        booked: smallCell(online.filter((r) => r.outcomeStatus === "BOOKED").length),
-      },
-      pdfOnly: {
-        enrolled: smallCell(pdfOnly.length),
-        booked: smallCell(pdfOnly.filter((r) => r.outcomeStatus === "BOOKED").length),
-      },
-    };
-  });
+function monthEnd(key: string): Date {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 1)); // første instant i næste måned
 }
 
-function buildDataQuality(rows: CohortAggregateRow[]): DataQuality {
-  const excludedByReason: DataQuality["excludedByReason"] = {
-    MISSING_BOOKING_NO: 0,
-    INVALID_BOOKING_NO_FORMAT: 0,
-    SHARED_BOOKING_REFERENCE: 0,
-    CONTRACT_DRIFT: 0,
-  };
-  let preStartExistingCount = 0;
-  let eligiblePendingCount = 0;
-  let lostObservedCount = 0;
+function bookedWithin(row: CohortAggregateRow, windowDays: number): boolean {
+  if (row.outcomeStatus !== "BOOKED" || !row.firstBookedAt || !row.firstQualifiedObservationAt) return false;
+  return row.firstBookedAt.getTime() - row.firstQualifiedObservationAt.getTime() <= windowDays * DAY_MS;
+}
 
+function publishable(row: CohortAggregateRow): boolean {
+  return (
+    row.eligibilityStatus === "ENROLLED" &&
+    row.bookingConflictDetectedAt === null &&
+    row.exposureGroup !== null &&
+    row.firstQualifiedObservationAt !== null
+  );
+}
+
+type Block = { fromMonth: string; toMonth: string; n: number; b: number };
+
+/** Lukkede, publicerbare blokke af modne kohortemåneder for ét vindue (regel 2+3). */
+function closedBlocks(rows: CohortAggregateRow[], asOf: Date, windowDays: number): Block[] {
+  const byMonth = new Map<string, CohortAggregateRow[]>();
   for (const r of rows) {
-    if (r.eligibilityStatus === "EXCLUDED" && r.exclusionReason) {
-      excludedByReason[r.exclusionReason] += 1;
-    }
-    if (r.eligibilityStatus === "PRE_START_EXISTING") preStartExistingCount += 1;
-    if (r.eligibilityStatus === "ELIGIBLE_PENDING") eligiblePendingCount += 1;
-    if (r.lostObservedAt) lostObservedCount += 1;
+    const k = monthKey(r.firstQualifiedObservationAt!);
+    const list = byMonth.get(k);
+    if (list) list.push(r);
+    else byMonth.set(k, [r]);
   }
+  const months = Array.from(byMonth.keys()).sort();
+  const blocks: Block[] = [];
+  let fromMonth: string | null = null;
+  let n = 0;
+  let b = 0;
+  for (const m of months) {
+    if (monthEnd(m).getTime() + windowDays * DAY_MS > asOf.getTime()) break; // umoden ⇒ også alle senere
+    const list = byMonth.get(m)!;
+    if (fromMonth === null) fromMonth = m;
+    n += list.length;
+    b += list.filter((r) => bookedWithin(r, windowDays)).length;
+    if (n >= T && b >= T && n - b >= T) {
+      blocks.push({ fromMonth, toMonth: m, n, b });
+      fromMonth = null;
+      n = 0;
+      b = 0;
+    }
+  }
+  // En åben rest-blok (under tærsklen) tilbageholdes helt.
+  return blocks;
+}
 
-  return {
-    totalObserved: rows.length,
-    excludedByReason,
-    preStartExistingCount,
-    eligiblePendingCount,
-    lostObservedCount,
-  };
+const SUPPRESSED: WindowCell = { denominator: null, numerator: null, ratePercent: null, suppressed: true };
+
+function windowCell(blocks: Block[]): WindowCell {
+  const n = blocks.reduce((a, x) => a + x.n, 0);
+  const b = blocks.reduce((a, x) => a + x.b, 0);
+  if (n < T || b < T || n - b < T) return SUPPRESSED;
+  return { denominator: n, numerator: b, ratePercent: (b / n) * 100, suppressed: false };
 }
 
 /**
- * Publicerbar KUN når begge grupper har mindst ét ikke-undertrykt
- * modningsvindue — ellers skal UI'et vise "Ikke nok data endnu" i stedet
- * for en sammenligning (Gate B's eksplicitte krav).
+ * Small-cell + sekundær undertrykkelse af en partition af `total` (regel 4).
+ * Primært skjules 1–9. Er de skjulte cellers sum derefter under tærsklen
+ * (hvilket altid gælder for én enkelt skjult celle), kunne summen udledes
+ * som totalen minus de synlige — så skjules yderligere den mindste synlige
+ * ikke-nul-celle, indtil summen er ≥ tærsklen. Kan det ikke opnås, skjules
+ * totalen også.
  */
-function computeHasPublishableComparison(groups: { ONLINE: GroupStats; PDF_ONLY: GroupStats }): boolean {
-  const onlineHasWindow = MATURITY_WINDOWS_DAYS.some((w) => !groups.ONLINE.windows[w].suppressed);
-  const pdfOnlyHasWindow = MATURITY_WINDOWS_DAYS.some((w) => !groups.PDF_ONLY.windows[w].suppressed);
-  return onlineHasWindow && pdfOnlyHasWindow;
+export function suppressPartition(cells: number[], total: number): { cells: (number | null)[]; total: number | null } {
+  const hidden = cells.map(isSmall);
+  const needsMore = () => {
+    const idx = hidden.map((h, i) => (h ? i : -1)).filter((i) => i >= 0);
+    if (idx.length === 0) return false;
+    return idx.reduce((a, i) => a + cells[i], 0) < T;
+  };
+  while (needsMore()) {
+    let pick = -1;
+    for (let i = 0; i < cells.length; i++) {
+      if (!hidden[i] && cells[i] > 0 && (pick === -1 || cells[i] < cells[pick])) pick = i;
+    }
+    if (pick === -1) break;
+    hidden[pick] = true;
+  }
+  const totalHidden = isSmall(total) || needsMore();
+  return { cells: cells.map((c, i) => (hidden[i] ? null : c)), total: totalHidden ? null : total };
+}
+
+/** Binær opdeling af en population (fx tabt vs. ikke tabt): skjul hvis tælleren eller komplementet er 1–9. */
+function suppressBinary(count: number, population: number): number | null {
+  return isSmall(count) || isSmall(population - count) ? null : count;
+}
+
+function freshnessOf(state: MeasurementState, asOf: Date): Freshness {
+  if (!state.lastSuccessfulSyncAt) return "NO_SYNC";
+  return asOf.getTime() - state.lastSuccessfulSyncAt.getTime() > STALE_AFTER_HOURS * 60 * 60 * 1000 ? "STALE" : "FRESH";
 }
 
 export function buildConversionAggregate(
@@ -188,30 +199,71 @@ export function buildConversionAggregate(
   measurement: MeasurementState,
   asOf: Date,
 ): ConversionAggregate {
-  // exposure_group er, per klassifikationskontrakten (classify.ts), KUN
-  // nogensinde sat på ENROLLED-rækker — så et filter på exposureGroup alene
-  // er allerede ækvivalent med "ENROLLED i denne gruppe". buildGroupStats
-  // filtrerer desuden selv på eligibilityStatus === "ENROLLED" som et
-  // eksplicit, uafhængigt værn.
-  const online = buildGroupStats(rows.filter((r) => r.exposureGroup === "ONLINE"), asOf);
-  const pdfOnly = buildGroupStats(rows.filter((r) => r.exposureGroup === "PDF_ONLY"), asOf);
+  const pub = rows.filter(publishable);
+  const perGroup = {
+    ONLINE: pub.filter((r) => r.exposureGroup === "ONLINE"),
+    PDF_ONLY: pub.filter((r) => r.exposureGroup === "PDF_ONLY"),
+  };
 
-  const groups = { ONLINE: online, PDF_ONLY: pdfOnly };
+  const count = (pred: (r: CohortAggregateRow) => boolean) => rows.filter(pred).length;
+  const reasonCounts = EXCLUSION_REASONS.map((reason) =>
+    count((r) => r.eligibilityStatus === "EXCLUDED" && r.exclusionReason === reason),
+  );
+  const partition = suppressPartition(
+    [
+      perGroup.ONLINE.length,
+      perGroup.PDF_ONLY.length,
+      count((r) => r.eligibilityStatus === "ENROLLED" && r.bookingConflictDetectedAt !== null),
+      count((r) => r.eligibilityStatus === "ELIGIBLE_PENDING"),
+      count((r) => r.eligibilityStatus === "PRE_START_EXISTING"),
+      ...reasonCounts,
+    ],
+    rows.length,
+  );
+  const [onlineTotal, pdfTotal, conflicts, pending, preStart, ...reasons] = partition.cells;
+
+  const buildGroup = (list: CohortAggregateRow[], total: number | null): GroupStats => {
+    const windows = {} as Record<MaturityWindowDays, WindowCell>;
+    for (const w of MATURITY_WINDOWS_DAYS) windows[w] = windowCell(closedBlocks(list, asOf, w));
+    const trend30 = closedBlocks(list, asOf, 30).map((blk) => ({
+      fromMonth: blk.fromMonth,
+      toMonth: blk.toMonth,
+      enrolled: blk.n,
+      booked: blk.b,
+      ratePercent: (blk.b / blk.n) * 100,
+    }));
+    return { totalEnrolled: total, windows, trend30 };
+  };
+  const groups = { ONLINE: buildGroup(perGroup.ONLINE, onlineTotal), PDF_ONLY: buildGroup(perGroup.PDF_ONLY, pdfTotal) };
 
   const differencePercentPoints = {} as Record<MaturityWindowDays, number | null>;
-  for (const windowDays of MATURITY_WINDOWS_DAYS) {
-    const a = groups.ONLINE.windows[windowDays];
-    const b = groups.PDF_ONLY.windows[windowDays];
-    differencePercentPoints[windowDays] =
-      a.ratePercent !== null && b.ratePercent !== null ? a.ratePercent - b.ratePercent : null;
+  for (const w of MATURITY_WINDOWS_DAYS) {
+    const a = groups.ONLINE.windows[w].ratePercent;
+    const b = groups.PDF_ONLY.windows[w].ratePercent;
+    differencePercentPoints[w] = a !== null && b !== null ? a - b : null;
   }
+
+  const excludedByReason = {} as Record<ExclusionReason, number | null>;
+  EXCLUSION_REASONS.forEach((reason, i) => {
+    excludedByReason[reason] = reasons[i];
+  });
+
+  const hasWindow = (g: GroupStats) => MATURITY_WINDOWS_DAYS.some((w) => !g.windows[w].suppressed);
 
   return {
     measurement,
-    hasPublishableComparison: computeHasPublishableComparison(groups),
+    freshness: freshnessOf(measurement, asOf),
+    hasPublishableComparison: hasWindow(groups.ONLINE) && hasWindow(groups.PDF_ONLY),
     groups,
     differencePercentPoints,
-    monthlyTrend: buildMonthlyTrend(rows),
-    dataQuality: buildDataQuality(rows),
+    dataQuality: {
+      totalObserved: partition.total,
+      eligiblePending: pending,
+      preStartExisting: preStart,
+      bookingConflicts: conflicts,
+      excludedByReason,
+      lostObserved: suppressBinary(count((r) => r.lostObservedAt !== null && r.outcomeStatus === "NOT_BOOKED"), rows.length),
+      outcomeConflicts: suppressBinary(count((r) => r.outcomeConflictObservedAt !== null), rows.length),
+    },
   };
 }

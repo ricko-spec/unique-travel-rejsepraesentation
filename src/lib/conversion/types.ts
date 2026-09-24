@@ -5,66 +5,60 @@
 
 export type EligibilityStatus = "PRE_START_EXISTING" | "ELIGIBLE_PENDING" | "ENROLLED" | "EXCLUDED";
 
-export type ExclusionReason =
-  | "MISSING_BOOKING_NO"
-  | "INVALID_BOOKING_NO_FORMAT"
-  | "SHARED_BOOKING_REFERENCE"
-  | "CONTRACT_DRIFT";
+export const EXCLUSION_REASONS = [
+  "MISSING_BOOKING_NO",
+  "INVALID_BOOKING_NO_FORMAT",
+  "SHARED_BOOKING_REFERENCE",
+  "CLOSED_BEFORE_QUALIFIED_OBSERVATION",
+] as const;
+export type ExclusionReason = (typeof EXCLUSION_REASONS)[number];
 
 export type ExposureGroup = "ONLINE" | "PDF_ONLY";
 
 export type OutcomeStatus = "NOT_BOOKED" | "BOOKED";
 
 /**
- * Én deals observerede tilstand ved denne sync, fra den read-only HubSpot-
- * adapter. `everQualifiedAt` er den TIDLIGSTE kendte overgang til stage
- * STAGE_QUOTE_SENT ELLER STAGE_UPDATED_QUOTE (aldrig den seneste) — det er
- * netop det der garanterer at "Opdateret tilbud" aldrig kan nulstille
- * kohortestarten: minimum, ikke maksimum, over hele den kendte historik.
- * `null` betyder dealen aldrig har passeret denne tærskel (Screened eller
- * tidligere).
+ * Én deals AKTUELLE tilstand ved denne sync, fra den read-only HubSpot-
+ * adapter. Bevidst INGEN historik (ingen "ever qualified at", ingen
+ * closedate): Gate A erklærede historisk rekonstruktion UNUSABLE, så
+ * kvalifikation og booking afgøres alene af hvad den daglige sync observerer.
  */
 export type HubSpotDealObservation = {
   rawDealId: string;
-  everQualifiedAt: Date | null;
+  pipelineId: string;
+  dealStageId: string;
   bookingNumberRaw: string | null;
   dealStatusRaw: string | null;
   hubspotClosed: boolean;
   hubspotClosedWon: boolean;
-  /** HubSpots `closedate`, hvis sat — bruges som det bedste kendte "booket"-tidspunkt. */
-  closedAtRaw: Date | null;
 };
 
-/** Den persisterede tilstand for én deal, som den så ud FØR denne sync. `null` = aldrig set før. */
-export type ExistingCohortState = {
+/** Den persisterede tilstand for én deal (conversion_deal_cohort-rækken). */
+export type CohortState = {
   firstSeenAt: Date;
+  lastObservedAt: Date;
   eligibilityStatus: EligibilityStatus;
   exclusionReason: ExclusionReason | null;
-  firstQualifiedObservationAt: Date | null;
-  exposureGroup: ExposureGroup | null;
-  bookingMatchKey: string | null;
-  outcomeStatus: OutcomeStatus;
-  firstBookedAt: Date | null;
-  lostObservedAt: Date | null;
-} | null;
-
-/** Resultatet af klassifikationen for én deal — det der (idempotent) upsertes. */
-export type ClassifiedDealResult = {
-  dealKey: string;
-  bookingMatchKey: string | null;
-  firstSeenAt: Date;
+  /** Kohortestart: `observedAt` for den FØRSTE prospektive kvalificerede observation. Aldrig historisk. */
   firstQualifiedObservationAt: Date | null;
   exposureGroup: ExposureGroup | null;
   exposureFrozenAt: Date | null;
-  eligibilityStatus: EligibilityStatus;
-  exclusionReason: ExclusionReason | null;
+  bookingMatchKey: string | null;
+  /** Sat én gang, når en ENROLLED deals frosne bookingreference senere viser sig delt med en anden deal. */
+  bookingConflictDetectedAt: Date | null;
   outcomeStatus: OutcomeStatus;
   firstBookedAt: Date | null;
   lostObservedAt: Date | null;
+  outcomeConflictObservedAt: Date | null;
   contractVersion: number;
 };
 
-/** Rå indeks over eksisterende online rejseplaner, kun de felter der er nødvendige (ingen kundedata). */
+export type ExistingCohortState = CohortState | null;
+
+/** Resultatet af klassifikationen for én deal — det der (idempotent, atomart) committes. */
+export type ClassifiedDealResult = CohortState & { dealKey: string };
+
+/** Indeks over eksisterende online rejseplaner: booking_match_key → tidligste trips.created_at. Ingen kundedata. */
 export type TravelPlanIndexEntry = { createdAt: Date };
 export type TravelPlanIndex = ReadonlyMap<string, TravelPlanIndexEntry>;
 
@@ -73,29 +67,32 @@ export type MeasurementStatus = "NOT_STARTED" | "ACTIVE" | "PAUSED";
 export type MeasurementState = {
   status: MeasurementStatus;
   contractVersion: number;
+  /** NULL med status ACTIVE = aktiveret, afventer den officielle baseline-sync (Gate D). */
   measurementStartedAt: Date | null;
   lastSuccessfulSyncAt: Date | null;
 };
 
 export type SyncRunStatus = "RUNNING" | "SUCCEEDED" | "FAILED";
 
-export type SyncRunErrorCode =
-  | "CONTRACT_DRIFT"
-  | "HTTP_401"
-  | "HTTP_403"
-  | "HTTP_429"
-  | "HTTP_5XX"
-  | "NETWORK_ERROR"
-  | "PAGE_INCONSISTENT"
-  | "TOTAL_MISMATCH"
-  | "UNKNOWN";
-
-export type SyncRunResult =
-  | {
-      ok: true;
-      dealsObserved: number;
-      dealsEnrolled: number;
-      dealsExcluded: number;
-      dealsBooked: number;
-    }
-  | { ok: false; errorCode: SyncRunErrorCode; message: string };
+export const SYNC_RUN_ERROR_CODES = [
+  "CONFIG_INVALID",
+  "NOT_ACTIVE",
+  "CONTRACT_VERSION_MISMATCH",
+  "CONTRACT_INCOMPLETE",
+  "CONTRACT_DRIFT",
+  "HTTP_401",
+  "HTTP_403",
+  "HTTP_429",
+  "HTTP_5XX",
+  "NETWORK_ERROR",
+  "PAGE_INCONSISTENT",
+  "TOTAL_MISMATCH",
+  "DUPLICATE_DEAL",
+  "EMPTY_SOURCE",
+  "SOURCE_READ_FAILED",
+  "SYNC_ALREADY_RUNNING",
+  "COMMIT_REJECTED",
+  "ABANDONED",
+  "UNKNOWN",
+] as const;
+export type SyncRunErrorCode = (typeof SYNC_RUN_ERROR_CODES)[number];

@@ -1,220 +1,284 @@
 // Vision 3.0 Fase 5, Gate B (Issue #80) — sync-motoren. Orkestrerer
 // HubSpot-adapteren (read-only), klassifikationen (classify.ts, ren) og
-// persistence (idempotent), med disse BINDENDE garantier:
+// persistence (transaktionel RPC), med disse BINDENDE garantier:
 //
-//   1. Stage-/pipelinekontrakten bekræftes LIVE FØRST — kontraktdrift
-//      giver et FAILED-run uden nogen deal-læsning.
-//   2. ALLE sider læses fail-closed (samme princip som paged-read.ts): en
-//      fejl, en uventet side eller et inkonsistent antal midtvejs afbryder
-//      HELE kørslen uden at skrive noget som helst til
-//      conversion_deal_cohort — "fuld kilde eller ingen commit af kørslen".
-//   3. Klassifikationen (ren, se classify.ts) kører KUN når hele kilden er
-//      læst succesfuldt.
-//   4. Skrivningen sker i ÉT atomart upsert-kald (persistence.ts).
-//   5. Målingen skal være ACTIVE (measurement_started_at sat) for at en
-//      sync overhovedet klassificerer noget — Gate B1 kører ALDRIG denne
-//      vej med en rigtig HubSpot-adapter; kun fixtures i tests.
+//   0. Secrets valideres FØR enhver læsning eller skrivning (tomme, for
+//      korte eller ens HMAC-secrets ⇒ CONFIG_INVALID, intet røres).
+//   1. Målingen skal være ACTIVE, og state'ens kontraktversion skal være
+//      lig runtime CONTRACT_VERSION.
+//   2. En lease tages (højst én samtidig kørsel). Alt herefter afsluttes
+//      ENTEN med én atomisk commit (kohorte + SUCCEEDED + friskhed) ELLER med
+//      et FAILED-run med kategorisk fejlkode. En fejl returnerer aldrig ok.
+//   3. Stage-kontrakten verificeres mod live pipeline-metadata; hele kilden
+//      læses fail-closed (total, dubletter, tomme sider, HTTP-fejl); trips og
+//      eksisterende kohorte læses komplet eller slet ikke.
+//   4. Klassifikationen kører først når ALT er læst.
+//
+// `dryRun: true` gennemløber læsning + klassifikation uden nogen skrivning
+// (heller ingen sync-run) — til Gate C's forbindelses-/kontrakttjek.
 
-import { CONTRACT_VERSION } from "./contract";
-import { reduceDealCohort } from "./classify";
-import { computeBookingKeyForConversion, computeDealKey, validateBookingNumber } from "./dealKey";
-import type { HubSpotReadAdapter } from "./hubspotAdapter";
-import type { ConversionPersistence } from "./persistence";
+import { CONTRACT_VERSION, PIPELINE_STAGE_CONTRACT, SYNC_LEASE_SECONDS, type PipelineStageContract } from "./contract";
+import {
+  computeSharedBookingMatchKeys,
+  markUnobservedConflicts,
+  reduceDealCohort,
+  validateObservation,
+  verifyStageContract,
+  type ValidatedObservation,
+} from "./classify";
+import { computeBookingKeyForConversion, computeDealKey, secretsAreUsable, validateBookingNumber } from "./dealKey";
+import type { AdapterFailureReason, HubSpotReadAdapter } from "./hubspotAdapter";
+import type { CommitCounts, ConversionPersistence } from "./persistence";
 import type { ClassifiedDealResult, HubSpotDealObservation, SyncRunErrorCode } from "./types";
 
 export type SyncRunOutcome =
-  | { ok: true; observed: number; enrolled: number; excluded: number; booked: number }
-  | { ok: false; errorCode: SyncRunErrorCode; message: string };
+  | { ok: true; dryRun: boolean; isBaseline: boolean; counts: CommitCounts }
+  | {
+      ok: false;
+      errorCode: SyncRunErrorCode;
+      /** false hvis FAILED-revisionsrækken IKKE kunne skrives (eller kørslen blev afvist før en lease). */
+      auditRecorded: boolean;
+    };
 
 const MAX_PAGES = 2000;
 
-async function readAllDeals(
-  adapter: HubSpotReadAdapter,
-): Promise<{ ok: true; observations: HubSpotDealObservation[] } | { ok: false; errorCode: SyncRunErrorCode; message: string }> {
-  const observations: HubSpotDealObservation[] = [];
-  let cursor: string | null = null;
-  let pages = 0;
+function mapAdapterFailure(reason: AdapterFailureReason): SyncRunErrorCode {
+  switch (reason) {
+    case "http-401":
+      return "HTTP_401";
+    case "http-403":
+      return "HTTP_403";
+    case "http-429":
+      return "HTTP_429";
+    case "http-5xx":
+      return "HTTP_5XX";
+    case "page-inconsistent":
+      return "PAGE_INCONSISTENT";
+    case "total-mismatch":
+      return "TOTAL_MISMATCH";
+    default:
+      return "NETWORK_ERROR";
+  }
+}
 
-  while (pages < MAX_PAGES) {
-    pages += 1;
+type Failure = { ok: false; code: SyncRunErrorCode };
+
+async function readAllDeals(adapter: HubSpotReadAdapter): Promise<{ ok: true; observations: HubSpotDealObservation[] } | Failure> {
+  const observations: HubSpotDealObservation[] = [];
+  const seenIds = new Set<string>();
+  let cursor: string | null = null;
+  let total: number | null = null;
+
+  for (let pages = 0; pages < MAX_PAGES; pages++) {
     let page;
     try {
       page = await adapter.readDealsPage(cursor);
-    } catch (e) {
-      return { ok: false, errorCode: "NETWORK_ERROR", message: e instanceof Error ? e.message : "unknown" };
+    } catch {
+      return { ok: false, code: "NETWORK_ERROR" };
     }
-    if (!page.ok) {
-      const errorCode: SyncRunErrorCode =
-        page.reason === "http-401"
-          ? "HTTP_401"
-          : page.reason === "http-403"
-            ? "HTTP_403"
-            : page.reason === "http-429"
-              ? "HTTP_429"
-              : page.reason === "http-5xx"
-                ? "HTTP_5XX"
-                : page.reason === "page-inconsistent"
-                  ? "PAGE_INCONSISTENT"
-                  : page.reason === "total-mismatch"
-                    ? "TOTAL_MISMATCH"
-                    : "NETWORK_ERROR";
-      return { ok: false, errorCode, message: page.message };
+    if (!page.ok) return { ok: false, code: mapAdapterFailure(page.reason) };
+    if (!Number.isInteger(page.total) || page.total < 0) return { ok: false, code: "TOTAL_MISMATCH" };
+    if (total === null) total = page.total;
+    else if (page.total !== total) return { ok: false, code: "TOTAL_MISMATCH" };
+
+    for (const obs of page.observations) {
+      const id = typeof obs.rawDealId === "string" ? obs.rawDealId.trim() : "";
+      if (id === "") return { ok: false, code: "PAGE_INCONSISTENT" };
+      // Samme deal på to sider (fx ved ustabil sortering) ⇒ kilden er ikke konsistent.
+      if (seenIds.has(id)) return { ok: false, code: "DUPLICATE_DEAL" };
+      seenIds.add(id);
+      observations.push(obs);
     }
-    observations.push(...page.observations);
-    if (!page.hasMore) return { ok: true, observations };
-    if (page.nextCursor === null) {
-      // hasMore=true men ingen cursor er selvmodsigende — fail-closed, aldrig en gættet fortsættelse.
-      return { ok: false, errorCode: "PAGE_INCONSISTENT", message: "hasMore uden nextCursor" };
+    if (observations.length > total) return { ok: false, code: "TOTAL_MISMATCH" };
+    if (!page.hasMore) {
+      if (observations.length !== total) return { ok: false, code: "TOTAL_MISMATCH" };
+      return { ok: true, observations };
     }
+    if (page.nextCursor === null || page.observations.length === 0) return { ok: false, code: "PAGE_INCONSISTENT" };
     cursor = page.nextCursor;
   }
-  return { ok: false, errorCode: "PAGE_INCONSISTENT", message: `over ${MAX_PAGES} sider` };
+  return { ok: false, code: "PAGE_INCONSISTENT" };
 }
 
-/**
- * Beregner hvilke booking_match_key'er der er "delte" — enten dublerede
- * inden for DENNE batch, eller allerede brugt af en anden, allerede
- * persisteret deal_key. Beregnes FØR selve klassifikationen, fordi
- * afgørelsen kræver kendskab til hele batchen/tabellen, ikke én deal ad
- * gangen (classify.ts er bevidst uvidende om andre deals).
- */
-function computeSharedBookingMatchKeys(
-  candidateKeys: { dealKey: string; bookingMatchKey: string }[],
-  alreadyUsedElsewhere: ReadonlySet<string>,
-): Set<string> {
-  const countInBatch = new Map<string, number>();
-  for (const c of candidateKeys) {
-    countInBatch.set(c.bookingMatchKey, (countInBatch.get(c.bookingMatchKey) ?? 0) + 1);
-  }
-  const shared = new Set<string>();
-  for (const [key, count] of countInBatch) {
-    if (count > 1) shared.add(key);
-  }
-  for (const key of alreadyUsedElsewhere) shared.add(key);
-  return shared;
-}
+export type RunConversionSyncOptions = {
+  dealKeySecret: string;
+  bookingMatchSecret: string;
+  now?: Date;
+  dryRun?: boolean;
+  /** Kun til tests — produktion bruger altid PIPELINE_STAGE_CONTRACT. */
+  stageContract?: PipelineStageContract;
+};
 
 export async function runConversionSync(
   hubspot: HubSpotReadAdapter,
   persistence: ConversionPersistence,
-  options: { dealKeySecret: string; bookingMatchSecret: string; now?: Date } = {
-    dealKeySecret: "",
-    bookingMatchSecret: "",
-  },
+  options: RunConversionSyncOptions,
 ): Promise<SyncRunOutcome> {
+  // 0. Konfiguration — før ALT andet.
+  if (!secretsAreUsable(options?.dealKeySecret, options?.bookingMatchSecret)) {
+    return { ok: false, errorCode: "CONFIG_INVALID", auditRecorded: false };
+  }
+  const dryRun = options.dryRun === true;
   const now = options.now ?? new Date();
+  const contract = options.stageContract ?? PIPELINE_STAGE_CONTRACT;
 
-  const measurement = await persistence.loadMeasurementState();
-  if (!measurement || measurement.status !== "ACTIVE" || !measurement.measurementStartedAt) {
-    // Gate B1's tilstand: målingen er ikke startet. Sync-motoren skal ALDRIG
-    // klassificere noget uden et frosset, godkendt nulpunkt — det ville
-    // netop være den skjulte historiske backfill Gate A forbød.
-    const outcome: SyncRunOutcome = {
-      ok: false,
-      errorCode: "CONTRACT_DRIFT",
-      message: "målingen er ikke ACTIVE (measurement_started_at mangler) — sync afvist",
-    };
-    await persistence.recordSyncRun({
-      status: "FAILED",
-      contractVersion: measurement?.contractVersion ?? CONTRACT_VERSION,
-      errorCode: outcome.errorCode,
-      message: outcome.message,
-    });
-    return outcome;
+  // 1. Målingstilstand og kontraktversion.
+  const stateRes = await persistence.loadMeasurementState();
+  if (!stateRes.ok) return { ok: false, errorCode: stateRes.code, auditRecorded: false };
+  const state = stateRes.state;
+  if (!dryRun) {
+    if (!state || state.status !== "ACTIVE") return { ok: false, errorCode: "NOT_ACTIVE", auditRecorded: false };
+    if (state.contractVersion !== CONTRACT_VERSION) {
+      return { ok: false, errorCode: "CONTRACT_VERSION_MISMATCH", auditRecorded: false };
+    }
+  }
+  const isBaseline = !state?.measurementStartedAt;
+
+  // 2. Lease (ikke i dry-run).
+  let runId: string | null = null;
+  let syncGeneration = 0;
+  if (!dryRun) {
+    const begin = await persistence.beginSyncRun({ contractVersion: CONTRACT_VERSION, leaseSeconds: SYNC_LEASE_SECONDS });
+    if (!begin.ok) return { ok: false, errorCode: begin.code, auditRecorded: false };
+    runId = begin.runId;
+    syncGeneration = begin.syncGeneration;
   }
 
-  const contract = await hubspot.confirmStageContract();
-  if (!contract.ok) {
-    await persistence.recordSyncRun({
-      status: "FAILED",
-      contractVersion: measurement.contractVersion,
-      errorCode: "CONTRACT_DRIFT",
-      message: contract.reason,
+  const fail = async (code: SyncRunErrorCode): Promise<SyncRunOutcome> => {
+    if (runId === null) return { ok: false, errorCode: code, auditRecorded: false };
+    let recorded = false;
+    try {
+      recorded = (await persistence.failSyncRun({ runId, errorCode: code })).ok;
+    } catch {
+      recorded = false;
+    }
+    return { ok: false, errorCode: code, auditRecorded: recorded };
+  };
+
+  try {
+    const result = await classifyAll(hubspot, persistence, {
+      dealKeySecret: options.dealKeySecret,
+      bookingMatchSecret: options.bookingMatchSecret,
+      now,
+      isBaseline,
+      contract,
     });
-    return { ok: false, errorCode: "CONTRACT_DRIFT", message: contract.reason };
-  }
+    if (!result.ok) return await fail(result.code);
 
-  const readResult = await readAllDeals(hubspot);
-  if (!readResult.ok) {
-    await persistence.recordSyncRun({
-      status: "FAILED",
-      contractVersion: measurement.contractVersion,
-      errorCode: readResult.errorCode,
-      message: readResult.message,
-    });
-    return { ok: false, errorCode: readResult.errorCode, message: readResult.message };
-  }
+    if (dryRun || runId === null) {
+      return { ok: true, dryRun: true, isBaseline, counts: countRows(result.rows, now) };
+    }
 
-  const dealKeyFn = (rawId: string) => computeDealKey(rawId, options.dealKeySecret);
-  // Genbruger Analytics Bridge-kontrakten direkte (Issue #45) — samme HMAC-
-  // opskrift. dealKey.ts's validateBookingNumber har allerede normaliseret,
-  // så `computeBookingKeyForConversion` her tager et allerede-normaliseret
-  // tal-streng-input, ligesom `normalizeBookingNo` selv er et no-op på den.
-  const bookingMatchKeyFn = (normalized: string) =>
-    computeBookingKeyForConversion(normalized, options.bookingMatchSecret);
-
-  const travelPlanIndex = await persistence.loadTravelPlanIndex();
-  const dealKeys = readResult.observations.map((o) => dealKeyFn(o.rawDealId));
-  const existingStates = await persistence.loadExistingCohortStates(dealKeys);
-  const alreadyUsedKeys = await persistence.loadUsedBookingMatchKeys();
-
-  // Første pas: find kandidat-booking_match_key'er for deals der ville
-  // kvalificere sig til optagelse i DENNE kørsel (dvs. ikke allerede
-  // terminale), så delte referencer inden for batchen kan opdages FØR
-  // klassifikationen af den enkelte deal.
-  const candidateKeys: { dealKey: string; bookingMatchKey: string }[] = [];
-  readResult.observations.forEach((obs, i) => {
-    const dealKey = dealKeys[i];
-    const existing = existingStates.get(dealKey) ?? null;
-    const isTerminal =
-      existing &&
-      (existing.eligibilityStatus === "ENROLLED" ||
-        existing.eligibilityStatus === "EXCLUDED" ||
-        existing.eligibilityStatus === "PRE_START_EXISTING");
-    if (isTerminal) return;
-    if (obs.everQualifiedAt === null) return;
-    if (obs.everQualifiedAt.getTime() < measurement.measurementStartedAt!.getTime()) return;
-    const validation = validateBookingNumber(obs.bookingNumberRaw);
-    if (validation.kind !== "valid") return;
-    candidateKeys.push({ dealKey, bookingMatchKey: bookingMatchKeyFn(validation.normalized) });
-  });
-  const sharedBookingMatchKeys = computeSharedBookingMatchKeys(candidateKeys, alreadyUsedKeys);
-
-  const classified: ClassifiedDealResult[] = readResult.observations.map((obs, i) => {
-    const dealKey = dealKeys[i];
-    return reduceDealCohort({
-      measurementStartedAt: measurement.measurementStartedAt!,
+    const commit = await persistence.commitSyncRun({
+      runId,
+      syncGeneration,
+      contractVersion: CONTRACT_VERSION,
       observedAt: now,
-      observation: obs,
-      existing: existingStates.get(dealKey) ?? null,
-      computeDealKey: dealKeyFn,
-      computeBookingMatchKey: bookingMatchKeyFn,
-      travelPlanIndex,
-      sharedBookingMatchKeys,
-      contractVersion: measurement.contractVersion,
+      isBaseline,
+      rows: result.rows,
     });
-  });
+    if (!commit.ok) return await fail(commit.code);
+    return { ok: true, dryRun: false, isBaseline, counts: commit.counts };
+  } catch {
+    // En uventet exception må aldrig blive til succes eller efterlade en
+    // halv tilstand: commit er atomisk, så kohorten er urørt.
+    return await fail("UNKNOWN");
+  }
+}
 
-  const writeResult = await persistence.upsertCohortRows(classified);
-  if (!writeResult.ok) {
-    await persistence.recordSyncRun({
-      status: "FAILED",
-      contractVersion: measurement.contractVersion,
-      errorCode: "UNKNOWN",
-      message: writeResult.message,
-    });
-    return { ok: false, errorCode: "UNKNOWN", message: writeResult.message };
+function countRows(rows: ClassifiedDealResult[], observedAt: Date): CommitCounts {
+  return {
+    observed: rows.filter((r) => r.lastObservedAt.getTime() === observedAt.getTime()).length,
+    enrolled: rows.filter((r) => r.eligibilityStatus === "ENROLLED").length,
+    excluded: rows.filter((r) => r.eligibilityStatus === "EXCLUDED").length,
+    booked: rows.filter((r) => r.outcomeStatus === "BOOKED").length,
+    conflicts: rows.filter((r) => r.bookingConflictDetectedAt !== null).length,
+  };
+}
+
+async function classifyAll(
+  hubspot: HubSpotReadAdapter,
+  persistence: ConversionPersistence,
+  ctx: {
+    dealKeySecret: string;
+    bookingMatchSecret: string;
+    now: Date;
+    isBaseline: boolean;
+    contract: PipelineStageContract;
+  },
+): Promise<{ ok: true; rows: ClassifiedDealResult[] } | Failure> {
+  let live;
+  try {
+    live = await hubspot.confirmStageContract();
+  } catch {
+    return { ok: false, code: "NETWORK_ERROR" };
+  }
+  if (!live.ok) return { ok: false, code: mapAdapterFailure(live.reason) };
+  const verified = verifyStageContract({ pipelineId: live.pipelineId, stageIds: live.stageIds }, ctx.contract);
+  if (!verified.ok) return { ok: false, code: verified.code };
+
+  const read = await readAllDeals(hubspot);
+  if (!read.ok) return read;
+  if (read.observations.length === 0) return { ok: false, code: "EMPTY_SOURCE" };
+
+  const trips = await persistence.loadTravelPlanIndex(ctx.bookingMatchSecret);
+  if (!trips.ok) return { ok: false, code: trips.code };
+  const persisted = await persistence.loadAllCohortStates();
+  if (!persisted.ok) return { ok: false, code: persisted.code };
+  if (ctx.isBaseline && persisted.states.size > 0) return { ok: false, code: "COMMIT_REJECTED" };
+
+  // Pas 1: validér hver observation mod kontrakten og beregn nøgler.
+  type Prepared = {
+    dealKey: string;
+    validated: ValidatedObservation;
+    booking: ReturnType<typeof validateBookingNumber>;
+    currentKey: string | null;
+  };
+  const prepared: Prepared[] = [];
+  const dealKeys = new Set<string>();
+  for (const obs of read.observations) {
+    const v = validateObservation(obs, ctx.contract);
+    if (!v.ok) return { ok: false, code: "CONTRACT_DRIFT" };
+    const dealKey = computeDealKey(obs.rawDealId, ctx.dealKeySecret);
+    if (dealKeys.has(dealKey)) return { ok: false, code: "DUPLICATE_DEAL" };
+    dealKeys.add(dealKey);
+    const booking = validateBookingNumber(obs.bookingNumberRaw);
+    const currentKey = booking.kind === "valid" ? computeBookingKeyForConversion(booking.normalized, ctx.bookingMatchSecret) : null;
+    prepared.push({ dealKey, validated: v.value, booking, currentKey });
   }
 
-  const enrolled = classified.filter((r) => r.eligibilityStatus === "ENROLLED").length;
-  const excluded = classified.filter((r) => r.eligibilityStatus === "EXCLUDED").length;
-  const booked = classified.filter((r) => r.outcomeStatus === "BOOKED").length;
+  // Pas 2: delte referencer på tværs af HELE kilden + alle persisterede
+  // frosne nøgler — uafhængigt af observationsrækkefølge.
+  const pairs: { dealKey: string; bookingMatchKey: string }[] = [];
+  for (const [dealKey, s] of persisted.states) {
+    if (s.bookingMatchKey) pairs.push({ dealKey, bookingMatchKey: s.bookingMatchKey });
+  }
+  for (const p of prepared) if (p.currentKey) pairs.push({ dealKey: p.dealKey, bookingMatchKey: p.currentKey });
+  const shared = computeSharedBookingMatchKeys(pairs);
 
-  await persistence.recordSyncRun({
-    status: "SUCCEEDED",
-    contractVersion: measurement.contractVersion,
-    deals: { observed: classified.length, enrolled, excluded, booked },
-  });
-
-  return { ok: true, observed: classified.length, enrolled, excluded, booked };
+  // Pas 3: klassifikation.
+  const rows: ClassifiedDealResult[] = prepared.map((p) =>
+    reduceDealCohort({
+      dealKey: p.dealKey,
+      observedAt: ctx.now,
+      isBaseline: ctx.isBaseline,
+      validated: p.validated,
+      booking: p.booking,
+      currentBookingMatchKey: p.currentKey,
+      existing: persisted.states.get(p.dealKey) ?? null,
+      travelPlanIndex: trips.index,
+      sharedBookingMatchKeys: shared,
+      contractVersion: CONTRACT_VERSION,
+    }),
+  );
+  rows.push(
+    ...markUnobservedConflicts({
+      persisted: persisted.states,
+      observedDealKeys: dealKeys,
+      sharedBookingMatchKeys: shared,
+      observedAt: ctx.now,
+      contractVersion: CONTRACT_VERSION,
+    }),
+  );
+  return { ok: true, rows };
 }

@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { computeBookingMatchKey, normalizeBookingNo } from "../analytics-bridge";
-import { BOOKING_NUMBER_FORMAT_RE } from "./contract";
+import { BOOKING_NUMBER_FORMAT_RE, MIN_SECRET_LENGTH } from "./contract";
 
 // Vision 3.0 Fase 5, Gate B (Issue #80) — pseudonymisering. To SEPARATE
 // HMAC-nøglerum, med to uafhængige secrets, aldrig krydset:
@@ -16,6 +16,20 @@ import { BOOKING_NUMBER_FORMAT_RE } from "./contract";
 // BOOKING_MATCH_SECRET (docs/ANALYTICS-BRIDGE-API.md).
 
 const DEAL_KEY_DOMAIN_PREFIX = "dealkey:v1:";
+
+/**
+ * Afgør om de to HMAC-secrets kan bruges. Tomme, for korte (under
+ * MIN_SECRET_LENGTH efter trim) eller IDENTISKE secrets afvises — en tom
+ * secret ville give en offentligt reproducerbar "pseudonymisering", og ens
+ * secrets ville kollapse domæneadskillelsen. Kaldes af sync-motoren FØR
+ * nogen læsning eller skrivning. Returnerer aldrig selve værdierne.
+ */
+export function secretsAreUsable(dealKeySecret: unknown, bookingMatchSecret: unknown): boolean {
+  if (typeof dealKeySecret !== "string" || typeof bookingMatchSecret !== "string") return false;
+  if (dealKeySecret.trim().length < MIN_SECRET_LENGTH) return false;
+  if (bookingMatchSecret.trim().length < MIN_SECRET_LENGTH) return false;
+  return dealKeySecret !== bookingMatchSecret;
+}
 
 export function computeDealKey(rawHubspotDealId: string, secret: string): string {
   const trimmed = rawHubspotDealId.trim();

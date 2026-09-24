@@ -1,225 +1,263 @@
 import { describe, expect, it } from "vitest";
-import { buildConversionAggregate, type CohortAggregateRow } from "./aggregate";
+import { buildConversionAggregate, suppressPartition, type CohortAggregateRow, type ConversionAggregate } from "./aggregate";
+import { CONTRACT_VERSION, MATURITY_WINDOWS_DAYS } from "./contract";
 import type { MeasurementState } from "./types";
 
-const ASOF = new Date("2026-12-31T00:00:00Z");
+const DAY = 24 * 60 * 60 * 1000;
+const ASOF = new Date("2027-03-01T12:00:00Z");
 const MEASUREMENT: MeasurementState = {
   status: "ACTIVE",
-  contractVersion: 1,
+  contractVersion: CONTRACT_VERSION,
   measurementStartedAt: new Date("2026-10-01T00:00:00Z"),
-  lastSuccessfulSyncAt: new Date("2026-12-30T00:00:00Z"),
+  lastSuccessfulSyncAt: new Date("2027-03-01T03:00:00Z"),
 };
 
-function enrolledRow(overrides: Partial<CohortAggregateRow> = {}): CohortAggregateRow {
+function row(overrides: Partial<CohortAggregateRow> = {}): CohortAggregateRow {
   return {
     eligibilityStatus: "ENROLLED",
     exclusionReason: null,
-    firstQualifiedObservationAt: new Date("2026-10-01T00:00:00Z"),
+    firstQualifiedObservationAt: new Date("2026-10-10T03:00:00Z"),
     exposureGroup: "ONLINE",
+    bookingConflictDetectedAt: null,
     outcomeStatus: "NOT_BOOKED",
     firstBookedAt: null,
     lostObservedAt: null,
+    outcomeConflictObservedAt: null,
     ...overrides,
   };
 }
 
-/** Bygger N ENROLLED-rækker i en gruppe, mature ift. `windowDays`, med `bookedCount` booket inden for vinduet. */
-function matureGroup(
-  group: "ONLINE" | "PDF_ONLY",
-  count: number,
-  bookedCount: number,
-  windowDays: number,
-): CohortAggregateRow[] {
-  const qualifiedAt = new Date(ASOF.getTime() - (windowDays + 5) * 24 * 60 * 60 * 1000);
-  return Array.from({ length: count }, (_, i) =>
-    enrolledRow({
+/** n tilbud i kohortemåneden `month` (YYYY-MM, dag 10), heraf `booked` booket 5 dage efter kohortestart. */
+function month(group: "ONLINE" | "PDF_ONLY", monthStr: string, n: number, booked: number): CohortAggregateRow[] {
+  const start = new Date(`${monthStr}-10T03:00:00Z`);
+  return Array.from({ length: n }, (_, i) =>
+    row({
       exposureGroup: group,
-      firstQualifiedObservationAt: qualifiedAt,
-      outcomeStatus: i < bookedCount ? "BOOKED" : "NOT_BOOKED",
-      firstBookedAt: i < bookedCount ? new Date(qualifiedAt.getTime() + 5 * 24 * 60 * 60 * 1000) : null,
+      firstQualifiedObservationAt: start,
+      outcomeStatus: i < booked ? "BOOKED" : "NOT_BOOKED",
+      firstBookedAt: i < booked ? new Date(start.getTime() + 5 * DAY) : null,
     }),
   );
 }
 
-describe("buildConversionAggregate — tomt grundlag", () => {
-  it("tomt datasæt giver null-celler, aldrig 0%, og ingen publicerbar sammenligning", () => {
-    const agg = buildConversionAggregate([], MEASUREMENT, ASOF);
-    expect(agg.hasPublishableComparison).toBe(false);
-    expect(agg.groups.ONLINE.totalEnrolled).toBeNull();
-    expect(agg.groups.ONLINE.windows[30]).toEqual({
-      denominator: null,
-      numerator: null,
-      ratePercent: null,
-      suppressed: true,
-    });
+const agg = (rows: CohortAggregateRow[], asOf = ASOF) => buildConversionAggregate(rows, MEASUREMENT, asOf);
+
+/** Alle publicerede udfaldstal i DTO'en: (tilbud, booket)-par. */
+function publishedOutcomePairs(a: ConversionAggregate): [number, number][] {
+  const out: [number, number][] = [];
+  for (const g of [a.groups.ONLINE, a.groups.PDF_ONLY]) {
+    for (const w of MATURITY_WINDOWS_DAYS) {
+      const c = g.windows[w];
+      if (!c.suppressed) out.push([c.denominator!, c.numerator!]);
+    }
+    for (const t of g.trend30) out.push([t.enrolled, t.booked]);
+  }
+  return out;
+}
+
+describe("udfaldsceller — small-cell + komplement (fund 3)", () => {
+  it.each([
+    ["30 tilbud / 25 booket (komplement 5)", 30, 25, false],
+    ["30 tilbud / 5 booket", 30, 5, false],
+    ["20 tilbud / 10 booket (præcis på grænsen)", 20, 10, true],
+    ["30 tilbud / 0 booket", 30, 0, false],
+    ["9 tilbud / 0 booket", 9, 0, false],
+  ])("%s", (_n, n, b, visible) => {
+    const a = agg(month("ONLINE", "2026-10", n, b));
+    const cell = a.groups.ONLINE.windows[30];
+    if (visible) {
+      expect(cell).toEqual({ denominator: n, numerator: b, ratePercent: (b / n) * 100, suppressed: false });
+      expect(a.groups.ONLINE.trend30).toEqual([{ fromMonth: "2026-10", toMonth: "2026-10", enrolled: n, booked: b, ratePercent: (b / n) * 100 }]);
+    } else {
+      // Tæller, nævner og procent skjules SAMMEN — og måneden optræder ikke i trenden.
+      expect(cell).toEqual({ denominator: null, numerator: null, ratePercent: null, suppressed: true });
+      expect(a.groups.ONLINE.trend30).toEqual([]);
+    }
+    for (const [tn, tb] of publishedOutcomePairs(a)) {
+      expect(tb).toBeGreaterThanOrEqual(10);
+      expect(tn - tb).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it("tomt grundlag giver null, aldrig 0 %, og ingen publicerbar sammenligning", () => {
+    const a = agg([]);
+    expect(a.hasPublishableComparison).toBe(false);
+    for (const w of MATURITY_WINDOWS_DAYS) expect(a.groups.ONLINE.windows[w].ratePercent).toBeNull();
+    expect(a.groups.ONLINE.trend30).toEqual([]);
+    expect(a.differencePercentPoints).toEqual({ 30: null, 60: null, 90: null });
+    expect(a.groups.ONLINE.totalEnrolled).toBe(0);
+    expect(a.dataQuality.totalObserved).toBe(0);
   });
 });
 
-describe("buildConversionAggregate — small-cell-undertrykkelse", () => {
-  it("under 10 modne deals i et vindue => cellen undertrykkes", () => {
-    const rows = matureGroup("ONLINE", 9, 5, 30);
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.groups.ONLINE.windows[30].suppressed).toBe(true);
-    expect(agg.groups.ONLINE.windows[30].ratePercent).toBeNull();
-  });
-
-  it("totalEnrolled under 10 undertrykkes, selvom vinduerne evt. ikke er det", () => {
-    const rows = matureGroup("ONLINE", 8, 0, 30);
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.groups.ONLINE.totalEnrolled).toBeNull();
-  });
-
-  it("mindst 10 modne, tæller og komplement begge >=10 => rate vises", () => {
-    const rows = matureGroup("ONLINE", 20, 12, 30); // tæller=12, komplement=8 -> stadig under! juster
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    // komplement = 20-12 = 8 < 10 => SKAL undertrykkes. Denne test bekræfter komplementær undertrykkelse.
-    expect(agg.groups.ONLINE.windows[30].suppressed).toBe(true);
-  });
-
-  it("mindst 10 modne, tæller og komplement begge rigeligt over 10 => rate vises korrekt", () => {
-    const rows = matureGroup("ONLINE", 30, 15, 30); // tæller=15, komplement=15
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    const cell = agg.groups.ONLINE.windows[30];
-    expect(cell.suppressed).toBe(false);
-    expect(cell.numerator).toBe(15);
-    expect(cell.denominator).toBe(30);
-    expect(cell.ratePercent).toBeCloseTo(50, 5);
-  });
-});
-
-describe("buildConversionAggregate — komplementær undertrykkelse", () => {
-  it("tæller under 10 => hele cellen (inkl. nævner) undertrykkes", () => {
-    const rows = matureGroup("ONLINE", 25, 3, 30); // tæller=3 (<10)
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    const cell = agg.groups.ONLINE.windows[30];
-    expect(cell.suppressed).toBe(true);
-    expect(cell.numerator).toBeNull();
-    expect(cell.denominator).toBeNull();
-  });
-
-  it("komplement (nævner-tæller) under 10 => hele cellen undertrykkes, selvom tælleren selv er stor", () => {
-    const rows = matureGroup("ONLINE", 25, 20, 30); // tæller=20, komplement=5 (<10)
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    const cell = agg.groups.ONLINE.windows[30];
-    expect(cell.suppressed).toBe(true);
-  });
-});
-
-describe("buildConversionAggregate — modning (30/60/90 dage)", () => {
-  it("umodne deals (yngre end vinduet) indgår ikke i nævneren for det vindue", () => {
-    // 25 modne (12 booket, komplement 13 — begge over small-cell-tærsklen,
-    // så testen isolerer modenheds-filtreringen fra privacy-undertrykkelsen)
-    // + 5 umodne (kun 10 dage gamle, under 30-dages-vinduet).
+describe("krydstabel-inferens: måned, gruppe og total (fund 3)", () => {
+  it("en lille måned kan ikke udledes som vinduestal minus synlige måneder — den slås sammen med næste måned", () => {
     const rows = [
-      ...matureGroup("ONLINE", 25, 12, 30),
-      ...Array.from({ length: 5 }, () =>
-        enrolledRow({ exposureGroup: "ONLINE", firstQualifiedObservationAt: new Date(ASOF.getTime() - 10 * 24 * 60 * 60 * 1000) }),
-      ),
+      ...month("ONLINE", "2026-10", 40, 20),
+      ...month("ONLINE", "2026-11", 5, 2), // lille
+      ...month("ONLINE", "2026-12", 30, 15),
     ];
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.groups.ONLINE.windows[30].denominator).toBe(25); // ikke 30
+    const a = agg(rows);
+    expect(a.groups.ONLINE.trend30.map((t) => [t.fromMonth, t.toMonth, t.enrolled, t.booked])).toEqual([
+      ["2026-10", "2026-10", 40, 20],
+      ["2026-11", "2026-12", 35, 17],
+    ]);
+    const w = a.groups.ONLINE.windows[30];
+    expect([w.denominator, w.numerator]).toEqual([75, 37]);
+    // Vinduet er PRÆCIS summen af de synlige perioder — ingen rest at differencere.
+    const sum = a.groups.ONLINE.trend30.reduce((s, t) => [s[0] + t.enrolled, s[1] + t.booked], [0, 0]);
+    expect(sum).toEqual([w.denominator, w.numerator]);
   });
 
-  it("booket EFTER vinduets grænse tæller ikke som konverteret i det vindue", () => {
-    const qualifiedAt = new Date(ASOF.getTime() - 40 * 24 * 60 * 60 * 1000); // moden for 30d
+  it("en lille sidste måned tilbageholdes helt (ikke i vindue, ikke i trend)", () => {
+    const a = agg([...month("ONLINE", "2026-10", 40, 20), ...month("ONLINE", "2026-11", 5, 2)]);
+    expect(a.groups.ONLINE.windows[30].denominator).toBe(40);
+    expect(a.groups.ONLINE.trend30).toHaveLength(1);
+  });
+
+  it("umodne måneder indgår hverken i nævner eller trend", () => {
+    const a = agg([...month("ONLINE", "2026-10", 40, 20), ...month("ONLINE", "2027-02", 40, 20)]);
+    expect(a.groups.ONLINE.windows[30].denominator).toBe(40);
+    expect(a.groups.ONLINE.totalEnrolled).toBe(80);
+  });
+
+  it("booket efter vinduets grænse tæller ikke i det vindue", () => {
+    const start = new Date("2026-10-10T03:00:00Z");
     const rows = [
-      // 12 booket INDEN for 30-dages-vinduet — skal tælle med.
-      ...Array.from({ length: 12 }, () =>
-        enrolledRow({
-          exposureGroup: "ONLINE",
-          firstQualifiedObservationAt: qualifiedAt,
-          outcomeStatus: "BOOKED",
-          firstBookedAt: new Date(qualifiedAt.getTime() + 20 * 24 * 60 * 60 * 1000),
-        }),
-      ),
-      // 3 booket EFTER 30-dages-grænsen — må IKKE tælle med i 30-dages-raten.
-      ...Array.from({ length: 3 }, () =>
-        enrolledRow({
-          exposureGroup: "ONLINE",
-          firstQualifiedObservationAt: qualifiedAt,
-          outcomeStatus: "BOOKED",
-          firstBookedAt: new Date(qualifiedAt.getTime() + 35 * 24 * 60 * 60 * 1000),
-        }),
-      ),
-      ...Array.from({ length: 15 }, () => enrolledRow({ exposureGroup: "ONLINE", firstQualifiedObservationAt: qualifiedAt })),
+      ...Array.from({ length: 12 }, () => row({ firstQualifiedObservationAt: start, outcomeStatus: "BOOKED", firstBookedAt: new Date(start.getTime() + 20 * DAY) })),
+      ...Array.from({ length: 10 }, () => row({ firstQualifiedObservationAt: start, outcomeStatus: "BOOKED", firstBookedAt: new Date(start.getTime() + 45 * DAY) })),
+      ...Array.from({ length: 15 }, () => row({ firstQualifiedObservationAt: start })),
     ];
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    // 30 modne i alt, kun de 12 INDEN for vinduet tæller — ikke 15.
-    expect(agg.groups.ONLINE.windows[30].numerator).toBe(12);
+    const a = agg(rows);
+    expect(a.groups.ONLINE.windows[30].numerator).toBe(12);
+    expect(a.groups.ONLINE.windows[60].numerator).toBe(22);
   });
 
-  it("de tre vinduer (30/60/90) beregnes uafhængigt af hinanden", () => {
-    const rows = matureGroup("ONLINE", 30, 15, 90); // moden for alle tre vinduer
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.groups.ONLINE.windows[30]).toBeDefined();
-    expect(agg.groups.ONLINE.windows[60]).toBeDefined();
-    expect(agg.groups.ONLINE.windows[90]).toBeDefined();
+  it("egenskab: over 150 dages daglig visning ændres et publiceret udfaldstal kun i spring, der selv opfylder tærsklerne", () => {
+    // Pseudo-tilfældige, men deterministiske måneder med små og store celler.
+    let seed = 7;
+    const rnd = (m: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % m;
+    };
+    const rows: CohortAggregateRow[] = [];
+    for (const m of ["2026-10", "2026-11", "2026-12", "2027-01", "2027-02"]) {
+      for (const g of ["ONLINE", "PDF_ONLY"] as const) {
+        const n = rnd(40);
+        const start = new Date(`${m}-${String(1 + rnd(27)).padStart(2, "0")}T03:00:00Z`);
+        for (let i = 0; i < n; i++) {
+          const booked = rnd(3) === 0;
+          rows.push(row({ exposureGroup: g, firstQualifiedObservationAt: start, outcomeStatus: booked ? "BOOKED" : "NOT_BOOKED", firstBookedAt: booked ? new Date(start.getTime() + rnd(80) * DAY) : null }));
+        }
+      }
+    }
+    let prev: ConversionAggregate | null = null;
+    for (let d = 0; d < 150; d++) {
+      const a = agg(rows, new Date(Date.UTC(2026, 10, 1) + d * DAY));
+      for (const [n, b] of publishedOutcomePairs(a)) {
+        expect(b).toBeGreaterThanOrEqual(10);
+        expect(n - b).toBeGreaterThanOrEqual(10);
+      }
+      if (prev) {
+        for (const g of ["ONLINE", "PDF_ONLY"] as const) {
+          for (const w of MATURITY_WINDOWS_DAYS) {
+            const x = prev.groups[g].windows[w];
+            const y = a.groups[g].windows[w];
+            if (!x.suppressed && !y.suppressed && (x.denominator !== y.denominator || x.numerator !== y.numerator)) {
+              const dn = y.denominator! - x.denominator!;
+              const db = y.numerator! - x.numerator!;
+              expect(dn).toBeGreaterThanOrEqual(10);
+              expect(db).toBeGreaterThanOrEqual(10);
+              expect(dn - db).toBeGreaterThanOrEqual(10);
+            }
+          }
+        }
+      }
+      prev = a;
+    }
   });
 });
 
-describe("buildConversionAggregate — publicerbarhed", () => {
-  it("kun publicerbar når BEGGE grupper har mindst ét ikke-undertrykt vindue", () => {
-    const rows = [...matureGroup("ONLINE", 30, 15, 30), ...matureGroup("PDF_ONLY", 3, 1, 30)]; // PDF_ONLY for lille
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.hasPublishableComparison).toBe(false);
+describe("tælletal og datakvalitet — sekundær undertrykkelse (fund 3)", () => {
+  it("én lille celle i en partition kan ikke udledes som total minus de synlige", () => {
+    const r = suppressPartition([100, 50, 3, 0], 153);
+    const hidden = r.cells.map((c, i) => (c === null ? i : -1)).filter((i) => i >= 0);
+    expect(hidden.length).toBeGreaterThanOrEqual(2);
+    expect(r.cells[3]).toBe(0); // nul afslører intet og vises
+    if (r.total !== null) {
+      const visibleSum = r.cells.reduce<number>((s, c) => s + (c ?? 0), 0);
+      expect(r.total - visibleSum).toBeGreaterThanOrEqual(10);
+    }
   });
 
-  it("publicerbar når begge grupper har mindst ét gyldigt vindue", () => {
-    const rows = [...matureGroup("ONLINE", 30, 15, 30), ...matureGroup("PDF_ONLY", 30, 15, 30)];
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.hasPublishableComparison).toBe(true);
+  it("to små celler med samlet sum under 10 tvinger yderligere undertrykkelse", () => {
+    const r = suppressPartition([100, 4, 3], 107);
+    expect(r.cells).toEqual([null, null, null]);
+    expect(r.total).toBe(107);
   });
 
-  it("forskellen i procentpoint er null, hvis nogen af de to rater er undertrykt", () => {
-    const rows = [...matureGroup("ONLINE", 30, 15, 30), ...matureGroup("PDF_ONLY", 3, 1, 30)];
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.differencePercentPoints[30]).toBeNull();
+  it("kan det ikke lade sig gøre, skjules totalen også", () => {
+    expect(suppressPartition([4, 3], 7)).toEqual({ cells: [null, null], total: null });
+  });
+
+  it("datakvalitet: små tal og deres komplement skjules; gruppetotaler indgår i samme partition", () => {
+    const rows = [
+      ...month("ONLINE", "2026-10", 40, 20),
+      ...month("PDF_ONLY", "2026-10", 60, 30),
+      row({ eligibilityStatus: "EXCLUDED", exclusionReason: "MISSING_BOOKING_NO", exposureGroup: null }),
+      row({ eligibilityStatus: "EXCLUDED", exclusionReason: "MISSING_BOOKING_NO", exposureGroup: null }),
+      ...Array.from({ length: 30 }, () => row({ eligibilityStatus: "ELIGIBLE_PENDING", exposureGroup: null, firstQualifiedObservationAt: null })),
+    ];
+    const a = agg(rows);
+    expect(a.dataQuality.excludedByReason.MISSING_BOOKING_NO).toBeNull();
+    const visible = [
+      a.groups.ONLINE.totalEnrolled,
+      a.groups.PDF_ONLY.totalEnrolled,
+      a.dataQuality.bookingConflicts,
+      a.dataQuality.eligiblePending,
+      a.dataQuality.preStartExisting,
+      ...Object.values(a.dataQuality.excludedByReason),
+    ];
+    if (a.dataQuality.totalObserved !== null) {
+      const remainder = a.dataQuality.totalObserved - visible.reduce<number>((s, c) => s + (c ?? 0), 0);
+      expect(remainder === 0 || remainder >= 10).toBe(true);
+    }
+  });
+
+  it("tabt/afvist og outcome-konflikter skjules ved 1–9 og ved lille komplement", () => {
+    const rows = [...month("ONLINE", "2026-10", 40, 20), row({ lostObservedAt: new Date() }), row({ outcomeConflictObservedAt: new Date() })];
+    const a = agg(rows);
+    expect(a.dataQuality.lostObserved).toBeNull();
+    expect(a.dataQuality.outcomeConflicts).toBeNull();
+    const allLost = agg(Array.from({ length: 15 }, () => row({ lostObservedAt: new Date() })).concat(row()));
+    expect(allLost.dataQuality.lostObserved).toBeNull(); // komplement = 1
   });
 });
 
-describe("buildConversionAggregate — datakvalitet", () => {
-  it("tæller udelukkelses-årsager, pending og pre-start korrekt", () => {
-    const rows: CohortAggregateRow[] = [
-      enrolledRow({ eligibilityStatus: "EXCLUDED", exclusionReason: "MISSING_BOOKING_NO", exposureGroup: null }),
-      enrolledRow({ eligibilityStatus: "EXCLUDED", exclusionReason: "MISSING_BOOKING_NO", exposureGroup: null }),
-      enrolledRow({ eligibilityStatus: "EXCLUDED", exclusionReason: "SHARED_BOOKING_REFERENCE", exposureGroup: null }),
-      enrolledRow({ eligibilityStatus: "ELIGIBLE_PENDING", exposureGroup: null, firstQualifiedObservationAt: null }),
-      enrolledRow({ eligibilityStatus: "PRE_START_EXISTING", exposureGroup: null }),
-      enrolledRow({ lostObservedAt: new Date() }),
-    ];
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.dataQuality.totalObserved).toBe(6);
-    expect(agg.dataQuality.excludedByReason.MISSING_BOOKING_NO).toBe(2);
-    expect(agg.dataQuality.excludedByReason.SHARED_BOOKING_REFERENCE).toBe(1);
-    expect(agg.dataQuality.eligiblePendingCount).toBe(1);
-    expect(agg.dataQuality.preStartExistingCount).toBe(1);
-    expect(agg.dataQuality.lostObservedCount).toBe(1);
-  });
-});
-
-describe("buildConversionAggregate — månedlig trend", () => {
-  it("grupperer ENROLLED-deals pr. kalendermåned (UTC) for kohortestart", () => {
+describe("konflikter, publicerbarhed og friskhed", () => {
+  it("rækker med senere opdaget bookingkonflikt indgår aldrig i gruppetal eller rater", () => {
     const rows = [
-      enrolledRow({ firstQualifiedObservationAt: new Date("2026-10-15T00:00:00Z") }),
-      enrolledRow({ firstQualifiedObservationAt: new Date("2026-10-20T00:00:00Z") }),
-      enrolledRow({ firstQualifiedObservationAt: new Date("2026-11-01T00:00:00Z") }),
+      ...month("ONLINE", "2026-10", 20, 10),
+      ...month("ONLINE", "2026-10", 12, 12).map((r) => ({ ...r, bookingConflictDetectedAt: new Date("2026-12-01T00:00:00Z") })),
     ];
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    const months = agg.monthlyTrend.map((m) => m.month);
-    expect(months).toEqual(["2026-10", "2026-11"]);
+    const a = agg(rows);
+    expect(a.groups.ONLINE.windows[30]).toMatchObject({ denominator: 20, numerator: 10 });
+    expect(a.groups.ONLINE.totalEnrolled).toBe(20);
+    expect(a.dataQuality.bookingConflicts).toBe(12);
   });
 
-  it("undertrykker små måneds-celler under tærsklen", () => {
-    const rows = [enrolledRow({ firstQualifiedObservationAt: new Date("2026-10-15T00:00:00Z") })];
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.monthlyTrend[0].online.enrolled).toBeNull();
+  it("kun publicerbar når BEGGE grupper har et publiceret vindue; forskellen kræver begge rater", () => {
+    const one = agg([...month("ONLINE", "2026-10", 30, 15), ...month("PDF_ONLY", "2026-10", 5, 1)]);
+    expect(one.hasPublishableComparison).toBe(false);
+    expect(one.differencePercentPoints[30]).toBeNull();
+    const both = agg([...month("ONLINE", "2026-10", 30, 15), ...month("PDF_ONLY", "2026-10", 40, 10)]);
+    expect(both.hasPublishableComparison).toBe(true);
+    expect(both.differencePercentPoints[30]).toBeCloseTo(50 - 25, 6);
   });
 
-  it("ikke-ENROLLED rækker (fx ELIGIBLE_PENDING) indgår ikke i den månedlige trend", () => {
-    const rows = [
-      enrolledRow({ eligibilityStatus: "ELIGIBLE_PENDING", exposureGroup: null, firstQualifiedObservationAt: null }),
-    ];
-    const agg = buildConversionAggregate(rows, MEASUREMENT, ASOF);
-    expect(agg.monthlyTrend).toEqual([]);
+  it("friskhed: ingen sync, frisk og forældet (>36 t)", () => {
+    expect(buildConversionAggregate([], { ...MEASUREMENT, lastSuccessfulSyncAt: null }, ASOF).freshness).toBe("NO_SYNC");
+    expect(agg([]).freshness).toBe("FRESH");
+    expect(agg([], new Date(MEASUREMENT.lastSuccessfulSyncAt!.getTime() + 37 * 60 * 60 * 1000)).freshness).toBe("STALE");
   });
 });

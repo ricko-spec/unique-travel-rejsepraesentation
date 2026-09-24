@@ -1,6 +1,24 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { computeBookingKeyForConversion, computeDealKey, validateBookingNumber } from "./dealKey";
+import { computeBookingKeyForConversion, computeDealKey, secretsAreUsable, validateBookingNumber } from "./dealKey";
+
+describe("secretsAreUsable", () => {
+  const a = "a".repeat(32);
+  const b = "b".repeat(64);
+  it("accepterer to forskellige secrets på mindst 32 tegn", () => {
+    expect(secretsAreUsable(a, b)).toBe(true);
+  });
+  it.each([
+    ["tom", "", b],
+    ["kun whitespace", " ".repeat(40), b],
+    ["for kort", "a".repeat(31), b],
+    ["identiske", b, b],
+    ["ikke en streng", undefined, b],
+  ])("afviser %s", (_n, x, y) => {
+    expect(secretsAreUsable(x, y)).toBe(false);
+    expect(secretsAreUsable(y, x)).toBe(false);
+  });
+});
 
 describe("computeDealKey", () => {
   it("er deterministisk for samme input+secret", () => {

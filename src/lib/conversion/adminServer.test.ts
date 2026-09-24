@@ -1,147 +1,88 @@
 import { describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadConversionAdminOverview } from "./adminServer";
+import { cohortRawRow, fakeAdminSupabase, type StateRow } from "./testFixtures";
+import { CONTRACT_VERSION } from "./contract";
+import { parseConversionWire } from "./wire";
 
-type StateRow = {
-  status: "NOT_STARTED" | "ACTIVE" | "PAUSED";
-  contract_version: number;
-  measurement_started_at: string | null;
-  last_successful_sync_at: string | null;
+const ASOF = new Date("2027-03-01T12:00:00Z");
+const ACTIVE: StateRow = {
+  status: "ACTIVE",
+  contract_version: CONTRACT_VERSION,
+  measurement_started_at: "2026-10-01T03:00:00Z",
+  last_successful_sync_at: "2027-03-01T03:00:00Z",
 };
-
-type CohortRow = {
-  eligibility_status: string;
-  exclusion_reason: string | null;
-  first_qualified_observation_at: string | null;
-  exposure_group: string | null;
-  outcome_status: string;
-  first_booked_at: string | null;
-  lost_observed_at: string | null;
-};
-
-function fakeSupabase(options: {
-  stateError?: { code?: string; message: string } | null;
-  stateRow?: StateRow | null;
-  cohortRows?: CohortRow[];
-  cohortError?: { message: string } | null;
-}) {
-  const client = {
-    from(table: string) {
-      if (table === "conversion_measurement_state") {
-        return {
-          select() {
-            return this;
-          },
-          eq() {
-            return this;
-          },
-          maybeSingle() {
-            if (options.stateError) return Promise.resolve({ data: null, error: options.stateError });
-            return Promise.resolve({ data: options.stateRow ?? null, error: null });
-          },
-        };
-      }
-      if (table === "conversion_deal_cohort") {
-        return {
-          select(_columns: string, sel?: { count?: string }) {
-            const withCount = sel?.count === "exact";
-            return {
-              order() {
-                return this;
-              },
-              range(from: number, to: number) {
-                if (options.cohortError) {
-                  return Promise.resolve({ data: null, error: options.cohortError, count: null });
-                }
-                const all = options.cohortRows ?? [];
-                const slice = all.slice(from, to + 1);
-                return Promise.resolve({ data: slice, error: null, count: withCount ? all.length : null });
-              },
-            };
-          },
-        };
-      }
-      throw new Error(`uventet tabel i fake: ${table}`);
-    },
-  };
-  return client as unknown as SupabaseClient;
-}
 
 describe("loadConversionAdminOverview — fail-closed 'ikke startet'", () => {
   it("manglende tabel (42P01) behandles som IKKE STARTET, aldrig som fejl", async () => {
-    const client = fakeSupabase({ stateError: { code: "42P01", message: "relation does not exist" } });
-    const result = await loadConversionAdminOverview(client);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.aggregate.measurement.status).toBe("NOT_STARTED");
-      expect(result.aggregate.hasPublishableComparison).toBe(false);
+    const r = await loadConversionAdminOverview(fakeAdminSupabase({ stateError: { code: "42P01", message: "x" } }), ASOF);
+    expect(r.ok && r.wire.measurement.status).toBe("NOT_STARTED");
+  });
+
+  it("ingen singleton-række ⇒ IKKE STARTET", async () => {
+    const r = await loadConversionAdminOverview(fakeAdminSupabase({ stateRow: null }), ASOF);
+    expect(r.ok && r.wire.measurement.status).toBe("NOT_STARTED");
+  });
+
+  it("ACTIVE uden baseline ⇒ afventer baseline, ingen kohorte-læsning", async () => {
+    const r = await loadConversionAdminOverview(
+      fakeAdminSupabase({ stateRow: { ...ACTIVE, measurement_started_at: null, last_successful_sync_at: null }, cohortError: { message: "må ikke læses" } }),
+      ASOF,
+    );
+    expect(r.ok && r.wire.measurement).toEqual({ status: "ACTIVE", contractVersion: CONTRACT_VERSION, measurementStartedAt: null, lastSuccessfulSyncAt: null });
+  });
+
+  it("anden DB-fejl, ugyldig status eller ugyldig dato ⇒ degraded, aldrig falsk NOT_STARTED", async () => {
+    for (const client of [
+      fakeAdminSupabase({ stateError: { code: "53300", message: "too many connections" } }),
+      fakeAdminSupabase({ stateRow: { ...ACTIVE, status: "HMM" } }),
+      fakeAdminSupabase({ stateRow: { ...ACTIVE, measurement_started_at: "ikke-en-dato" } }),
+    ]) {
+      expect(await loadConversionAdminOverview(client, ASOF)).toEqual({ ok: false, reason: "degraded" });
     }
-  });
-
-  it("ingen singleton-række endnu => IKKE STARTET", async () => {
-    const client = fakeSupabase({ stateRow: null });
-    const result = await loadConversionAdminOverview(client);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.aggregate.measurement.status).toBe("NOT_STARTED");
-  });
-
-  it("status=NOT_STARTED i DB => IKKE STARTET-visning, ingen kohorte-læsning forsøgt", async () => {
-    const client = fakeSupabase({
-      stateRow: { status: "NOT_STARTED", contract_version: 1, measurement_started_at: null, last_successful_sync_at: null },
-    });
-    const result = await loadConversionAdminOverview(client);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.aggregate.measurement.status).toBe("NOT_STARTED");
-  });
-
-  it("en anden, uventet DB-fejl på state-læsningen giver 'degraded', ikke et falsk NOT_STARTED", async () => {
-    const client = fakeSupabase({ stateError: { code: "53300", message: "too many connections" } });
-    const result = await loadConversionAdminOverview(client);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toBe("degraded");
   });
 });
 
 describe("loadConversionAdminOverview — aktiv måling", () => {
-  it("læser kohorte-rækker og bygger et rigtigt aggregat, når målingen er ACTIVE", async () => {
-    const cohortRows: CohortRow[] = Array.from({ length: 12 }, () => ({
-      eligibility_status: "ENROLLED",
-      exclusion_reason: null,
-      first_qualified_observation_at: "2026-10-01T00:00:00Z",
-      exposure_group: "ONLINE",
-      outcome_status: "NOT_BOOKED",
-      first_booked_at: null,
-      lost_observed_at: null,
-    }));
-    const client = fakeSupabase({
-      stateRow: {
-        status: "ACTIVE",
-        contract_version: 1,
-        measurement_started_at: "2026-10-01T00:00:00Z",
-        last_successful_sync_at: "2026-12-01T00:00:00Z",
-      },
-      cohortRows,
-    });
-    const result = await loadConversionAdminOverview(client);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.aggregate.measurement.status).toBe("ACTIVE");
-      expect(result.aggregate.groups.ONLINE.totalEnrolled).toBe(12);
-    }
+  it("returnerer en wire-DTO med ISO-strenge, som klientens skema accepterer", async () => {
+    const rows = Array.from({ length: 12 }, (_, i) => cohortRawRow(i + 1));
+    const r = await loadConversionAdminOverview(fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: rows }), ASOF);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.wire.measurement.measurementStartedAt).toBe("2026-10-01T03:00:00.000Z");
+    expect(r.wire.groups.ONLINE.totalEnrolled).toBe(12);
+    expect(parseConversionWire(JSON.parse(JSON.stringify(r.wire)))).not.toBeNull();
   });
 
-  it("en fejlet/afkortet kohorte-læsning giver 'degraded', ikke en tom liste", async () => {
-    const client = fakeSupabase({
-      stateRow: {
-        status: "ACTIVE",
-        contract_version: 1,
-        measurement_started_at: "2026-10-01T00:00:00Z",
-        last_successful_sync_at: null,
+  it("afkortet/fejlet kohorte-læsning ⇒ degraded, ikke en tom liste", async () => {
+    const rows = Array.from({ length: 1500 }, (_, i) => cohortRawRow(i + 1));
+    const truncating = {
+      from(table: string) {
+        const base = fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: rows }) as unknown as { from: (t: string) => unknown };
+        if (table !== "conversion_deal_cohort") return base.from(table);
+        return {
+          select: (_c: string, sel?: { count?: string }) => {
+            const q = {
+              order: () => q,
+              range: (from: number) => Promise.resolve({ data: from === 0 ? rows.slice(0, 1000) : [], error: null, count: sel?.count ? 1500 : null }),
+            };
+            return q;
+          },
+        };
       },
-      cohortError: { message: "boom" },
+    } as unknown as SupabaseClient;
+    expect(await loadConversionAdminOverview(truncating, ASOF)).toEqual({ ok: false, reason: "degraded" });
+    expect(await loadConversionAdminOverview(fakeAdminSupabase({ stateRow: ACTIVE, cohortError: { message: "boom" } }), ASOF)).toEqual({
+      ok: false,
+      reason: "degraded",
     });
-    const result = await loadConversionAdminOverview(client);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toBe("degraded");
+  });
+
+  it("en ugyldig kohorterække ⇒ degraded", async () => {
+    const r = await loadConversionAdminOverview(
+      fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: [cohortRawRow(1, { outcome_status: "MAYBE" })] }),
+      ASOF,
+    );
+    expect(r).toEqual({ ok: false, reason: "degraded" });
   });
 });
