@@ -59,6 +59,7 @@ export const conversionWireSchema = z.object({
       INVALID_BOOKING_NO_FORMAT: nullableCount,
       SHARED_BOOKING_REFERENCE: nullableCount,
       CLOSED_BEFORE_QUALIFIED_OBSERVATION: nullableCount,
+      BOOKED_BEFORE_QUALIFIED_OBSERVATION: nullableCount,
     }),
     lostObserved: nullableCount,
     outcomeConflicts: nullableCount,

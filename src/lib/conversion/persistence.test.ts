@@ -261,6 +261,23 @@ describe("frys-regler — spejler DB-triggeren og CHECK-constraints", () => {
     expect(cohortTransitionViolation({ ...state, bookingConflictDetectedAt: T1 }, state)).toBe("conflict_frozen");
   });
 
+  it("review-runde 2: booking før kohortestart afvises for ENROLLED; BOOKED_BEFORE kræver en reelt tidligere booking", () => {
+    const early = new Date(T1.getTime() - 60_000);
+    expect(cohortRowViolation({ ...state, outcomeStatus: "BOOKED", firstBookedAt: early })).toBe("enrolled_booked_before_cohort_start");
+    expect(cohortRowViolation({ ...state, outcomeStatus: "BOOKED", firstBookedAt: T1 })).toBeNull();
+    const excluded = {
+      ...state,
+      eligibilityStatus: "EXCLUDED" as const,
+      exclusionReason: "BOOKED_BEFORE_QUALIFIED_OBSERVATION" as const,
+      exposureGroup: null,
+      exposureFrozenAt: null,
+      bookingMatchKey: null,
+      outcomeStatus: "BOOKED" as const,
+    };
+    expect(cohortRowViolation({ ...excluded, firstBookedAt: early })).toBeNull();
+    expect(cohortRowViolation({ ...excluded, firstBookedAt: T1 })).toBe("booked_before_fields");
+  });
+
   it("række-invarianter", () => {
     expect(cohortRowViolation({ ...state, bookingMatchKey: null })).toBe("enrolled_fields");
     expect(cohortRowViolation({ ...state, eligibilityStatus: "ELIGIBLE_PENDING", exposureGroup: null, exposureFrozenAt: null })).not.toBeNull();

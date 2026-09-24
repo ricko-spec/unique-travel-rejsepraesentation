@@ -156,7 +156,8 @@ create table if not exists public.conversion_deal_cohort (
                                        'MISSING_BOOKING_NO',
                                        'INVALID_BOOKING_NO_FORMAT',
                                        'SHARED_BOOKING_REFERENCE',
-                                       'CLOSED_BEFORE_QUALIFIED_OBSERVATION'
+                                       'CLOSED_BEFORE_QUALIFIED_OBSERVATION',
+                                       'BOOKED_BEFORE_QUALIFIED_OBSERVATION'
                                      )),
   booking_conflict_detected_at    timestamptz,
   outcome_status                  text        not null default 'NOT_BOOKED'
@@ -190,6 +191,15 @@ create table if not exists public.conversion_deal_cohort (
     check (exclusion_reason not in ('MISSING_BOOKING_NO', 'INVALID_BOOKING_NO_FORMAT')
            or exclusion_reason is null
            or (first_qualified_observation_at is not null and booking_match_key is null)),
+  -- Review-runde 2, fund 1: en booking observeret FØR første kvalificerede
+  -- observation kan aldrig være en konvertering fra tilbuddet.
+  constraint conversion_deal_cohort_enrolled_booked_order_check
+    check (eligibility_status <> 'ENROLLED' or first_booked_at is null
+           or first_booked_at >= first_qualified_observation_at),
+  constraint conversion_deal_cohort_booked_before_fields_check
+    check (exclusion_reason is distinct from 'BOOKED_BEFORE_QUALIFIED_OBSERVATION'
+           or (first_qualified_observation_at is not null and booking_match_key is null
+               and first_booked_at is not null and first_booked_at < first_qualified_observation_at)),
   constraint conversion_deal_cohort_shared_fields_check
     check (exclusion_reason is distinct from 'SHARED_BOOKING_REFERENCE'
            or (first_qualified_observation_at is not null and booking_match_key is not null)),
@@ -212,13 +222,13 @@ comment on column public.conversion_deal_cohort.exposure_group is
 comment on column public.conversion_deal_cohort.eligibility_status is
   'PRE_START_EXISTING = ved baseline allerede kvalificeret/lukket. ELIGIBLE_PENDING = åben PRE_QUOTE-deal; kan optages senere. ENROLLED = optaget præcis én gang med frosset eksponering. EXCLUDED = permanent udelukket med årsag (aldrig stiltiende PDF_ONLY).';
 comment on column public.conversion_deal_cohort.exclusion_reason is
-  'MISSING_BOOKING_NO / INVALID_BOOKING_NO_FORMAT / SHARED_BOOKING_REFERENCE = bookingnummeret kan ikke afgøre ONLINE/PDF_ONLY entydigt. CLOSED_BEFORE_QUALIFIED_OBSERVATION = dealen blev første gang observeret i en lukket stage, der kan nås både før og efter et tilbud.';
+  'MISSING_BOOKING_NO / INVALID_BOOKING_NO_FORMAT / SHARED_BOOKING_REFERENCE = bookingnummeret kan ikke afgøre ONLINE/PDF_ONLY entydigt. CLOSED_BEFORE_QUALIFIED_OBSERVATION = dealen blev første gang observeret i en lukket stage, der kan nås både før og efter et tilbud. BOOKED_BEFORE_QUALIFIED_OBSERVATION = UT-solgt-status blev observeret FØR første kvalificerede observation — kan aldrig tælle som konvertering fra tilbuddet.';
 comment on column public.conversion_deal_cohort.booking_conflict_detected_at is
   'Reconciliation-tilstand: sat én gang, når en ENROLLED deals frosne bookingreference senere viser sig delt med en anden deal. Rækken bevares (revisionsspor, oprindelig eksponering uændret), men indgår ALDRIG i publicerbare konverteringstal.';
 comment on column public.conversion_deal_cohort.outcome_status is
   'BOOKED hvis og kun hvis unique_travel_dealstatus på et tidspunkt er observeret i {Solgt, Billetter sendt}. hs_is_closed_won afgør ikke BOOKED. Kan kun gå NOT_BOOKED → BOOKED.';
 comment on column public.conversion_deal_cohort.first_booked_at is
-  'observed_at for den første sync, der så UT-solgt-status. Ændres aldrig.';
+  'observed_at for den første sync, der så UT-solgt-status. Ændres aldrig. For ENROLLED gælder first_booked_at >= first_qualified_observation_at (CHECK); en tidligere booking giver EXCLUDED/BOOKED_BEFORE_QUALIFIED_OBSERVATION.';
 comment on column public.conversion_deal_cohort.lost_observed_at is
   'Datakvalitet: første observation af hs_is_closed=true, hs_is_closed_won=false og ikke UT-solgt. Indgår aldrig i konverteringsprocenten.';
 comment on column public.conversion_deal_cohort.outcome_conflict_observed_at is

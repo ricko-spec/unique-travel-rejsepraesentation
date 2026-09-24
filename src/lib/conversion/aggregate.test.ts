@@ -261,3 +261,145 @@ describe("konflikter, publicerbarhed og friskhed", () => {
     expect(agg([], new Date(MEASUREMENT.lastSuccessfulSyncAt!.getTime() + 37 * 60 * 60 * 1000)).freshness).toBe("STALE");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Review-runde 2 (Codex 5308506532)
+// ---------------------------------------------------------------------------
+
+/** n tilbud med kohortestart `start`; `b30` booket dag 5, yderligere `b60extra` booket dag 45, `b90extra` dag 75. */
+function cohort(group: "ONLINE" | "PDF_ONLY", start: string, n: number, b30: number, b60extra = 0, b90extra = 0) {
+  const s = new Date(start);
+  return Array.from({ length: n }, (_, i) => {
+    const day = i < b30 ? 5 : i < b30 + b60extra ? 45 : i < b30 + b60extra + b90extra ? 75 : null;
+    return row({
+      exposureGroup: group,
+      firstQualifiedObservationAt: s,
+      outcomeStatus: day === null ? "NOT_BOOKED" : "BOOKED",
+      firstBookedAt: day === null ? null : new Date(s.getTime() + day * DAY),
+    });
+  });
+}
+
+describe("review-runde 2, fund 1 — booking før kohortestart tæller aldrig som konvertering", () => {
+  it("ENROLLED-række med firstBookedAt < firstQualifiedAt er ikke publicerbar og tælles aldrig som booket", () => {
+    const start = new Date("2026-10-10T03:00:00Z");
+    const early = Array.from({ length: 12 }, () =>
+      row({ firstQualifiedObservationAt: start, outcomeStatus: "BOOKED", firstBookedAt: new Date(start.getTime() - 2 * DAY) }),
+    );
+    const a = agg([...cohort("ONLINE", "2026-10-10T03:00:00Z", 30, 15), ...early]);
+    expect(a.groups.ONLINE.windows[30]).toMatchObject({ denominator: 30, numerator: 15 });
+    expect(a.groups.ONLINE.totalEnrolled).toBe(30);
+  });
+});
+
+describe("review-runde 2, designfund — modning pr. deal (Issue #80), ikke pr. kohortemåned", () => {
+  it("en deal der er 36 dage gammel indgår i 30-dages-nævneren, selv om dens kohortemåned ikke er slut + 30 dage", () => {
+    const asOf = new Date("2026-11-25T12:00:00Z");
+    const a = agg(cohort("ONLINE", "2026-10-20T03:00:00Z", 30, 15), asOf);
+    expect(a.groups.ONLINE.windows[30]).toMatchObject({ denominator: 30, numerator: 15 });
+  });
+
+  it("en deal der er 29 dage gammel indgår ikke", () => {
+    const asOf = new Date("2026-11-18T12:00:00Z");
+    expect(agg(cohort("ONLINE", "2026-10-20T03:00:00Z", 30, 15), asOf).groups.ONLINE.windows[30].suppressed).toBe(true);
+  });
+});
+
+describe("review-runde 2, fund 2 — koordineret undertrykkelse på tværs af 30/60/90", () => {
+  it("30→60: 30 tilbud, 15 booket efter 30 dage, 16 efter 60 ⇒ 60-dages-cellen skjules (inkrement 1 kan ikke udledes)", () => {
+    const a = agg(cohort("ONLINE", "2026-10-10T03:00:00Z", 30, 15, 1));
+    expect(a.groups.ONLINE.windows[30]).toMatchObject({ denominator: 30, numerator: 15 });
+    expect(a.groups.ONLINE.windows[60].suppressed).toBe(true);
+  });
+
+  it("60→90: inkrement 3 mellem dag 60 og 90 ⇒ 90-dages-cellen skjules", () => {
+    const a = agg(cohort("ONLINE", "2026-10-10T03:00:00Z", 40, 12, 0, 3));
+    expect(a.groups.ONLINE.windows[60]).toMatchObject({ denominator: 40, numerator: 12 });
+    expect(a.groups.ONLINE.windows[90].suppressed).toBe(true);
+  });
+
+  it("inkrement 0 eller ≥ 10 må publiceres i begge vinduer", () => {
+    const zero = agg(cohort("ONLINE", "2026-10-10T03:00:00Z", 30, 15));
+    expect(zero.groups.ONLINE.windows[60]).toMatchObject({ denominator: 30, numerator: 15 });
+    const ten = agg(cohort("ONLINE", "2026-10-10T03:00:00Z", 40, 10, 10));
+    expect(ten.groups.ONLINE.windows[30]).toMatchObject({ numerator: 10 });
+    expect(ten.groups.ONLINE.windows[60]).toMatchObject({ numerator: 20 });
+  });
+
+  it("et lille inkrement slås sammen med næste kohorte, til summen er ≥ 10", () => {
+    const a = agg([
+      ...cohort("ONLINE", "2026-10-10T03:00:00Z", 30, 15, 1),
+      ...cohort("ONLINE", "2026-10-20T03:00:00Z", 30, 12, 9),
+    ]);
+    expect(a.groups.ONLINE.windows[30]).toMatchObject({ denominator: 60, numerator: 27 });
+    expect(a.groups.ONLINE.windows[60]).toMatchObject({ denominator: 60, numerator: 37 });
+  });
+
+  it("egenskab: på tværs af vinduer og dage kan intet lille booket/ikke-booket-inkrement udledes", () => {
+    let seed = 11;
+    const rnd = (m: number) => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed % m;
+    };
+    const rows: CohortAggregateRow[] = [];
+    for (let d = 0; d < 150; d += 1 + rnd(4)) {
+      for (const g of ["ONLINE", "PDF_ONLY"] as const) {
+        const start = new Date(Date.UTC(2026, 9, 1) + d * DAY + 3 * 3600000);
+        const n = rnd(9);
+        for (let i = 0; i < n; i++) {
+          const booked = rnd(3) === 0;
+          rows.push(row({ exposureGroup: g, firstQualifiedObservationAt: start, outcomeStatus: booked ? "BOOKED" : "NOT_BOOKED", firstBookedAt: booked ? new Date(start.getTime() + rnd(100) * DAY) : null }));
+        }
+      }
+    }
+    const okInc = (x: number) => x === 0 || Math.abs(x) >= 10;
+    let prev: ConversionAggregate | null = null;
+    let checkedCross = 0;
+    for (let day = 0; day < 260; day++) {
+      const a = agg(rows, new Date(Date.UTC(2026, 10, 1) + day * DAY));
+      for (const g of ["ONLINE", "PDF_ONLY"] as const) {
+        const G = a.groups[g];
+        for (const w of MATURITY_WINDOWS_DAYS) {
+          const c = G.windows[w];
+          if (c.suppressed) continue;
+          expect(c.numerator!).toBeGreaterThanOrEqual(10);
+          expect(c.denominator! - c.numerator!).toBeGreaterThanOrEqual(10);
+        }
+        // Angriberen kender trend30-perioderne: find præfikset, der udgør 60/90-populationen, og udled inkrementet.
+        let cumN = 0;
+        let cumB = 0;
+        const prefix = new Map<number, number>([[0, 0]]);
+        for (const t of G.trend30) {
+          cumN += t.enrolled;
+          cumB += t.booked;
+          prefix.set(cumN, cumB);
+        }
+        for (const w of [60, 90] as const) {
+          const c = G.windows[w];
+          if (c.suppressed) continue;
+          expect(prefix.has(c.denominator!)).toBe(true);
+          expect(okInc(c.numerator! - prefix.get(c.denominator!)!)).toBe(true);
+          checkedCross++;
+        }
+        const c60 = G.windows[60];
+        const c90 = G.windows[90];
+        if (!c60.suppressed && !c90.suppressed && c60.denominator === c90.denominator) {
+          expect(okInc(c90.numerator! - c60.numerator!)).toBe(true);
+        }
+        if (prev) {
+          for (const w of MATURITY_WINDOWS_DAYS) {
+            const x = prev.groups[g].windows[w];
+            const y = G.windows[w];
+            if (!x.suppressed && !y.suppressed) {
+              expect(okInc(y.denominator! - x.denominator!)).toBe(true);
+              expect(okInc(y.numerator! - x.numerator!)).toBe(true);
+              expect(okInc(y.denominator! - y.numerator! - (x.denominator! - x.numerator!))).toBe(true);
+            }
+          }
+        }
+      }
+      prev = a;
+    }
+    expect(checkedCross).toBeGreaterThan(50);
+  });
+});

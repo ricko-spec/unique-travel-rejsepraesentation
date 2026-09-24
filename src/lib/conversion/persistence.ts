@@ -97,6 +97,24 @@ export function cohortRowViolation(r: CohortState): string | null {
   if (r.exclusionReason === "MISSING_BOOKING_NO" || r.exclusionReason === "INVALID_BOOKING_NO_FORMAT") {
     if (r.firstQualifiedObservationAt === null || r.bookingMatchKey !== null) return "booking_problem_fields";
   }
+  if (r.exclusionReason === "BOOKED_BEFORE_QUALIFIED_OBSERVATION") {
+    if (
+      r.firstQualifiedObservationAt === null ||
+      r.bookingMatchKey !== null ||
+      r.firstBookedAt === null ||
+      r.firstBookedAt.getTime() >= r.firstQualifiedObservationAt.getTime()
+    ) {
+      return "booked_before_fields";
+    }
+  }
+  if (
+    r.eligibilityStatus === "ENROLLED" &&
+    r.firstBookedAt !== null &&
+    r.firstQualifiedObservationAt !== null &&
+    r.firstBookedAt.getTime() < r.firstQualifiedObservationAt.getTime()
+  ) {
+    return "enrolled_booked_before_cohort_start";
+  }
   if (r.exclusionReason === "SHARED_BOOKING_REFERENCE") {
     if (r.firstQualifiedObservationAt === null || r.bookingMatchKey === null) return "shared_fields";
   }

@@ -274,3 +274,35 @@ describe("reduceDealCohort — udfald", () => {
     expect(r.outcomeConflictObservedAt).toEqual(T1);
   });
 });
+
+describe("review-runde 2, fund 1 — booking observeret før første kvalificerede observation", () => {
+  const BOOKED = { booked: true, lostObserved: false, conflict: false };
+
+  it("PRE_QUOTE + BOOKED ⇒ forbliver ELIGIBLE_PENDING, men bookingtidspunktet huskes", () => {
+    const r = reduceDealCohort(input({ validated: validated("PRE_QUOTE", BOOKED), observedAt: T1 }));
+    expect(r.eligibilityStatus).toBe("ELIGIBLE_PENDING");
+    expect(r.firstBookedAt).toEqual(T1);
+  });
+
+  it("pending (booket ved A) → kvalificeret ved B ⇒ EXCLUDED BOOKED_BEFORE_QUALIFIED_OBSERVATION, aldrig ENROLLED", () => {
+    const pending = toState(reduceDealCohort(input({ validated: validated("PRE_QUOTE", BOOKED), observedAt: T1 })));
+    const r = reduceDealCohort(input({ existing: pending, observedAt: T2, validated: validated("QUOTE_OR_LATER", BOOKED) }));
+    expect(r.eligibilityStatus).toBe("EXCLUDED");
+    expect(r.exclusionReason).toBe("BOOKED_BEFORE_QUALIFIED_OBSERVATION");
+    expect(r.exposureGroup).toBeNull();
+    expect(r.firstBookedAt).toEqual(T1);
+    expect(r.firstQualifiedObservationAt).toEqual(T2);
+  });
+
+  it("baseline-pending der var booket, udelukkes også ved senere kvalifikation", () => {
+    const pending = toState(reduceDealCohort(input({ isBaseline: true, observedAt: T0, validated: validated("PRE_QUOTE", BOOKED) })));
+    const r = reduceDealCohort(input({ existing: pending, observedAt: T2 }));
+    expect(r.exclusionReason).toBe("BOOKED_BEFORE_QUALIFIED_OBSERVATION");
+  });
+
+  it("booking og kvalifikation observeret i SAMME sync ⇒ interval 0 ⇒ ENROLLED og BOOKED (ikke før tilbuddet)", () => {
+    const r = reduceDealCohort(input({ observedAt: T1, validated: validated("QUOTE_OR_LATER", BOOKED) }));
+    expect(r.eligibilityStatus).toBe("ENROLLED");
+    expect(r.firstBookedAt).toEqual(r.firstQualifiedObservationAt);
+  });
+});

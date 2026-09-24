@@ -17,6 +17,7 @@ const REASON_LABELS: Record<keyof ConversionWire["dataQuality"]["excludedByReaso
   INVALID_BOOKING_NO_FORMAT: "ugyldigt bookingnummer",
   SHARED_BOOKING_REFERENCE: "delt bookingnummer",
   CLOSED_BEFORE_QUALIFIED_OBSERVATION: "lukket før tilbud kunne observeres",
+  BOOKED_BEFORE_QUALIFIED_OBSERVATION: "booket før tilbud blev observeret",
 };
 
 function formatPercent(v: number | null): string {

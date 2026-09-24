@@ -232,6 +232,13 @@ export function reduceDealCohort(input: ReduceDealCohortInput): ClassifiedDealRe
 
   // QUOTE_OR_LATER: første prospektive kvalificerede observation — nu.
   const qualified = { ...base, ...none, firstQualifiedObservationAt: observedAt };
+  if (outcome.firstBookedAt !== null && outcome.firstBookedAt.getTime() < observedAt.getTime()) {
+    // Bookingen blev observeret FØR tilbuddet (fx UT-solgt-status på en
+    // PRE_QUOTE-deal). Den kan aldrig være en konvertering fra tilbuddet ⇒
+    // eksplicit udelukket (review-runde 2, fund 1). Samme sync = interval 0
+    // og er IKKE "før".
+    return { ...qualified, eligibilityStatus: "EXCLUDED", exclusionReason: "BOOKED_BEFORE_QUALIFIED_OBSERVATION" };
+  }
   if (input.booking.kind === "missing") {
     return { ...qualified, eligibilityStatus: "EXCLUDED", exclusionReason: "MISSING_BOOKING_NO" };
   }

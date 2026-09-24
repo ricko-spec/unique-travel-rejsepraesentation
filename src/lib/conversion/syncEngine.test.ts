@@ -441,3 +441,23 @@ describe("dry-run", () => {
     expect(p.getAllCohortRows().size).toBe(0);
   });
 });
+
+describe("review-runde 2, fund 1 — end-to-end: booking observeret før tilbuddet", () => {
+  it("PRE_QUOTE + Solgt ved sync 1, Tilbud sendt ved sync 2 ⇒ EXCLUDED BOOKED_BEFORE_QUALIFIED_OBSERVATION, commit accepteret", async () => {
+    const { p, setClock } = await started([deal("x", { dealStageId: STAGES.screened })]);
+    setClock(T1);
+    const r1 = await runConversionSync(adapter([deal("x", { dealStageId: STAGES.screened, dealStatusRaw: "Solgt" })]), p, opts(T1));
+    expect(r1).toMatchObject({ ok: true });
+    expect(p.getCohortRow(key("x"))).toMatchObject({ eligibilityStatus: "ELIGIBLE_PENDING", outcomeStatus: "BOOKED", firstBookedAt: T1 });
+    setClock(T2);
+    const r2 = await runConversionSync(adapter([deal("x", { dealStageId: STAGES.quote, dealStatusRaw: "Solgt" })]), p, opts(T2));
+    expect(r2).toMatchObject({ ok: true });
+    expect(p.getCohortRow(key("x"))).toMatchObject({
+      eligibilityStatus: "EXCLUDED",
+      exclusionReason: "BOOKED_BEFORE_QUALIFIED_OBSERVATION",
+      exposureGroup: null,
+      firstQualifiedObservationAt: T2,
+      firstBookedAt: T1,
+    });
+  });
+});
