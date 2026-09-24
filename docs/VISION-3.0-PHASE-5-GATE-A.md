@@ -8,7 +8,10 @@
 > kommando (`Invoke-QuoteSignalLiveEvidence.ps1`, seneste mergede/reviewede version på
 > `origin/integration/marketing-dashboard-google-ads-v1` i `ricko-spec/dk-wanderlust-spy`) og delt
 > det fulde, aggregerede output. Denne runde dokumenterer resultatet og skelner eksplicit mellem
-> historisk og prospektiv måling, som Ricko bad om.
+> historisk og prospektiv måling, som Ricko bad om. **Runde 4 (samme dag):** rettet efter et
+> uafhængigt review af PR #79 — `afterOutcomeRatio` (51,2 %) omformuleret fra "en åben Gate
+> B-opgave" til udelukkende evidens mod historisk rekonstruktion; §3.1 udvidet til at dokumentere
+> alle tre kontraktdele (pipeline, stage-id'er, bookingnummer-property) i stedet for kun to.
 
 ## Afgørelse
 
@@ -24,13 +27,15 @@ To adskilte spørgsmål, to adskilte svar:
    fuldt stop.**
 2. **Kan en prospektiv, fremadrettet måling starte pålideligt fra nu?** **Ja, med forbehold.**
    Pipeline- og stage-kontrakten er live-bekræftet uden uoverensstemmelser (`allConfirmed: true`),
-   og selve læsemekanismen er fuldt pålidelig (100 % `complete_and_reconciled` historik). Et
-   ubegrundet fund (`afterOutcomeRatio` 51,2 %, se §3.2) skal adresseres i Gate B's design af selve
-   den daglige synkronisering, før den aktiveres — men blokerer ikke at gå videre til det
-   designarbejde. Den historiske `UNUSABLE`-dom blokerer **ikke automatisk** den prospektive løsning
-   (Rickos eksplicitte instruks) — den blokerer specifikt **kun** brug af HubSpots retrospektive
-   historik som datagrundlag, og medfører at målingen skal starte fra en fast, dokumenteret
-   startdato (§4) i stedet.
+   og selve læsemekanismen er fuldt pålidelig (100 % `complete_and_reconciled` historik).
+   `afterOutcomeRatio` (51,2 %, se §3.2) er **yderligere evidens for at historisk rekonstruktion er
+   ubrugelig — ikke en teknisk defekt Gate B skal reparere**. Gate B bygger en ny, prospektiv
+   måling fra første succesfulde synkronisering og forsøger ikke at rette eller rekonstruere
+   historikken; fundet må nævnes som begrundelse for det designvalg, men er ikke en åben
+   Gate B-beslutning. Den historiske `UNUSABLE`-dom blokerer **ikke automatisk** den prospektive
+   løsning (Rickos eksplicitte instruks) — den blokerer specifikt **kun** brug af HubSpots
+   retrospektive historik som datagrundlag, og medfører at målingen skal starte fra en fast,
+   dokumenteret startdato (§4) i stedet.
 
 **Scope af "GO MED FORBEHOLD":** tilladelse til at gå videre til **Gate B — design af
 migration/persistence for den prospektive daglige synkronisering**. **Ikke** en godkendelse af
@@ -92,16 +97,32 @@ mergede/reviewede version på `origin/integration/marketing-dashboard-google-ads
 eget acceptkriterium kræver ("Gate A dokumenterer live-valideret stage- og feltkontrakt med kun
 aggregater").
 
-### 3.1 Stage-/pipelinekontrakt — bekræftet, ingen uoverensstemmelser
+### 3.1 Fuld kontrakt — pipeline, stage-id'er og bookingnummer-felt (Issue #78 krav 1-3)
 
 ```
 PHASE5B3_STAGE_CONTRACT {"version":1,"pipelineConfirmed":true,"quoteSent":"confirmed",
 "updatedQuote":"confirmed","allConfirmed":true,"reasonsDa":[]}
 ```
 
-Pipeline `754595640` og de to stage-id'er (`1098732868` = "Tilbud sendt", `1169407502` =
-"Opdateret tilbud") er **live bekræftet mod HubSpot i selve denne kørsel** — ikke kun genbrugt fra
-et ældre PR. Dette lukker Issue #78's krav 1-3 for denne kandidat fuldt ud.
+1. **Pipeline `754595640`** — **live bekræftet i denne kørsel** (`pipelineConfirmed: true`), ikke
+   kun genbrugt fra et ældre PR.
+2. **Stage-id'er**: `1098732868` = "Tilbud sendt", `1169407502` = "Opdateret tilbud" — begge **live
+   bekræftet i denne kørsel** (`quoteSent`/`updatedQuote`: `"confirmed"`, `allConfirmed: true`,
+   `reasonsDa: []` — ingen uoverensstemmelser).
+3. **Bookingnummer-property: `unique_travel_bookingno`** (label "Unique Travel BookingNO"). Denne
+   kørsel læser ikke bookingreferencer (kun dealstage-historik) og re-bekræfter derfor ikke feltet
+   selv — men feltets **semantik er tidligere live-bekræftet, ikke kun udledt af navnet**: bekræftet
+   at det ER TravelWire-bookingnummeret, kan være udfyldt **før** salgets udfald, og verificeret
+   manuelt på åbne/solgte/afviste deals (Marketing Dashboards Gate 2 PASS, 2026-09-21 — se Issue
+   #78's kommentarspor for kilden). Der foreligger ingen tvivl om dette felts identitet.
+
+**Udfaldsklassifikation (Booket/Ikke booket endnu):** afgøres af det separate, UT-ejede statusfelt
+`unique_travel_dealstatus` (værdier inkl. "Solgt", "Billetter sendt" = Booket) sammen med HubSpots
+egne lukke-flag (`hs_is_closed`/`hs_is_closed_won`) — **bevidst ikke dealstage-id**, for at undgå to
+potentielt modstridende udfaldskilder. Dette er en tidligere dokumenteret, reviewet designbeslutning
+fra Marketing Dashboard-projektet, genbrugt her som kontrakt (samme kilde som ovenfor).
+
+Dette lukker Issue #78's krav 1-3 for denne kandidat fuldt ud.
 
 ### 3.2 Gate M-vurdering: `UNUSABLE` for **historisk rekonstruktion** — kandidat `dealstage-history-quote-milestone`
 
@@ -144,11 +165,14 @@ et ældre PR. Dette lukker Issue #78's krav 1-3 for denne kandidat fuldt ud.
   (`established`/`ok`).
 - **`afterOutcomeRatio` 51,2 %** — af de 303 deals der HAR et detekteret quote-event (148 `ok` +
   155 `quote-event-after-outcome`), er **over halvdelen** tidsstemplet EFTER at deal-udfaldet
-  allerede var afgjort. Dette er logisk usammenhængende for "Tilbud sendt" som et ledende signal og
-  er **ikke forklaret af denne måling alene** — kan skyldes retroaktive rettelser af ældre,
-  allerede lukkede deals, eller gen-quotede/genåbnede sager. **Skal adresseres i Gate B's design**
-  (se §5), men er en egenskab ved den RETROSPEKTIVE historik-læsning — ikke nødvendigvis noget der
-  gentager sig i en prospektiv, dag-for-dag-observerende synkronisering.
+  allerede var afgjort. Dette er logisk usammenhængende for "Tilbud sendt" som et ledende signal —
+  kan skyldes retroaktive rettelser af ældre, allerede lukkede deals, eller gen-quotede/genåbnede
+  sager; den præcise årsag er ikke afgørende for Gate A. **Dette er yderligere evidens for at
+  HubSpots retrospektive historik ikke er en pålidelig kilde til "Tilbud sendt" — det er ikke en
+  teknisk defekt, Gate B skal reparere eller rekonstruere.** Gate B bygger i stedet en ny,
+  prospektiv måling fra første succesfulde synkronisering (se §5); fundet er en egenskab ved den
+  RETROSPEKTIVE historik-læsning specifikt og gentager sig ikke nødvendigvis i en prospektiv,
+  dag-for-dag-observerende synkronisering, som aldrig læser HubSpots gamle historik.
 - `history-not-usable: 0` og `quote-event-before-createdate: 0` — ingen fund i disse kategorier.
 - `multipleQuoteEvents: 24` — 24 deals har mere end ét "Tilbud sendt"-event i historikken (adskilt
   fra "Opdateret tilbud", som er en egen stage og ikke tæller som endnu et tilbud).
@@ -222,7 +246,7 @@ og betyder at målingen skal starte fra en **fast, dokumenteret startdato** — 
 | | **Historisk måling (retrospektiv)** | **Prospektiv måling (fremadrettet)** |
 |---|---|---|
 | Spørgsmål | Kan HubSpots historik bruges til at rekonstruere fortidens "Tilbud sendt"? | Kan en daglig, fremadrettet synkronisering måle det pålideligt fra nu? |
-| Afgørelse | **Nej — `UNUSABLE`** (6,2 % dækning, 0 % i 9 sammenhængende måneder) | **Ja, med forbehold** — pipeline/stage-kontrakt bekræftet ren; ét ubegrundet fund skal adresseres i designet (`afterOutcomeRatio`, se §3.2) |
+| Afgørelse | **Nej — `UNUSABLE`** (6,2 % dækning, 0 % i 9 sammenhængende måneder) | **Ja, med forbehold** — pipeline/stage-kontrakt bekræftet ren; `afterOutcomeRatio` (51,2 %, §3.2) er yderligere evidens mod historisk rekonstruktion, ikke en åben Gate B-opgave |
 | Konsekvens | **Backfill af kohorten fra HubSpot-historik er blokeret, fuldt stop.** Bruges kun til eksplorativ kontekst, aldrig officielle tal | **GO MED FORBEHOLD til Gate B** — design af den daglige synkronisering, migration/persistence. Ikke en godkendelse til at aktivere selve målingen (kræver Gate C/D) |
 | Nulpunkt | N/A — findes ikke, og skal ikke findes | Fast, dokumenteret dato = første succesfulde daglige sync (§4) |
 
@@ -249,17 +273,17 @@ og betyder at målingen skal starte fra en **fast, dokumenteret startdato** — 
 
 ## 6. Åbne beslutninger til Ricko
 
+> `afterOutcomeRatio` (51,2 %, §3.2) er **ikke** længere en åben beslutning her — den er afklaret
+> som evidens mod historisk rekonstruktion, ikke en Gate B-opgave (se §"Afgørelse" og §3.2).
+
 1. **Bekræft GO MED FORBEHOLD-scopet** (§"Afgørelse"): tilladelse til Gate B-design, ikke til at
    aktivere nogen live måling.
-2. **`afterOutcomeRatio` (51,2 %, §3.2)** — skal undersøges/forklares, eller er det acceptabelt at
-   Gate B's design blot undgår retrospektiv historik-læsning helt (observér kun dagens faktiske
-   stage ved hver sync, byg egen historik fremadrettet) og dermed sandsynligvis omgår problemet?
-3. **Booket/Ikke booket endnu vs. et separat tabt/afvist-udfald** (§5, note) — skal "Ikke booket
+2. **Booket/Ikke booket endnu vs. et separat tabt/afvist-udfald** (§5, note) — skal "Ikke booket
    endnu" også dække deals HubSpot selv har lukket som tabt, eller skal tabt vises som en tredje,
    synlig tilstand i datakvalitetsrapporteringen (uden at være del af selve
    konverteringsprocent-hovedtallet)?
-4. Valgfrit, ikke blokerende: skal `--mode=join` køres frisk for at opdatere Marketing Dashboards
+3. Valgfrit, ikke blokerende: skal `--mode=join` køres frisk for at opdatere Marketing Dashboards
    3+ dage gamle match-/dæknings-tal (271 rejseplaner/197 matchet), eller er de tilstrækkelige som
    eksplorativ reference indtil Gate B?
-5. Godkend/juster kohortemodellens Gate B-startpunkt: skal Gate B-designarbejdet startes som eget
+4. Godkend/juster kohortemodellens Gate B-startpunkt: skal Gate B-designarbejdet startes som eget
    issue nu, eller afvente et separat oplæg først?

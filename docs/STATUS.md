@@ -29,11 +29,11 @@
   tilbud") er live bekræftet uden uoverensstemmelser. Historisk rekonstruktion fra HubSpots
   dealstage-historik er `UNUSABLE` (6,2 % dækning; 0 % i ni sammenhængende måneder sep. 2025–maj
   2026 — et dokumenteret dataartefakt, ikke reel mangel på aktivitet), men blokerer **ikke**
-  automatisk den prospektive løsning. Et endnu ikke forklaret fund (51,2 % af detekterede
-  "Tilbud sendt"-events er tidsstemplet efter deal-udfaldet) skal adresseres i Gate B's design.
-  Nulpunkt for den officielle måling = første succesfulde daglige synkronisering (fast, dokumenteret
-  dato, ikke bagudskuende). **Ingen produktkode/migration/HubSpot-integration før Gate B er
-  eksplicit godkendt af Ricko** (se åbne beslutninger i Gate A-rapportens §6).
+  automatisk den prospektive løsning. 51,2 % af detekterede "Tilbud sendt"-events er tidsstemplet
+  efter deal-udfaldet — **yderligere evidens mod historisk rekonstruktion, ikke en åben Gate
+  B-opgave**. Nulpunkt for den officielle måling = første succesfulde daglige synkronisering (fast,
+  dokumenteret dato, ikke bagudskuende). **Ingen produktkode/migration/HubSpot-integration før Gate
+  B er eksplicit godkendt af Ricko** (se åbne beslutninger i Gate A-rapportens §6).
 - **Kendt driftsopfølgning (ikke en blocker):** production UI-smoketest af Fase 1C, 2, 3 og 4 er
   udsat (Ricko kan ikke teste lige nu).
 
@@ -58,9 +58,10 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
   (mod prod-DB) eller på production efter merge.
 - **Storage bucket-config uden for drift-tjekket** (kendt blind vinkel).
 - Repo er public — secrets/kundedata-disciplin er procesbåret, ikke teknisk håndhævet.
-- **Gate A (Issue #78) er `GO MED FORBEHOLD` — Gate B endnu ikke startet.** `afterOutcomeRatio`-fundet
-  (§3.2 i Gate A-rapporten) skal adresseres i Gate B's design, og et fast, dokumenteret nulpunkt for
-  den prospektive måling skal fastlægges (første succesfulde daglige sync).
+- **Gate A (Issue #78) er `GO MED FORBEHOLD` — Gate B endnu ikke startet.** Et fast, dokumenteret
+  nulpunkt for den prospektive måling skal fastlægges (første succesfulde daglige sync).
+  `afterOutcomeRatio`-fundet (§3.2 i Gate A-rapporten) er afklaret som evidens mod historisk
+  rekonstruktion, ikke en åben Gate B-opgave.
 - Øvrige åbne beslutninger (KRÆVER RICKO): `docs/DECISIONS.md` § Åbne beslutninger.
   Prioriteret backlog: `docs/ROADMAP.md`.
 
@@ -72,9 +73,9 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 **Gate A er afsluttet `GO MED FORBEHOLD`.** Næste skridt (afventer Rickos beslutning, se Gate
 A-rapportens §6): start Gate B som eget kapitel/issue — design af den prospektive daglige
-synkronisering, migration og pseudonymiseret persistence. Gate B skal eksplicit adressere
-`afterOutcomeRatio`-fundet og fastlægge det formelle nulpunkt (første succesfulde sync). Ingen
-migration/produktkode før Gate B er godkendt.
+synkronisering, migration og pseudonymiseret persistence, samt fastlæggelse af det formelle
+nulpunkt (første succesfulde sync). `afterOutcomeRatio`-fundet er ikke en Gate B-reparationsopgave
+— kun evidens mod historisk backfill. Ingen migration/produktkode før Gate B er godkendt.
 
 Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) — Vision 3.0: Customer Engagement & Sales Intelligence.
 Master-issue/produktkapitel, IKKE én stor PR. **Fase 5 (prospektiv konverteringsmåling / HubSpot-kobling)

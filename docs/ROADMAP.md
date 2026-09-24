@@ -131,10 +131,10 @@ eller GitHub Issues.
 ## Skal besluttes af Ricko
 
 - **Vision 3.0 Fase 5 — start Gate B (Issue #78).** Gate A er afsluttet `GO MED FORBEHOLD` (kun
-  Gate B-designarbejde, ikke aktivering). Åbne beslutninger før Gate B starter, se
-  `docs/VISION-3.0-PHASE-5-GATE-A.md` §6: bekræft GO-scopet, afklar `afterOutcomeRatio`-fundet
-  (51,2 %), afklar Booket/Ikke booket endnu vs. et separat tabt-udfald, og beslut om et Gate
-  B-issue skal oprettes nu.
+  Gate B-designarbejde, ikke aktivering). `afterOutcomeRatio`-fundet (51,2 %) er evidens mod
+  historisk rekonstruktion, ikke en åben Gate B-opgave. Åbne beslutninger før Gate B starter, se
+  `docs/VISION-3.0-PHASE-5-GATE-A.md` §6: bekræft GO-scopet, afklar Booket/Ikke booket endnu vs.
+  et separat tabt-udfald, og beslut om et Gate B-issue skal oprettes nu.
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af
   `pg_cron`-extensionen). Ingen tidsfrist — hverken `trip_visits`, `trip_section_engagement`

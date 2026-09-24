@@ -3,7 +3,8 @@
 > Kort hand-off til næste session — **overskrives** ved meningsfulde milepæle (se `docs/WORKING_MODE.md` §5).
 > Ikke en anmodning om godkendelse. Operationel status (hvad er live) står i `docs/STATUS.md`.
 
-**Sidst opdateret:** 2026-09-24 (Gate A for Issue #78 afsluttet `GO MED FORBEHOLD`, kun til Gate B-design)
+**Sidst opdateret:** 2026-09-24 (Gate A for Issue #78 afsluttet `GO MED FORBEHOLD`, kun til Gate B-design;
+runde 4 rettede to fund fra et uafhængigt review af PR #79)
 
 ## Branch / HEAD
 
@@ -37,9 +38,10 @@
 ## Udestående
 
 1. **Gate B** — design af den prospektive daglige synkronisering, migration og pseudonymiseret
-   persistence. Skal eksplicit adressere `afterOutcomeRatio`-fundet (51,2 %) og fastlægge det
-   formelle nulpunkt (første succesfulde sync). Ikke startet — afventer Rickos beslutning om at
-   oprette et eget Gate B-issue, se Gate A-rapportens §6.
+   persistence, samt fastlæggelse af det formelle nulpunkt (første succesfulde sync).
+   `afterOutcomeRatio`-fundet (51,2 %) er **ikke** en Gate B-reparationsopgave — kun evidens mod
+   historisk backfill (se Gate A-rapporten §3.2/§"Afgørelse"). Ikke startet — afventer Rickos
+   beslutning om at oprette et eget Gate B-issue, se Gate A-rapportens §6.
 2. Uafklaret: Booket/Ikke booket endnu vs. et separat, synligt tabt/afvist-udfald i
    datakvalitetsrapportering (Gate A-rapporten §5, note).
 3. Valgfrit, ikke blokerende: frisk `--mode=join`-kørsel for at opdatere Marketing Dashboards 3+
@@ -55,5 +57,5 @@ udført.
 
 ## Næste handling
 
-Afvent Rickos beslutning om at starte Gate B som eget kapitel/issue (Gate A-rapportens §6, punkt 5).
+Afvent Rickos beslutning om at starte Gate B som eget kapitel/issue (Gate A-rapportens §6, punkt 4).
 Ingen Gate B-kode, migration eller implementering før det er eksplicit godkendt.
