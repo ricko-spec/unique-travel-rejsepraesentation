@@ -10,10 +10,10 @@
 - **Production `main`:** `644269aaf4d534ae3f21379df940a4f822a55c7c` (merge af PR #79 — Gate A,
   Issue #78, afsluttet `GO MED FORBEHOLD`). Fase 1B/1C/2/3/4 fortsat live derudover.
 - **Gate B0+B1 (Issue #80):** branch `feat/gate-b0-b1-conversion-measurement-80` fra frisk `main`
-  (`644269a`); PR [#81](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/81),
-  head-SHA `2638ada2c98f80d5374001314cae8f4f5d9bd362` (kode-komplet på `a5f5e11...`; `2638ada` er
-  et efterfølgende docs-only STATUS/CHECKPOINT/DECISIONS-commit, ingen kodeændring),
-  **reviewklar, ikke merget**.
+  (`644269a`); PR [#81](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/81) —
+  løbende head-SHA hardkodes bevidst ikke her (se GitHub); det kode-komplette commit er
+  `a5f5e11d8e0aad033961aab52cc1e03ade01c012` (efterfølgende commits på branchen er kun
+  docs-opdateringer, som denne selv). **Reviewklar, ikke merget.**
 
 ## Færdigt
 

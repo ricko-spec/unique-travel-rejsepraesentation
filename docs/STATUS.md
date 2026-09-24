@@ -22,11 +22,10 @@
 - **Aktivt kapitel:** [Issue #80](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/80) —
   **Vision 3.0 Fase 5, Gate B: prospektiv konverteringsmåling uden aktivering** (barn af Gate A).
   Branch `feat/gate-b0-b1-conversion-measurement-80`; PR
-  [#81](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/81), head-SHA
-  `2638ada2c98f80d5374001314cae8f4f5d9bd362` (kode-komplet på `a5f5e11d8e0aad033961aab52cc1e03ade01c012`;
-  `2638ada` er et efterfølgende docs-only-commit — samme STATUS/CHECKPOINT/DECISIONS-opdatering du
-  læser nu — der ikke rører kode/tests), **reviewklar, ikke merget** — stopper bevidst ved
-  review-/migrationsgaten.
+  [#81](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/81) — denne fil
+  hardcoder bevidst IKKE PR'ens løbende head-SHA (den bliver stale ved hvert nyt commit på
+  branchen, inkl. rene docs-opdateringer som denne selv — se GitHub for det aktuelle head).
+  **Reviewklar, ikke merget** — stopper bevidst ved review-/migrationsgaten.
   - **Gate B0 (ADR):** arkitektur **A** valgt — direkte, read-only HubSpot-læsning i dette projekt,
     ingen Marketing Dashboard-afhængighed. Se `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md`.
   - **Gate B1 (implementering uden aktivering):** `supabase/013_conversion_measurement.sql`
@@ -35,8 +34,9 @@
     ingen commit af kørslen"), HubSpot-adapter-KONTRAKT + fixture (ingen live klient/kald),
     small-cell + komplementær privacy-undertrykkelse (`aggregate.ts`), admin-API/-UI i fail-closed
     "ikke startet"-tilstand (`/admin/api/conversion`, `ConversionMeasurement.tsx`).
-  - **Verificeret på det kode-komplette head `a5f5e11`** (uændret af det senere docs-only-commit
-    `2638ada`): `npm test` 836/836 (761 eksisterende + 75 nye) · `npm run
+  - **Verificeret på det kode-komplette commit `a5f5e11d8e0aad033961aab52cc1e03ade01c012`**
+    (denne SHA ændrer sig aldrig — efterfølgende commits på branchen er kun docs-opdateringer, som
+    ikke rører kode/tests): `npm test` 836/836 (761 eksisterende + 75 nye) · `npm run
     typecheck` 0 fejl · `npm run lint` 0 fejl (2 kendte `<img>`-advarsler, uændret) · `npm run
     build` success · `git diff --check` ren · Vercel preview-check **pass** på eksakt head-SHA.
   - **Ingen migration anvendt, ingen secrets oprettet/ændret, ingen scheduler, ingen live
