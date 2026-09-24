@@ -85,20 +85,32 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
   `20260919074341_trip_contact_intent`, kørt og read-only verificeret, baseline opdateret), `POST /[bookingId]/intent`,
   tracked links, "Kontakt-intent" i admin. Live i production 2026-09-19T08:21:19Z. **Production UI-smoketest er udsat**
   — driftsopfølgning, ikke en blocker.
+- **[Issue #76](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/76) —
+  Vision 3.0 Fase 4: salgsoversigt med målt kundeaktivitet.** Merget
+  ([PR #77](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/77),
+  2026-09-19T09:24:56Z, merge-commit `c407d626`). Kompakt server-side DTO (ingen
+  `data`/`raw_pdf_text`/`created_by`), pagineret læsehjælper, seks set-baserede læsninger, kolonnerne
+  Åbnet/Set/Kontakt/Seneste aktivitet, filtre + sortering + klient-side pagination, `not-measured`, delt
+  `resolveEligibleSections`, `CONTACT_INTENT_TRACKING_SINCE = 2026-09-19T08:21:19Z`. Ingen migration. Se
+  `docs/VISION-3.0-PHASE-4-PLAN.md`. **Rettelse (2026-09-24):** denne fil sagde tidligere "PR åben, ikke
+  merget" — verificeret forkert mod GitHub, PR #77 er merget og live.
 
 ## Næste
 
-1. **[Issue #76](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/76) —
-   Vision 3.0 Fase 4: salgsoversigt med målt kundeaktivitet** (barn af [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
-   Godkendt af Ricko 2026-09-19; **implementeret, PR åben (ikke merget)**. Kompakt server-side DTO (ingen
-   `data`/`raw_pdf_text`/`created_by`), pagineret læsehjælper, seks set-baserede læsninger, kolonnerne
-   Åbnet/Set/Kontakt/Seneste aktivitet, filtre + sortering + klient-side pagination, `not-measured`, delt
-   `resolveEligibleSections`, `CONTACT_INTENT_TRACKING_SINCE = 2026-09-19T08:21:19Z`. Ingen migration. Se
-   `docs/VISION-3.0-PHASE-4-PLAN.md`.
+1. **[Issue #78](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/78) —
+   Vision 3.0 Fase 5: prospektiv konverteringsmåling (online rejseplan mod kun PDF)** (barn af
+   [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41)).
+   **Gate A (read-only datagrundlagsverifikation) afgjort `MEASUREMENT_BLOCKED`** 2026-09-24 — se
+   `docs/VISION-3.0-PHASE-5-GATE-A.md`. Ingen godkendt HubSpot-adgang i `docs/ACCESS_MATRIX.md` endnu;
+   pipeline/stage-kontrakt, bookingnummer-felt og aggregater er derfor ikke verificeret. Fire-gate-
+   arbejdsform (Gate A → B migration/persistence → C scheduler/secrets → D production-smoketest), hver
+   med egen Ricko-godkendelse. Ingen produktkode/migration før Gate A er ophævet.
 2. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
    Vision 3.0: Customer Engagement & Sales Intelligence.** Master-issue — IKKE én stor PR.
-   Fase 3 (kontakt-intent) er live (#73/PR #74); fase 4 (salgsoversigt) er implementeret i #76 (PR åben);
-   fase 5 (HubSpot) hører hjemme i Marketing Dashboard-projektet.
+   Fase 4 (salgsoversigt) er live (#76/PR #77); **fase 5 (prospektiv konverteringsmåling) er, per
+   Issue #78, besluttet placeret i dette repo** (server-side, ingen HubSpot i browseren) — se
+   `docs/DECISIONS.md`. Dette opdaterer et tidligere notat her om at fase 5 hørte hjemme i
+   "Marketing Dashboard-projektet".
 3. **Drift, ingen kode:** Mille opretter Japan/Kenya/Mauritius + uploader billeder i production
 
 Herudover intet forudbestemt. Punkter efter dette vælges af Ricko fra backloggen nedenfor
@@ -113,9 +125,11 @@ eller GitHub Issues.
 
 ## Skal besluttes af Ricko
 
-- **Vision 3.0 Fase 4 — merge-godkendelse af Issue #76-PR'en.** Implementeret og verificeret (se `docs/STATUS.md`).
-  Ingen migration nødvendig; merge til `main` er et production-deploy og kræver Rickos PR-specifikke godkendelse.
-  Derefter autentificeret production-smoketest af salgsoversigten (kan udskydes; blokerer ikke merge).
+- **Vision 3.0 Fase 5 — ophæv Gate A-blokeringen (Issue #78).** To veje beskrevet i
+  `docs/VISION-3.0-PHASE-5-GATE-A.md` §5: godkend HubSpot-MCP-adgang (kræver opdatering af
+  `docs/ACCESS_MATRIX.md`), eller kør det vedlagte lokale read-only script og del kun
+  aggregat-tallene. Uden dette kan Gate A ikke afsluttes med `GO`/`GO MED FORBEHOLD`, og Gate B
+  (migration/persistence) kan ikke starte.
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af
   `pg_cron`-extensionen). Ingen tidsfrist — hverken `trip_visits`, `trip_section_engagement`
