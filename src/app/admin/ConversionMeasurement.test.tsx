@@ -3,6 +3,8 @@
 // session + fake Supabase, svaret går gennem Response.json() (ISO-strenge,
 // ingen Date-objekter), valideres af klientens skema og renderes server-side.
 // Dækker de fire UI-tilstande som fixture-bevis (ingen screenshots i repoet).
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -142,5 +144,26 @@ describe("GET /admin/api/conversion → ConversionBody (faktisk JSON-form)", () 
   it("et JSON-svar med Date-lignende men ugyldige felter afvises af skemaet i stedet for at kaste", () => {
     expect(parseConversionWire({ measurement: { measurementStartedAt: 123 } })).toBeNull();
     expect(formatIsoDate("ikke-en-dato")).toBe("—");
+  });
+});
+
+describe("review-runde 3 — trendtabel med to perioder i samme måned", () => {
+  it("renderer to adskilte rækker med unik identitet (Periode 1 og Periode 2)", async () => {
+    const rows = [
+      ...monthRows("ONLINE", "2026-10-05T03:00:00Z", 30, 15, 1),
+      ...monthRows("ONLINE", "2026-10-20T03:00:00Z", 30, 12, 100),
+      ...monthRows("PDF_ONLY", "2026-10-05T03:00:00Z", 40, 10, 1000),
+    ];
+    const { json } = await routeJson(fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: rows }));
+    const html = render(json);
+    expect(html).toContain("Periode 1");
+    expect(html).toContain("Periode 2");
+    expect(html.match(/Periode 1/g)).toHaveLength(2); // én pr. gruppe-tabel
+  });
+
+  it("React-nøglen i trendtabellen er periodeindekset — ikke måneden, der kan gentages", () => {
+    const src = readFileSync(join(process.cwd(), "src/app/admin/ConversionMeasurement.tsx"), "utf8");
+    expect(src).toContain("key={p.periodIndex}");
+    expect(src).not.toContain("key={p.fromMonth}");
   });
 });

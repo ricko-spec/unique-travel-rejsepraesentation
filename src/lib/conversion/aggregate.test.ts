@@ -67,7 +67,7 @@ describe("udfaldsceller — small-cell + komplement (fund 3)", () => {
     const cell = a.groups.ONLINE.windows[30];
     if (visible) {
       expect(cell).toEqual({ denominator: n, numerator: b, ratePercent: (b / n) * 100, suppressed: false });
-      expect(a.groups.ONLINE.trend30).toEqual([{ fromMonth: "2026-10", toMonth: "2026-10", enrolled: n, booked: b, ratePercent: (b / n) * 100 }]);
+      expect(a.groups.ONLINE.trend30).toEqual([{ periodIndex: 1, fromMonth: "2026-10", toMonth: "2026-10", enrolled: n, booked: b, ratePercent: (b / n) * 100 }]);
     } else {
       // Tæller, nævner og procent skjules SAMMEN — og måneden optræder ikke i trenden.
       expect(cell).toEqual({ denominator: null, numerator: null, ratePercent: null, suppressed: true });
@@ -401,5 +401,28 @@ describe("review-runde 2, fund 2 — koordineret undertrykkelse på tværs af 30
       prev = a;
     }
     expect(checkedCross).toBeGreaterThan(50);
+  });
+});
+
+describe("review-runde 3 — unik og stabil periodeidentitet i trenden", () => {
+  it("to lukkede blokke i samme kohortemåned får hver sin periode (1, 2) — aldrig identisk identitet", () => {
+    const a = agg([
+      ...cohort("ONLINE", "2026-10-05T03:00:00Z", 30, 15),
+      ...cohort("ONLINE", "2026-10-20T03:00:00Z", 30, 12),
+    ]);
+    const t = a.groups.ONLINE.trend30;
+    expect(t.map((p) => [p.periodIndex, p.fromMonth, p.toMonth, p.enrolled, p.booked])).toEqual([
+      [1, "2026-10", "2026-10", 30, 15],
+      [2, "2026-10", "2026-10", 30, 12],
+    ]);
+    expect(new Set(t.map((p) => p.periodIndex)).size).toBe(t.length);
+  });
+
+  it("periodeindekset er stabilt: en ny blok tilføjes som næste periode uden at omnummerere de gamle", () => {
+    const rows = [...cohort("ONLINE", "2026-10-05T03:00:00Z", 30, 15), ...cohort("ONLINE", "2026-10-20T03:00:00Z", 30, 12)];
+    const before = agg(rows, new Date("2026-11-10T12:00:00Z")).groups.ONLINE.trend30;
+    const after = agg(rows).groups.ONLINE.trend30;
+    expect(before.map((p) => p.periodIndex)).toEqual([1]);
+    expect(after.slice(0, before.length)).toEqual(before);
   });
 });

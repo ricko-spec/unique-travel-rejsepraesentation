@@ -52,8 +52,15 @@ export type WindowCell = {
   suppressed: boolean;
 };
 
-/** Én publiceret trend-periode (én eller flere sammenhængende kohortemåneder), 30-dages-udfald. */
+/**
+ * Én publiceret trend-periode (én lukket 30-blok), 30-dages-udfald.
+ * `periodIndex` (1, 2, 3 …) er periodens unikke, stabile identitet: blokke
+ * lukkes kun i kohorteorden og ændres ikke bagefter, så en ny periode får
+ * altid næste nummer. Måneder kan gentages (flere blokke i samme måned) og er
+ * derfor kun en etiket.
+ */
 export type TrendPeriod = {
+  periodIndex: number;
   fromMonth: string; // "YYYY-MM"
   toMonth: string; // "YYYY-MM"
   enrolled: number;
@@ -255,7 +262,8 @@ export function buildConversionAggregate(
       60: windowCell(blocks.b60, 60),
       90: windowCell(blocks.b90, 90),
     } as Record<MaturityWindowDays, WindowCell>;
-    const trend30 = blocks.b30.map((blk) => ({
+    const trend30 = blocks.b30.map((blk, i) => ({
+      periodIndex: i + 1,
       fromMonth: monthKey(new Date(blk.firstT)),
       toMonth: monthKey(new Date(blk.lastT)),
       enrolled: blk.n,

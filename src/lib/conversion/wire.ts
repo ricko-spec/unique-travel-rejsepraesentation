@@ -20,6 +20,7 @@ const windowCell = z.object({
 });
 
 const trendPeriod = z.object({
+  periodIndex: z.number().int().positive(),
   fromMonth: z.string().regex(/^\d{4}-\d{2}$/),
   toMonth: z.string().regex(/^\d{4}-\d{2}$/),
   enrolled: z.number().int().nonnegative(),
@@ -30,7 +31,9 @@ const trendPeriod = z.object({
 const groupStats = z.object({
   totalEnrolled: nullableCount,
   windows: z.object({ "30": windowCell, "60": windowCell, "90": windowCell }),
-  trend30: z.array(trendPeriod),
+  trend30: z
+    .array(trendPeriod)
+    .refine((ps) => new Set(ps.map((p) => p.periodIndex)).size === ps.length, "dublet periodIndex"),
 });
 
 const isoOrNull = z

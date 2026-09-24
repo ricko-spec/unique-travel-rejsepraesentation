@@ -46,8 +46,8 @@ export function formatIsoDate(iso: string | null, withTime = false): string {
     : d.toLocaleDateString("da-DK", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Copenhagen" });
 }
 
-function formatPeriod(from: string, to: string): string {
-  return from === to ? from : `${from} – ${to}`;
+function formatPeriod(index: number, from: string, to: string): string {
+  return `Periode ${index} (${from === to ? from : `${from} – ${to}`})`;
 }
 
 export function ConversionMeasurement() {
@@ -226,8 +226,8 @@ function TrendTable({ label, periods }: { label: string; periods: ConversionWire
           </thead>
           <tbody>
             {periods.map((p) => (
-              <tr key={p.fromMonth}>
-                <td>{formatPeriod(p.fromMonth, p.toMonth)}</td>
+              <tr key={p.periodIndex}>
+                <td>{formatPeriod(p.periodIndex, p.fromMonth, p.toMonth)}</td>
                 <td style={{ textAlign: "center" }}>{p.enrolled}</td>
                 <td style={{ textAlign: "center" }}>{p.booked}</td>
                 <td style={{ textAlign: "center" }}>{formatPercent(p.ratePercent)}</td>
