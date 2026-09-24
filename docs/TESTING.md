@@ -311,6 +311,55 @@ den dækkes af loader-kørslen, testene og smoketesten nedenfor.
 5. Åbn Detaljer: "Kontaktklik måles fra 19. september 2026." vises under Kontakt-intent.
 6. Netværks-fanen: svaret fra `/admin/api/trips` er ≈ 110–130 KB og indeholder ikke `data`, `raw_pdf_text` eller `created_by`.
 
+### Konverteringsmåling — Gate B1 (Issue #80, PR #81 review-runde 1)
+
+`src/lib/conversion/*.test.ts` + `src/app/admin/ConversionMeasurement.test.tsx` (kør: `npx vitest run
+src/lib/conversion src/app/admin/ConversionMeasurement.test.tsx`). `vitest.config.ts` tilføjer kun
+`@/`-aliaset og en JSX-transform, så komponent/route kan renderes rigtigt.
+
+- **Red-proof før rettelserne:** 7 kontraeksempler (30/25-komplement i måned, tidligere ENROLLED ved senere delt
+  reference, ignoreret sync-run-fejl, upagineret `trips`, JSON-dato kaldt som `Date`, `hs_is_closed_won` ⇒ BOOKED i
+  migration men ikke i kode, tomme secrets) fejlede alle af den rigtige grund på `a8f08fc`.
+- **Klassifikation/sync (fund 1, 2, 4, 5, 7):** baseline ⇒ PRE_START/PENDING uden historik; kohortestart =
+  `observedAt`; Opdateret tilbud nulstiller intet; ukendt stage/pipeline/umulige flag ⇒ `CONTRACT_DRIFT`; repo-kontrakten
+  ⇒ `CONTRACT_INCOMPLETE`; sandhedstabel for udfald (8 kombinationer); 5xx/429/401/403, total-mismatch, total der
+  ændrer sig, dublet på tværs af sider, tom kilde, kastende adapter ⇒ FAILED og ingen kohorteændring; 5.000 deals/50 sider;
+  afvist commit og fejlet FAILED-skrivning ⇒ aldrig `ok: true` (`auditRecorded` rapporteret); samtidig kørsel afvist;
+  crash ⇒ `ABANDONED` efter lease; forældet run kan ikke committe; delte referencer i samme sync, senere sync, omvendt
+  rækkefølge, pending-dublet, forsvundet deal, tre deals og idempotent genkørsel; tomme/korte/ens secrets afvist før ét
+  eneste persistence-/HubSpot-kald; intet råt deal-id/bookingnummer/secret gemt.
+- **Supabase-læsning (fund 4):** flere sider, server-`max_rows` lavere end sidestørrelsen, tavs afkortning, manglende
+  count, fejl på side 3, dublet-række, 10.000 kohorterækker uden `.in(...)`, ugyldige DB-værdier ⇒ fail-closed.
+- **Privacy (fund 3):** 30/25, 30/5, 20/10 (grænse, synlig), 30/0, 9/0, tomt grundlag (null, aldrig 0 %); lille måned
+  slås sammen med næste (vindue = præcis summen af synlige perioder); lille sidste måned tilbageholdes; sekundær
+  undertrykkelse af tælletal/datakvalitet; **egenskabstest over 150 dages daglig visning**: ethvert publiceret
+  udfaldstal og enhver dag-til-dag-ændring opfylder n, b, n−b ≥ 10.
+- **UI (fund 6):** routen kaldes med mocket session + fake Supabase, svaret går gennem `Response.text()` → `JSON.parse`
+  (ISO-strenge) → zod → `renderToStaticMarkup`: 401 uden session; **(1) ikke startet (42P01), (2) aktiv men ikke moden,
+  (3) moden og publicerbar (50,0 % / 25,0 % / +25,0 pp + trend), (4) privacy-undertrykt (30/25 og 30/5 vises aldrig)**;
+  afventer baseline; forældede data; degraded ⇒ 500 uden interne detaljer. Dette er det fixturebaserede UI-bevis —
+  screenshots committes ikke (repoet er public).
+- **Mutation (TS, 13 unikke mutanter):** alle ikke-ækvivalente dræbt, bl.a. komplement fjernet fra blokke, sekundær
+  undertrykkelse slået fra, baseline-PRE_START, senere konflikt, delt-reference-tærskel, `hs_is_closed_won` ⇒ booket,
+  secrets-check fjernet, commit-fejl som succes, afkortet trips-læsning som tomt indeks, **JSON-dato som `Date` (den
+  oprindelige fund 6-fejl)**, total-check fjernet. To ækvivalente overlevende: `idx.length === 1` i sekundær
+  undertrykkelse (redundant — fjernet) og dublet-check i pagineringen (fanges også af deal_key-dublet-værnet).
+
+**Migration 013 — kørt mod lokal in-memory Postgres (pglite 0.5.8, uden for repoet), ikke kun læst — 87/87:** Supabase-
+lignende roller + default ACL (auto-ALL); migrationen køres to gange (idempotens); grants (kun `service_role`
+SELECT/INSERT/UPDATE), RLS + én policy pr. tabel, funktioner SECURITY INVOKER + `search_path`, EXECUTE kun
+`service_role`; seed med tidsstempler afvist; skrivning af kohorte/friskhed uden for commit afvist; DELETE/TRUNCATE
+afvist; anon/authenticated afvist; begin: NOT_ACTIVE, kontraktversion, lease, samtidig kørsel; baseline sætter
+`measurement_started_at` = `observed_at`; **en batch med én gyldig ny række + én ulovlig overgang skriver INTET (run
+forbliver RUNNING, friskhed uændret)**; forældet generation, historisk kohortestart, ny PRE_START efter baseline,
+`observed_at` ikke monotont/i fremtiden, dubletter, rækkens kontraktversion, tom batch, CHECK-brud (ikke-hex deal_key,
+ENROLLED uden eksponering, konflikt på ikke-ENROLLED); booket/kohortestart/eksponering/konflikt/`last_observed_at`
+kan ikke ændres; fejlkode-CHECK; crash ⇒ ABANDONED, kohorte urørt, forældet run og udløbet lease kan ikke committe;
+højst én RUNNING (unikt indeks); `measurement_started_at` uforanderlig; PAUSED blokerer begin; ingen
+klartekst-kolonner. **SQL-mutationer (11 unikke):** hvert fjernet værn (terminal-frys, skrivning uden for sync, generation,
+booket-frys, lease-udløb, kohortestart, unikt RUNNING-indeks, anon-revoke, konflikt-frys, nulpunkt, baseline-mismatch
+m.fl.) fælder scriptet. Selve production-kørslen er Gate B2 og IKKE sket.
+
 ## Efter enhver testrunde
 
 Rapportér resultater ærligt (også røde), opdatér `docs/STATUS.md`, og ryd test-data op.

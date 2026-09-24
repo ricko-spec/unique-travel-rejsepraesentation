@@ -109,8 +109,10 @@ deres begrundelse står i merged PR'er (se `docs/STATUS.md` for links), ikke gen
    — branch `feat/gate-b0-b1-conversion-measurement-80`, PR reviewklar (se `docs/STATUS.md` for
    PR-link/head-SHA). Migration `013_conversion_measurement.sql` bygget som fil, **ikke anvendt**.
    Ren sync-/klassifikationsmotor, persistence-adaptere (Supabase + fixture), admin-API/-UI i
-   fail-closed "ikke startet"-tilstand, small-cell + komplementær privacy-undertrykkelse, 75 nye
-   tests. Se `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md` (arkitektur) og
+   fail-closed "ikke startet"-tilstand, small-cell + komplementær privacy-undertrykkelse. **Review-
+   runde 1 (Codex, 7 fund) rettet samlet:** prospektiv snapshot-kvalifikation uden historik,
+   transaktionelle sync-RPC'er, blok-baseret privacy, konflikt-reconciliation, wire-DTO, én
+   udfaldssandhedstabel. Se `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md` (arkitektur) og
    `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md` (Gate B2/C/D-procedure). **Ingen migration/secrets/
    scheduler/live HubSpot-kald/merge i denne leverance** — stopper ved review-/migrationsgaten.
 2. **[Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) —
@@ -135,8 +137,10 @@ eller GitHub Issues.
   B1 (implementering uden aktivering) er leveret som PR. Beslutninger, se
   `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md` + `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`: (1)
   bekræft arkitektur A, (2) review og merge-godkendelse af PR'en, (3) derefter Gate B2 (kør
-  migration 013 i production — separat godkendelse), (4) bekræft outcome-fortolkningen
-  (`unique_travel_dealstatus`/`hs_is_closed_won` ⇒ Booket) med en domæneansvarlig før Gate C.
+  migration 013 i production — separat godkendelse), (4) Gate C-forudsætning: klassificér
+  pipelinens øvrige stages (`PRE_QUOTE`/`QUOTE_OR_LATER`/`CLOSED_AMBIGUOUS`) fra live-metadata —
+  indtil da fejler enhver officiel sync lukket (`CONTRACT_INCOMPLETE`). Udfaldsdefinitionen er
+  fastlagt fra Gate A (kun `unique_travel_dealstatus` ⇒ Booket; `hs_is_closed_won` aldrig).
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af
   `pg_cron`-extensionen). Ingen tidsfrist — hverken `trip_visits`, `trip_section_engagement`

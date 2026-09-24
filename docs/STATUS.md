@@ -34,11 +34,13 @@
     ingen commit af kørslen"), HubSpot-adapter-KONTRAKT + fixture (ingen live klient/kald),
     small-cell + komplementær privacy-undertrykkelse (`aggregate.ts`), admin-API/-UI i fail-closed
     "ikke startet"-tilstand (`/admin/api/conversion`, `ConversionMeasurement.tsx`).
-  - **Verificeret på det kode-komplette commit `a5f5e11d8e0aad033961aab52cc1e03ade01c012`**
-    (denne SHA ændrer sig aldrig — efterfølgende commits på branchen er kun docs-opdateringer, som
-    ikke rører kode/tests): `npm test` 836/836 (761 eksisterende + 75 nye) · `npm run
-    typecheck` 0 fejl · `npm run lint` 0 fejl (2 kendte `<img>`-advarsler, uændret) · `npm run
-    build` success · `git diff --check` ren · Vercel preview-check **pass** på eksakt head-SHA.
+  - **Review-runde 1 (Codex, 7 fund, DO NOT MERGE på `a8f08fc`) rettet samlet** — se PR-kommentaren
+    og ADR rev. 2: (1) prospektiv snapshot-kvalifikation uden historik + versioneret stage-kontrakt
+    (fail-closed `CONTRACT_INCOMPLETE` indtil Gate C), (2) transaktionelle sync-RPC'er med lease,
+    generation og DB-håndhævede frys-regler, (3) blok-baseret privacy (ingen lille celle/komplement
+    kan udledes, heller ikke dag-for-dag), (4) komplet paginerede Supabase-læsninger, (5)
+    konflikt-reconciliation for delte bookingreferencer, (6) wire-DTO med ISO-strenge, (7) én
+    udfaldssandhedstabel. Testresultater og head-SHA: se PR #81 (hardkodes ikke her).
   - **Ingen migration anvendt, ingen secrets oprettet/ændret, ingen scheduler, ingen live
     HubSpot-kald, ikke merget.** Runbook til Gate B2/C/D:
     `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.
@@ -65,8 +67,10 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
   (mod prod-DB) eller på production efter merge.
 - **Storage bucket-config uden for drift-tjekket** (kendt blind vinkel).
 - Repo er public — secrets/kundedata-disciplin er procesbåret, ikke teknisk håndhævet.
-- **PR #81 (Gate B0+B1, Issue #80) afventer review og merge-godkendelse.** Se åbne beslutninger i
+- **PR #81 (Gate B0+B1, Issue #80) afventer re-review og merge-godkendelse.** Se åbne beslutninger i
   PR-beskrivelsen og `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md`/`-GATE-B1-RUNBOOK.md`.
+- **GitHub Actions findes ikke i repoet** (ingen `.github/workflows`) — "fuld CI" på GitHub er
+  pt. kun Vercel-checket; test/typecheck/lint/build køres lokalt og dokumenteres i PR'en.
 - Øvrige åbne beslutninger (KRÆVER RICKO): `docs/DECISIONS.md` § Åbne beslutninger.
   Prioriteret backlog: `docs/ROADMAP.md`.
 

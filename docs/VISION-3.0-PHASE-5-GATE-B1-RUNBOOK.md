@@ -1,116 +1,114 @@
 # Vision 3.0 Fase 5 — Gate B1: leverance og operatør-runbook til Gate B2/C/D
 
-> [Issue #80](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/80). Denne fil
-> er den præcise operatør-runbook Issue #80's afleveringskrav punkt 10 beder om ("ingen
-> secretværdier"). Intet i denne fil må eller kan udføres af en agent alene — hvert trin kræver
-> Rickos eksplicitte, separate godkendelse, som beskrevet i Issue #80's fire-gate-struktur.
+> [Issue #80](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/80). Den
+> præcise operatør-runbook Issue #80's afleveringskrav punkt 10 beder om ("ingen secretværdier").
+> Intet i denne fil må eller kan udføres af en agent alene — hvert trin kræver Rickos eksplicitte,
+> separate godkendelse, jf. Issue #80's fire-gate-struktur.
+>
+> Revideret i PR #81 review-runde 1 (2026-09-24): transaktionelle RPC'er, prospektiv
+> snapshot-kvalifikation, stage-kontrakt der skal udfyldes ved Gate C, dry-run-tilstand. Designet
+> er beskrevet i `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md` (rev. 2).
 
-## Hvad Gate B1 har leveret (denne PR)
+## Hvad Gate B1 har leveret (PR #81)
 
-- `supabase/013_conversion_measurement.sql` — migration, **bygget som fil, IKKE anvendt**.
-- `src/lib/conversion/*` — ren sync-/klassifikationslogik, persistence-adaptere (Supabase + in-
-  memory fake), HubSpot-adapter-kontrakt + fixture, aggregeringslogik med small-cell/komplementær
-  undertrykkelse. 75 nye tests, alle grønne.
+- `supabase/013_conversion_measurement.sql` — migration, **bygget som fil, IKKE anvendt**: tre
+  tabeller, frys-/guard-triggere, tre sync-RPC'er (`conversion_begin_sync_run`,
+  `conversion_commit_sync_run`, `conversion_fail_sync_run`) + `conversion_parse_batch`.
+- `src/lib/conversion/*` — kontrakt (v2), pseudonymisering, ren klassifikation, HubSpot-
+  adapter-kontrakt + fixture, sync-motor, persistence (Supabase-RPC-adapter + in-memory fake der
+  spejler RPC-semantikken), aggregering med privacy-model, wire-DTO.
 - `src/app/admin/api/conversion/route.ts` + `src/app/admin/ConversionMeasurement.tsx` — admin-API
-  og -UI, monteret i `/admin`, fail-closed "ikke startet"-tilstand (håndterer også at tabellerne
-  endnu ikke findes i production — se `src/lib/conversion/adminServer.ts`).
-- `docs/VISION-3.0-PHASE-5-GATE-B0-ADR.md` — arkitekturvalg A, trusselsmodel, dataflow, invariants,
-  rollback.
+  og -UI, monteret i `/admin`, fail-closed "ikke startet" (også når tabellerne ikke findes).
 
 ## Hvad der IKKE er aktiveret (eksplicit liste)
 
-- Migrationen er **ikke** kørt i production. `conversion_measurement_state`,
-  `conversion_deal_cohort` og `conversion_sync_runs` findes **ikke** i den levende database endnu.
+- Migrationen er **ikke** kørt i production — ingen af de tre tabeller eller RPC'erne findes live.
 - **Ingen** secrets er oprettet eller ændret (`HUBSPOT_PRIVATE_APP_TOKEN`,
-  `HUBSPOT_DEAL_KEY_SECRET` findes ikke i Vercel endnu).
-- **Ingen** scheduler/cron er oprettet eller aktiveret.
-- **Ingen** live HubSpot-kald er foretaget af nogen agent i denne PR — al testdækning bruger
-  `createFixtureHubSpotAdapter`/`createInMemoryConversionPersistence`.
-- `conversion_measurement_state.measurement_started_at` er ikke sat — kan ikke være det, tabellen
-  findes ikke.
-- Admin-UI'et viser derfor altid "Målingen er ikke startet endnu" i production, indtil Gate D.
+  `HUBSPOT_DEAL_KEY_SECRET` findes ikke i Vercel).
+- **Ingen** scheduler/cron, **ingen** rigtig HubSpot-klient, **ingen** live HubSpot-kald.
+- Stage-kontrakten er **ufuldstændig** (`PIPELINE_STAGE_CONTRACT.complete = false`) — en officiel
+  sync kan derfor ikke gennemføres, selv hvis alt andet blev aktiveret (fejler `CONTRACT_INCOMPLETE`).
+- Admin-UI'et viser "Målingen er ikke startet endnu" i production indtil Gate D.
 - PR'en er **ikke merget**.
 
 ## Gate B2 — migrationsgodkendelse (kræver Rickos eksplicitte go)
 
-**Forudsætning:** PR'en er reviewet og godkendt til merge først (denne PR selv stopper ved
-review-/migrationsgaten, som instrueret).
+**Forudsætning:** PR #81 er reviewet og merget efter Rickos OK.
 
-1. Merge PR'en til `main` (almindelig merge-commit, Rickos eksplicitte OK — samme proces som
-   Gate A/PR #79).
-2. Kør `supabase/013_conversion_measurement.sql` i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdftmkgpugex/sql/new)
-   mod projekt `iunixfpthdftmkgpugex` — samme rækkefølge som migration 010-012.
-3. Verificér read-only (ingen writes, ingen syntetiske rækker):
-   - `conversion_measurement_state`, `conversion_deal_cohort`, `conversion_sync_runs` findes med de
-     forventede kolonner (se migrationsfilens kommentarer).
-   - RLS aktiveret på alle tre, én `service_role full access`-policy hver.
-   - Table grants: kun `service_role` har `SELECT, INSERT, UPDATE` (ingen `anon`/`authenticated`,
-     ingen `DELETE`) — samme mønster som migration 011/012.
-   - `conversion_measurement_state_guard_started_at`-triggeren findes og er `BEFORE UPDATE`.
-   - Row count: 0 i alle tre tabeller (ingen singleton-række er endnu oprettet — det sker IKKE af
-     denne migration, bevidst, se migrationsfilens kommentar).
-4. Kør `node scripts/check-schema-drift.mjs --update-baseline` og commit den opdaterede
-   `supabase/schema-baseline.json` sammen med en kort statusopdatering af
-   `supabase/README.md` (samme mønster som 010-012's driftsnoter).
-5. **Ingen scheduler, ingen HubSpot-secret endnu** — Gate B2 stopper her.
+1. Kør `supabase/013_conversion_measurement.sql` i SQL Editor mod projekt `iunixfpthdftmkgpugex`.
+2. Verificér read-only (ingen writes, ingen syntetiske rækker):
+   - de tre tabeller findes med kolonnerne i migrationsfilen; RLS aktiveret; én
+     `service_role full access`-policy hver;
+   - table grants: kun `service_role` har `SELECT, INSERT, UPDATE` (ingen `anon`/`authenticated`,
+     ingen `DELETE`);
+   - de fire funktioner er `SECURITY INVOKER`, `search_path = public, pg_catalog`, EXECUTE kun for
+     `service_role`;
+   - triggerne `conversion_measurement_state_guard` og `conversion_deal_cohort_guard` findes
+     (`BEFORE INSERT OR UPDATE`); indekset `conversion_sync_runs_single_running_idx` er UNIQUE;
+   - 0 rækker i alle tre tabeller.
+3. Kør `node scripts/check-schema-drift.mjs --update-baseline` og commit `supabase/schema-baseline.json`
+   + en statuslinje i `supabase/README.md`.
+4. **Ingen scheduler, ingen HubSpot-secret** — Gate B2 stopper her.
 
 ## Gate C — aktivering (separat, eksplicit go)
 
-1. Opret HubSpot Private App-token (read-only scopes: `crm.objects.deals.read`,
-   `crm.schemas.deals.read`, pipeline-læse-scope) — samme token-klasse som Gate A brugte, men et
-   NYT token bør overvejes for produktions-drift frem for at genbruge et evt. ad hoc-token fra
-   Gate A's undersøgelse.
-2. Generér en ny, uafhængig `HUBSPOT_DEAL_KEY_SECRET` (fx `openssl rand -hex 32`) — ALDRIG samme
-   værdi som `BOOKING_MATCH_SECRET` eller `ANALYTICS_BRIDGE_API_KEY`.
-3. Sæt begge som server-side-only miljøvariabler i Vercel → Project Settings → Environment
-   Variables (production, og evt. preview) — aldrig i repoet, `.env.local` deles aldrig.
-4. Seed singleton-rækken i `conversion_measurement_state` (status fortsat `NOT_STARTED`,
-   `measurement_started_at` fortsat `NULL`) — første eksplicitte `INSERT` i denne tabel.
-5. Opret ÉN daglig Vercel Cron (`vercel.json` eller Vercel-dashboardet) der kalder en ny,
-   server-side-only cron-route, som selv kalder `runConversionSync()` med en RIGTIG
-   `HubSpotReadAdapter` (implementeres i Gate C, ikke i denne PR — Gate B1 leverer kun
-   adapter-kontrakten + fixture).
-6. **Dry-run FØRST**: kør synkroniseringen manuelt mod production med
-   `conversion_measurement_state.status` fortsat `NOT_STARTED` — `runConversionSync()` afviser da
-   at klassificere noget (se `syncEngine.ts`'s eksplicitte NOT_STARTED-guard) og skriver kun et
-   `FAILED`-run med en klar, forventet årsag. Bruges til at bekræfte at selve HubSpot-forbindelsen,
-   pipeline-/stage-kontrakten og pagineringen virker, UDEN at kunne skrive noget som helst til
-   kohorten.
-7. Kontrollér data-health/dry-run-outputtet (kun aggregater) sammen med Ricko før Gate D.
-8. Rollback: sæt `conversion_measurement_state.status = 'PAUSED'` for at stoppe fremtidige syncs
-   uden datatab; fjern cronnen for at stoppe helt.
+1. **Udfyld stage-kontrakten (forudsætning).** Operatøren (Ricko) henter pipeline `754595640`'s
+   komplette stage-liste read-only (samme operatør-kørte mønster som Gate A — agenten ser aldrig
+   tokenet). Ricko klassificerer HVER stage som `PRE_QUOTE`, `QUOTE_OR_LATER` eller
+   `CLOSED_AMBIGUOUS` (se ADR'ens tabel). En PR tilføjer dem i `PIPELINE_STAGE_CONTRACT`, sætter
+   `complete: true` og bumper `CONTRACT_VERSION` (3); samme PR opdaterer
+   `conversion_measurement_state.contract_version`-default og runbooken. Kun stage-id'er og
+   klassifikation committes — aldrig deal-data.
+2. Byg den rigtige `HubSpotReadAdapter` (mod `api.hubapi.com`, read-only): `confirmStageContract`
+   returnerer pipelinens komplette stage-liste; `readDealsPage` bruger søgning filtreret på
+   pipelinen, returnerer HubSpots `total` på hver side og præcis felterne i
+   `HubSpotDealObservation`. Fejl mappes til kategoriske årsager — aldrig rå payloads. Testes mod
+   fixtures før første live-kald.
+3. Opret HubSpot Private App-token (read-only: `crm.objects.deals.read`, `crm.schemas.deals.read`)
+   og en ny, uafhængig `HUBSPOT_DEAL_KEY_SECRET` (`openssl rand -hex 32` — ALDRIG samme værdi som
+   `BOOKING_MATCH_SECRET`; motoren afviser ens eller kortere end 32 tegn). Sæt dem som
+   server-side-only miljøvariabler i Vercel. Aldrig i repoet.
+4. Seed singleton-rækken: `insert into conversion_measurement_state (id) values (1);`
+   (status `NOT_STARTED`; triggeren afviser et seed med tidsstempler).
+5. **Dry-run FØRST:** kør `runConversionSync(..., { dryRun: true })` via en server-side route/script.
+   Dry-run læser HubSpot, verificerer stage-kontrakten, læser `trips` og kohorten komplet og
+   klassificerer — men skriver INTET (heller ingen sync-run). Kontrollér kun de returnerede
+   aggregater sammen med Ricko.
+6. Opret ÉN daglig Vercel Cron, der kalder en server-side-only route med `runConversionSync()`.
+   Den gør intet før Gate D (status `NOT_STARTED` ⇒ `NOT_ACTIVE`, ingen skrivning).
+7. Rollback: fjern cronnen; secrets kan fjernes uden datatab.
 
 ## Gate D — officiel start (separat, eksplicit go)
 
-1. Ricko godkender eksplicit at målingen må starte NU.
-2. Operatøren opdaterer `conversion_measurement_state`: `status = 'ACTIVE'`,
-   `measurement_started_at = now()` (ÉN gang — uforanderlig herefter, håndhævet af DB-triggeren).
-3. Første succesfulde sync klassificerer alle aktuelt kendte deals: allerede-kvalificerede (var på
-   "Tilbud sendt" eller senere FØR `measurement_started_at`) bliver `PRE_START_EXISTING` og tæller
-   ALDRIG med i konverteringsmålingen — dette er selve mekanismen der forhindrer skjult historisk
-   backfill.
-4. Dokumentér kun AGGREGEREDE baseline-tal (antal `PRE_START_EXISTING` / `ELIGIBLE_PENDING` /
-   `ENROLLED` ved første kørsel) i `docs/STATUS.md` — aldrig deal-id'er eller bookingnumre.
-5. Admin-smoke-test: log ind som sælger, åbn `/admin`, bekræft at
-   "Konverteringsmåling"-sektionen nu viser målingsstart + tal (eller "Ikke nok data endnu", hvis
-   ingen gruppe er moden/stor nok endnu — det er korrekt, forventet adfærd, ikke en fejl).
-6. Herefter er kohorten officielt i gang. Enhver senere pause/genstart kræver samme
-   godkendelsesniveau som denne gate.
+1. Ricko godkender eksplicit, at målingen må starte.
+2. Operatøren sætter `update conversion_measurement_state set status = 'ACTIVE';`
+   (`measurement_started_at` forbliver `NULL` — triggeren tillader ikke at operatøren sætter den).
+3. Næste sync er **baseline-kørslen**: `conversion_commit_sync_run` sætter
+   `measurement_started_at` = kørslens `observed_at` (én gang, uforanderlig). Alle deals i
+   `QUOTE_OR_LATER`/`CLOSED_AMBIGUOUS` bliver `PRE_START_EXISTING`; åbne `PRE_QUOTE`-deals bliver
+   `ELIGIBLE_PENDING`. Ingen historik bruges.
+4. Dokumentér kun AGGREGEREDE baseline-tal (fra `conversion_sync_runs`) i `docs/STATUS.md`.
+5. Admin-smoke-test: `/admin` → "Konverteringsmåling" viser målingsstart og "Ikke nok data endnu"
+   (korrekt, forventet i de første måneder).
+6. Pause: `update conversion_measurement_state set status = 'PAUSED';` — begin afviser, intet
+   tabes. Genstart kræver samme godkendelsesniveau.
 
-## Kendte, dokumenterede begrænsninger (ikke blokerende for Gate B1, men bør kendes før Gate C)
+## Drift: fejlkoder og crash
 
-- Den rigtige `HubSpotReadAdapter`-implementering (mod `api.hubapi.com`) er **ikke bygget** i Gate
-  B1 — kun kontrakten (`src/lib/conversion/hubspotAdapter.ts`) og en fixture. Gate C skal bygge
-  denne, matchende de nøjagtige `confirmStageContract`/`readDealsPage`-semantikker, testet mod
-  fixtures FØR første live-kald.
-- Outcome-formlen (`unique_travel_dealstatus` i sold-bucket ⇒ Booket; `hs_is_closed` uden
-  `hs_is_closed_won` ⇒ `lost_observed_at`) er en dokumenteret, rimelig FORTOLKNING af Gate A's
-  princip ("afgøres af unique_travel_dealstatus sammen med hs_is_closed/hs_is_closed_won") — ikke
-  en ordret kopi af Marketing Dashboards fulde, ikke-fuldt-dokumenterede formel. Bør bekræftes
-  eksplicit af Ricko eller en domæneansvarlig ved Gate B2/C, ikke kun antages.
-- Ydeevne ved skala (dealstage-historik for ~2.600+ deals, hver dag) er ikke belastningstestet —
-  Gate A's egen live-kørsel viste at én kørsel tager sekunder for dette datavolumen, men det bør
-  bekræftes for den fulde, produktionsbundne sync i Gate C.
-- Single-request-upsert-størrelsen (`persistence.upsertCohortRows`) er ikke testet mod PostgRESTs
-  egne payload-/statement-grænser ved ~2.600 rækker i ét kald — bør verificeres i Gate C's
-  dry-run, med sideopdeling som en fremtidig, dokumenteret forbedring hvis nødvendigt.
+`conversion_sync_runs.error_code` er en af: `CONFIG_INVALID`, `NOT_ACTIVE`,
+`CONTRACT_VERSION_MISMATCH`, `CONTRACT_INCOMPLETE`, `CONTRACT_DRIFT`, `HTTP_401/403/429/5XX`,
+`NETWORK_ERROR`, `PAGE_INCONSISTENT`, `TOTAL_MISMATCH`, `DUPLICATE_DEAL`, `EMPTY_SOURCE`,
+`SOURCE_READ_FAILED`, `SYNC_ALREADY_RUNNING`, `COMMIT_REJECTED`, `ABANDONED`, `UNKNOWN`
+(`CONFIG_INVALID`, `NOT_ACTIVE`, `CONTRACT_VERSION_MISMATCH`, `SYNC_ALREADY_RUNNING` afvises før en
+lease og skrives derfor ikke som række). En kørsel der crasher, efterlader en RUNNING-række uden
+kohortedata; efter 30 minutter markeres den `ABANDONED` af næste kørsel.
+
+## Kendte, dokumenterede begrænsninger
+
+- Den rigtige HubSpot-adapter og den komplette stage-kontrakt er Gate C-arbejde (se ovenfor).
+- Commit-batchen sendes som ét RPC-kald (~2.600 rækker ≈ 1–2 MB JSON server→Supabase; Vercels
+  4,5 MB-grænse gælder kun indgående requests). Skal bekræftes i Gate C's dry-run/første kørsel.
+- Privacy: se ADR'ens "Resterende, dokumenteret risiko" (umodne tællinger; sent opdagede konflikter
+  i allerede publicerede blokke).
+- En deal der går fra `PRE_QUOTE` til en tvetydig lukket stage mellem to syncs, udelukkes
+  (`CLOSED_BEFORE_QUALIFIED_OBSERVATION`) og vises i datakvalitet.
