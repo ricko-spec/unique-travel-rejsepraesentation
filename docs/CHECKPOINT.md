@@ -14,7 +14,9 @@
   014 ved aktivering. Live-forsøg 1 (head `560fced`) fejlede sikkert med `PRECHECK_FAILED`
   (0 skrivninger, ingen DB-ændring); før/efter-tællingen rapporterer nu tabel + kategori.
   Live-forsøg 2 (head `e4490b1`): **PASS** — 2.652 observeret, 0 skrivninger, rækker 0/0/0
-  uændret, skema-fingeraftryk uændret. **Udestående:** Rickos review; intet aktiveret, ikke merget.
+  uændret, skema-fingeraftryk uændret. Codex-review 5318246169 (blokerende) rettet: kontrakten
+  verificeres nu også på normaliseret label, displayOrder og archived (rename/reorder/arkivering ⇒
+  `CONTRACT_DRIFT`). **Udestående:** nyt review; intet aktiveret, ikke merget.
 
 ## Branch / HEAD
 

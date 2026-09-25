@@ -18,9 +18,23 @@ Property-metadata: `pipeline`/`dealstage` (enumeration), `unique_travel_bookingn
 
 ## 2. Stagekontrakt v3
 
-Fire klasser (`src/lib/conversion/contract.ts`). Hver stage har desuden sit forventede
-lukke-flag (= live `metadata.isClosed`); en deals `hs_is_closed` skal matche, og den live
-stage-liste (id + lukke-flag) skal matche kontrakten 1:1 — ellers `CONTRACT_DRIFT` (fail-closed).
+Fire klasser (`src/lib/conversion/contract.ts`). Hver stage bærer desuden den live-metadata,
+klassen er begrundet i: lukke-flag (= live `metadata.isClosed`), `label`, `displayOrder` og
+`archived`. En deals `hs_is_closed` skal matche lukke-flaget, og den live stage-liste skal matche
+kontrakten 1:1 på **id, isClosed, normaliseret label, displayOrder og archived**; pipelinen må ikke
+være arkiveret. Enhver afvigelse — rename, reorder, (af)arkivering, ny/manglende/dubleret stage —
+⇒ `CONTRACT_DRIFT` (fail-closed). Klassifikationen bygger nemlig på navn og placering (fx er Følg
+op/Lav tilbud PRE_QUOTE, fordi de ligger før Tilbud sendt), så et stage-id alene er ikke nok
+(Codex-review 5318246169).
+
+- **Normaliseret label** = Unicode NFC, trim og sammenfoldet whitespace. Store/små bogstaver
+  bevares bevidst — en ændring der er fail-closed og kræver en reviewet kontraktopdatering.
+- **displayOrder** sammenlignes eksakt pr. stage (JSON-arrayets rækkefølge er uden betydning).
+- Manglende eller ugyldig `label`/`displayOrder`/`archived` (pr. stage) eller `archived` (pipeline)
+  i live-svaret ⇒ adapteren afviser svaret (`page-inconsistent`) — aldrig MATCH.
+- Kontrakten valideres også internt: labels ikke-tomme og unikke, `displayOrder` unikke heltal ≥ 0.
+- `CONTRACT_VERSION` forbliver 3: klassifikationen og stage-sættet er uændret, kun verifikationen
+  er skærpet, og v3 er endnu ikke persisteret nogen steder (production-DB står på 2).
 
 | Klasse | Første observation efter baseline | Ved baseline |
 |---|---|---|
@@ -89,7 +103,8 @@ bevidst stadig 2** (ingen DB-ændring i C1), så enhver non-dry-run fejler lukke
 `src/lib/conversion/hubspotLiveAdapter.ts`:
 
 - Host nøjagtigt `https://api.hubapi.com`; hård allowlist på (metode, URL).
-- `GET /crm/v3/pipelines/deals/754595640` — stage-id'er + `metadata.isClosed` (strengt parset).
+- `GET /crm/v3/pipelines/deals/754595640` — pipelinens `archived` samt pr. stage id, `label`,
+  `displayOrder`, `archived` og `metadata.isClosed` (alle strengt parset; øvrige felter ignoreres).
 - `POST /crm/objects/2026-09/deals/search` — HubSpots aktuelt dokumenterede, datoversionerede
   search (limit ≤ 200, maks. 10.000 resultater pr. query, heltals-`after`). Body: filter
   `pipeline EQ 754595640`, sortering `hs_object_id ASCENDING`, præcis properties `pipeline`,
@@ -146,6 +161,11 @@ test-first med kategorisk diagnose pr. tabel (§4). Ingen live-kørsel foretaget
 | outcome-konflikter (data-health) | 28 |
 | skriveforsøg | 0 |
 | rækker før / efter (state/cohort/runs) | 0/0/0 / 0/0/0 — uændret: JA |
+
+*Note:* forsøg 2 kørte før skærpelsen i §2 (Codex-review 5318246169) og verificerede derfor kun id
+og lukke-flag live. Label, displayOrder og archived i kontrakten er taget direkte fra Rickos
+live-metadata samme dag (Issue #84), så de matcher den observerede tilstand; den skærpede
+verifikation køres live første gang ved næste godkendte kørsel. Ingen ny live-kørsel i C1.
 
 **Nul-write-bevis (tre uafhængige kilder):** (1) værktøjets egne værn: 0 skriveforsøg og
 uændrede rækketal før/efter; (2) ChatGPTs read-only efterkontrol af production: 0/0/0 rækker,

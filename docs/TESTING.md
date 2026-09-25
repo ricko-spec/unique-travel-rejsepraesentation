@@ -381,6 +381,14 @@ endpoints, metoder, ingen query-parametre, præcis seks properties, stabil sorte
 `operatorDryRun.test.ts`: read-only-værn, ingen begin/commit/fail, uden singleton, rækkeændring/
 før-/efter-fejl ⇒ FAIL, small-cell-output. **Mutation: 22 mutanter, alle dræbt** (to overlevende
 i første kørsel lukket med nye tests). Hele suiten: 1014/1014.
+**Semantisk stagekontrakt (Codex-review 5318246169):** `stageSemantics.test.ts` (skrevet først — 48
+røde før implementeringen) går gennem den rigtige live-adapterform (HubSpot pipeline-JSON →
+`createHubSpotLiveAdapter` → verifikation/sync-motor/operatør-dry-run): alle 18 stages bærer label/
+displayOrder/archived; rename (inkl. ombyttede labels), reorder (inkl. Lav tilbud efter Tilbud
+sendt), stage- og pipeline-arkivering ⇒ `CONTRACT_DRIFT` med 0 skrivninger; NFC/whitespace er ikke
+drift, store/små bogstaver er; manglende/ugyldige felter ⇒ fail-closed; intern konsistens.
+**Mutation: 20 mutanter, 19 dræbt**; den overlevende (fjernet `typeof`-tjek på displayOrder) er
+ækvivalent, fordi `Number.isInteger` også afviser strenge. Hele suiten: 1129/1129.
 **Kategoriseret precheck (efter live-forsøg 1 = PRECHECK_FAILED):** `operatorPrecheck.test.ts`
 (skrevet først, røde før implementeringen): status/kode → AUTH/PERMISSION/TABLE_NOT_FOUND/NETWORK/
 INVALID_RESPONSE, fejl pr. tabel i fast rækkefølge, exception ⇒ NETWORK, ende-til-ende gennem den
