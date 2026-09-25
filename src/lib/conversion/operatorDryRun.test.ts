@@ -120,7 +120,10 @@ describe("runOperatorDryRun", () => {
 
   it("en live stage-liste, der ikke matcher kontrakt v3, rapporteres som CONTRACT_DRIFT", async () => {
     const r = await runOperatorDryRun({
-      adapter: createFixtureHubSpotAdapter({ deals: deals(3), stages: [{ id: "1098732868", closed: false }, { id: "ukendt", closed: false }] }),
+      adapter: createFixtureHubSpotAdapter({ deals: deals(3), stages: [
+          { id: "1098732868", closed: false, label: "Tilbud sendt", displayOrder: 6, archived: false },
+          { id: "ukendt", closed: false, label: "ukendt", displayOrder: 99, archived: false },
+        ] }),
       persistence: createInMemoryConversionPersistence({ measurementState: null }),
       countRows: counts({ state: 0, cohort: 0, runs: 0 }),
       ...SECRETS,

@@ -22,7 +22,9 @@
 import {
   PIPELINE_STAGE_CONTRACT,
   classifyOutcomeSignal,
+  normalizeStageLabel,
   stageContractViolation,
+  type LiveStage,
   type PipelineStageContract,
   type StageClass,
 } from "./contract";
@@ -84,13 +86,17 @@ export function validateObservation(
  * Verificerer kontrakten mod pipelinens LIVE stage-liste (fra adapterens
  * confirmStageContract). Hver live-stage skal være klassificeret, og hver
  * klassificeret stage skal findes live — ellers er "Tilbud sendt eller
- * senere" ikke entydigt, og kørslen skal fejle lukket.
+ * senere" ikke entydigt, og kørslen skal fejle lukket. For hver kendt stage
+ * skal isClosed, normaliseret label, displayOrder og archived være uændrede,
+ * og pipelinen må ikke være arkiveret (Codex-review 5318246169): rename,
+ * reorder eller (af)arkivering ⇒ CONTRACT_DRIFT.
  */
 export function verifyStageContract(
-  live: { pipelineId: string; stages: readonly { id: string; closed: boolean }[] },
+  live: { pipelineId: string; pipelineArchived: boolean; stages: readonly LiveStage[] },
   contract: PipelineStageContract = PIPELINE_STAGE_CONTRACT,
 ): { ok: true } | { ok: false; code: "CONTRACT_DRIFT" | "CONTRACT_INCOMPLETE" } {
   if (live.pipelineId !== contract.pipelineId) return { ok: false, code: "CONTRACT_DRIFT" };
+  if (live.pipelineArchived !== false) return { ok: false, code: "CONTRACT_DRIFT" };
   if (stageContractViolation(contract)) return { ok: false, code: "CONTRACT_DRIFT" };
   const liveIds = live.stages.map((s) => s.id);
   const liveSet = new Set(liveIds);
@@ -102,8 +108,12 @@ export function verifyStageContract(
     if (!Object.prototype.hasOwnProperty.call(contract.stages, s.id)) {
       return { ok: false, code: contract.complete ? "CONTRACT_DRIFT" : "CONTRACT_INCOMPLETE" };
     }
-    // v3: et ændret lukke-flag på en kendt stage er kontraktdrift.
-    if (contract.stages[s.id].closed !== s.closed) return { ok: false, code: "CONTRACT_DRIFT" };
+    // v3: ændret lukke-flag, navn, placering eller arkivstatus på en kendt stage er kontraktdrift.
+    const e = contract.stages[s.id];
+    if (e.closed !== s.closed) return { ok: false, code: "CONTRACT_DRIFT" };
+    if (typeof s.label !== "string" || normalizeStageLabel(e.label) !== normalizeStageLabel(s.label)) return { ok: false, code: "CONTRACT_DRIFT" };
+    if (e.displayOrder !== s.displayOrder) return { ok: false, code: "CONTRACT_DRIFT" };
+    if (e.archived !== s.archived) return { ok: false, code: "CONTRACT_DRIFT" };
   }
   if (!contract.complete) return { ok: false, code: "CONTRACT_INCOMPLETE" };
   return { ok: true };

@@ -54,7 +54,7 @@ const EXPECTED: Record<string, StageClass> = {
 };
 
 const idOf = (label: string) => LIVE.find((s) => s[2] === label)![1];
-const liveStages = LIVE.map(([, id, , closed]) => ({ id, closed }));
+const liveStages = LIVE.map(([displayOrder, id, label, closed]) => ({ id, closed, label, displayOrder, archived: false }));
 
 describe("stagekontrakt v3 — komplet og 1:1 med live-metadata", () => {
   it("version 3, complete, pipeline 754595640 og præcis de 18 live-stages", () => {
@@ -67,33 +67,33 @@ describe("stagekontrakt v3 — komplet og 1:1 med live-metadata", () => {
   it.each(LIVE)("displayOrder %s · %s (%s): klasse, closed-flag og label matcher live", (_o, id, label, closed) => {
     const entry = PIPELINE_STAGE_CONTRACT.stages[id];
     const invalidates = label === "Dubletter" || label === "Test Leads";
-    expect(entry).toEqual({ class: EXPECTED[label], closed, label, ...(invalidates ? { invalidatesEnrollment: true } : {}) });
+    expect(entry).toEqual({ class: EXPECTED[label], closed, label, displayOrder: _o, archived: false, ...(invalidates ? { invalidatesEnrollment: true } : {}) });
   });
 
   it("kontrakten er internt konsistent (PRE_QUOTE åben, CLOSED_NO_QUOTE lukket, kun 'Tilbud sendt'/'Opdateret tilbud' kvalificerer)", () => {
     expect(stageContractViolation(PIPELINE_STAGE_CONTRACT)).toBeNull();
     const qualifying = Object.entries(PIPELINE_STAGE_CONTRACT.stages).filter(([, e]) => e.class === "QUOTE_OR_LATER").map(([id]) => id);
     expect(qualifying.sort()).toEqual(["1098732868", "1169407502"]);
-    expect(stageContractViolation({ ...PIPELINE_STAGE_CONTRACT, stages: { x: { class: "PRE_QUOTE", closed: true, label: "x" } } })).not.toBeNull();
-    expect(stageContractViolation({ ...PIPELINE_STAGE_CONTRACT, stages: { x: { class: "CLOSED_NO_QUOTE", closed: false, label: "x" } } })).not.toBeNull();
+    expect(stageContractViolation({ ...PIPELINE_STAGE_CONTRACT, stages: { x: { class: "PRE_QUOTE", closed: true, label: "x", displayOrder: 0, archived: false } } })).not.toBeNull();
+    expect(stageContractViolation({ ...PIPELINE_STAGE_CONTRACT, stages: { x: { class: "CLOSED_NO_QUOTE", closed: false, label: "x", displayOrder: 0, archived: false } } })).not.toBeNull();
   });
 
   it("en internt inkonsistent kontrakt afvises af verifyStageContract, selv hvis live matcher den", () => {
-    const bad = { pipelineId: "754595640", complete: true, stages: { x: { class: "PRE_QUOTE" as const, closed: true, label: "x" } } };
-    expect(verifyStageContract({ pipelineId: "754595640", stages: [{ id: "x", closed: true }] }, bad)).toEqual({ ok: false, code: "CONTRACT_DRIFT" });
+    const bad = { pipelineId: "754595640", complete: true, stages: { x: { class: "PRE_QUOTE" as const, closed: true, label: "x", displayOrder: 0, archived: false } } };
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: [{ id: "x", closed: true, label: "x", displayOrder: 0, archived: false }] }, bad)).toEqual({ ok: false, code: "CONTRACT_DRIFT" });
   });
 
-  it("live stage-listen (id + closed) matcher kontrakten mekanisk", () => {
-    expect(verifyStageContract({ pipelineId: "754595640", stages: liveStages })).toEqual({ ok: true });
+  it("live stage-listen (id, closed, label, displayOrder, archived) matcher kontrakten mekanisk", () => {
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: liveStages })).toEqual({ ok: true });
   });
 
   it("ukendt, manglende, dubleret stage eller ændret closed-flag i live-metadata ⇒ CONTRACT_DRIFT", () => {
-    expect(verifyStageContract({ pipelineId: "754595640", stages: [...liveStages, { id: "999", closed: false }] }).ok).toBe(false);
-    expect(verifyStageContract({ pipelineId: "754595640", stages: liveStages.slice(1) }).ok).toBe(false);
-    expect(verifyStageContract({ pipelineId: "754595640", stages: [...liveStages, liveStages[0]] }).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: [...liveStages, { id: "999", closed: false, label: "ny", displayOrder: 18, archived: false }] }).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: liveStages.slice(1) }).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: [...liveStages, liveStages[0]] }).ok).toBe(false);
     const flipped = liveStages.map((s) => (s.id === idOf("Solgt") ? { ...s, closed: false } : s));
-    expect(verifyStageContract({ pipelineId: "754595640", stages: flipped })).toEqual({ ok: false, code: "CONTRACT_DRIFT" });
-    expect(verifyStageContract({ pipelineId: "1", stages: liveStages }).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: flipped })).toEqual({ ok: false, code: "CONTRACT_DRIFT" });
+    expect(verifyStageContract({ pipelineId: "1", pipelineArchived: false, stages: liveStages }).ok).toBe(false);
   });
 });
 

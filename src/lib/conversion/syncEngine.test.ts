@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runConversionSync, type RunConversionSyncOptions } from "./syncEngine";
-import { createFixtureHubSpotAdapter, fixtureObservation } from "./hubspotAdapter";
+import { createFixtureHubSpotAdapter, fixtureObservation, liveStagesFromContract } from "./hubspotAdapter";
 import { createInMemoryConversionPersistence, type ConversionPersistence } from "./persistence";
 import { computeBookingKeyForConversion, computeDealKey } from "./dealKey";
 import { CONTRACT_VERSION, type PipelineStageContract } from "./contract";
@@ -18,14 +18,14 @@ const CONTRACT: PipelineStageContract = {
   pipelineId: "754595640",
   complete: true,
   stages: {
-    [STAGES.screened]: { class: "PRE_QUOTE", closed: false, label: "screened" },
-    [STAGES.quote]: { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt" },
-    [STAGES.updated]: { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud" },
-    [STAGES.sold]: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "solgt" },
-    [STAGES.lost]: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "tabt" },
+    [STAGES.screened]: { class: "PRE_QUOTE", closed: false, label: "screened", displayOrder: 0, archived: false },
+    [STAGES.quote]: { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt", displayOrder: 1, archived: false },
+    [STAGES.updated]: { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud", displayOrder: 2, archived: false },
+    [STAGES.sold]: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "solgt", displayOrder: 3, archived: false },
+    [STAGES.lost]: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "tabt", displayOrder: 4, archived: false },
   },
 };
-const LIVE_STAGES = Object.entries(CONTRACT.stages).map(([id, e]) => ({ id, closed: e.closed }));
+const LIVE_STAGES = liveStagesFromContract(CONTRACT);
 
 const ARMED: MeasurementState = { status: "ACTIVE", contractVersion: CONTRACT_VERSION, measurementStartedAt: null, lastSuccessfulSyncAt: null };
 

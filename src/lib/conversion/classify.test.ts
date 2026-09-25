@@ -9,7 +9,7 @@ import {
   type ValidatedObservation,
 } from "./classify";
 import { CONTRACT_VERSION, classifyOutcomeSignal, type PipelineStageContract } from "./contract";
-import { fixtureObservation } from "./hubspotAdapter";
+import { fixtureObservation, liveStagesFromContract } from "./hubspotAdapter";
 import type { ClassifiedDealResult, CohortState } from "./types";
 
 const T0 = new Date("2026-10-01T03:00:00Z"); // baseline
@@ -24,11 +24,11 @@ const TEST_CONTRACT: PipelineStageContract = {
   pipelineId: "754595640",
   complete: true,
   stages: {
-    screened: { class: "PRE_QUOTE", closed: false, label: "screened" },
-    "1098732868": { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt" },
-    "1169407502": { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud" },
-    solgt: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "solgt" },
-    tabt: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "tabt" },
+    screened: { class: "PRE_QUOTE", closed: false, label: "screened", displayOrder: 0, archived: false },
+    "1098732868": { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt", displayOrder: 1, archived: false },
+    "1169407502": { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud", displayOrder: 2, archived: false },
+    solgt: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "solgt", displayOrder: 3, archived: false },
+    tabt: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "tabt", displayOrder: 4, archived: false },
   },
 };
 
@@ -77,22 +77,22 @@ describe("validateObservation / verifyStageContract — versioneret, fail-closed
   });
 
   it("stage-listen skal matche live 1:1 — ukendt live-stage, manglende stage eller dublet fejler lukket", () => {
-    const all = Object.entries(TEST_CONTRACT.stages).map(([id, e]) => ({ id, closed: e.closed }));
-    expect(verifyStageContract({ pipelineId: "754595640", stages: all }, TEST_CONTRACT)).toEqual({ ok: true });
-    expect(verifyStageContract({ pipelineId: "754595640", stages: [...all, { id: "ny", closed: false }] }, TEST_CONTRACT)).toEqual({
+    const all = liveStagesFromContract(TEST_CONTRACT);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: all }, TEST_CONTRACT)).toEqual({ ok: true });
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: [...all, { id: "ny", closed: false, label: "ny", displayOrder: 99, archived: false }] }, TEST_CONTRACT)).toEqual({
       ok: false,
       code: "CONTRACT_DRIFT",
     });
-    expect(verifyStageContract({ pipelineId: "754595640", stages: all.slice(1) }, TEST_CONTRACT).ok).toBe(false);
-    expect(verifyStageContract({ pipelineId: "754595640", stages: [...all, all[0]] }, TEST_CONTRACT).ok).toBe(false);
-    expect(verifyStageContract({ pipelineId: "1", stages: all }, TEST_CONTRACT).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: all.slice(1) }, TEST_CONTRACT).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: [...all, all[0]] }, TEST_CONTRACT).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "1", pipelineArchived: false, stages: all }, TEST_CONTRACT).ok).toBe(false);
   });
 
   it("en ufuldstændig kontrakt giver stadig CONTRACT_INCOMPLETE (fail-closed)", () => {
     const incomplete = { ...TEST_CONTRACT, complete: false };
-    const all = Object.entries(TEST_CONTRACT.stages).map(([id, e]) => ({ id, closed: e.closed }));
-    expect(verifyStageContract({ pipelineId: "754595640", stages: all }, incomplete)).toEqual({ ok: false, code: "CONTRACT_INCOMPLETE" });
-    expect(verifyStageContract({ pipelineId: "754595640", stages: [...all, { id: "ny", closed: false }] }, incomplete)).toEqual({
+    const all = liveStagesFromContract(TEST_CONTRACT);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: all }, incomplete)).toEqual({ ok: false, code: "CONTRACT_INCOMPLETE" });
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: [...all, { id: "ny", closed: false, label: "ny", displayOrder: 99, archived: false }] }, incomplete)).toEqual({
       ok: false,
       code: "CONTRACT_INCOMPLETE",
     });

@@ -13,8 +13,8 @@ import { createInMemoryConversionPersistence } from "./persistence";
 const TOKEN = "pat-eu1-" + "x".repeat(36);
 const PIPE = "754595640";
 const TWO_STAGES = [
-  { id: "1098732868", metadata: { isClosed: "false" } },
-  { id: "1169407502", metadata: { isClosed: "false" } },
+  { id: "1098732868", label: "Tilbud sendt", displayOrder: 0, archived: false, metadata: { isClosed: "false" } },
+  { id: "1169407502", label: "Opdateret tilbud", displayOrder: 1, archived: false, metadata: { isClosed: "false" } },
 ];
 
 type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
@@ -59,7 +59,7 @@ function deal(id: number, over: Record<string, unknown> = {}) {
 function searchServer(n: number, opts: { pageTotalOverride?: (page: number) => number; emptyPage?: number } = {}) {
   const all = Array.from({ length: n }, (_, i) => deal(i + 1));
   return (call: Call): Resp => {
-    if (call.method === "GET") return { status: 200, json: { id: PIPE, label: "UT", stages: TWO_STAGES } };
+    if (call.method === "GET") return { status: 200, json: { id: PIPE, label: "UT", archived: false, stages: TWO_STAGES } };
     const body = call.body as { after?: string; limit: number };
     const start = body.after ? Number(body.after) : 0;
     const page = Math.floor(start / body.limit);
@@ -195,11 +195,33 @@ describe("createHubSpotLiveAdapter — kategoriske, fail-closed fejl uden rå da
     expect(await bad.confirmStageContract()).toEqual({ ok: false, reason: "page-inconsistent" });
     const good = createHubSpotLiveAdapter({
       token: TOKEN,
-      fetchImpl: fakeFetch(() => ({ status: 200, json: { id: PIPE, stages: [{ id: "b", metadata: { isClosed: "true" } }, { id: "a", metadata: { isClosed: "false" } }] } })).fetchImpl,
+      fetchImpl: fakeFetch(() => ({
+        status: 200,
+        json: {
+          id: PIPE,
+          archived: false,
+          stages: [
+            { id: "b", label: "B", displayOrder: 1, archived: false, metadata: { isClosed: "true" }, probability: "0.1" },
+            { id: "a", label: "A", displayOrder: 0, archived: false, metadata: { isClosed: "false" } },
+          ],
+        },
+      })).fetchImpl,
       sleep: noSleep,
     });
-    expect(await good.confirmStageContract()).toEqual({ ok: true, pipelineId: PIPE, stages: [{ id: "b", closed: true }, { id: "a", closed: false }] });
-    const noClosed = createHubSpotLiveAdapter({ token: TOKEN, fetchImpl: fakeFetch(() => ({ status: 200, json: { id: PIPE, stages: [{ id: "a", metadata: {} }] } })).fetchImpl, sleep: noSleep });
+    expect(await good.confirmStageContract()).toEqual({
+      ok: true,
+      pipelineId: PIPE,
+      pipelineArchived: false,
+      stages: [
+        { id: "b", closed: true, label: "B", displayOrder: 1, archived: false },
+        { id: "a", closed: false, label: "A", displayOrder: 0, archived: false },
+      ],
+    });
+    const noClosed = createHubSpotLiveAdapter({
+      token: TOKEN,
+      fetchImpl: fakeFetch(() => ({ status: 200, json: { id: PIPE, archived: false, stages: [{ id: "a", label: "A", displayOrder: 0, archived: false, metadata: {} }] } })).fetchImpl,
+      sleep: noSleep,
+    });
     expect(await noClosed.confirmStageContract()).toEqual({ ok: false, reason: "page-inconsistent" });
   });
 
@@ -222,8 +244,8 @@ describe("live adapter + sync-motor (dry-run) — paginering fail-closed end-to-
     pipelineId: PIPE,
     complete: true,
     stages: {
-      "1098732868": { class: "QUOTE_OR_LATER" as const, closed: false, label: "Tilbud sendt" },
-      "1169407502": { class: "QUOTE_OR_LATER" as const, closed: false, label: "Opdateret tilbud" },
+      "1098732868": { class: "QUOTE_OR_LATER" as const, closed: false, label: "Tilbud sendt", displayOrder: 0, archived: false },
+      "1169407502": { class: "QUOTE_OR_LATER" as const, closed: false, label: "Opdateret tilbud", displayOrder: 1, archived: false },
     },
   };
   const run = (server: (c: Call) => Resp, pageSize = 100) =>
@@ -260,7 +282,7 @@ describe("live adapter + sync-motor (dry-run) — paginering fail-closed end-to-
   });
 
   it("forkert pipeline i metadata ⇒ CONTRACT_DRIFT", async () => {
-    const server = (c: Call): Resp => (c.method === "GET" ? { status: 200, json: { id: "999", stages: TWO_STAGES } } : searchServer(1)(c));
+    const server = (c: Call): Resp => (c.method === "GET" ? { status: 200, json: { id: "999", archived: false, stages: TWO_STAGES } } : searchServer(1)(c));
     expect(await run(server)).toMatchObject({ ok: false, errorCode: "CONTRACT_DRIFT" });
   });
 
@@ -271,11 +293,11 @@ describe("live adapter + sync-motor (dry-run) — paginering fail-closed end-to-
 
   it("ukendt, manglende eller dubleret live-stage ⇒ fail-closed", async () => {
     for (const stages of [
-      [...TWO_STAGES, { id: "ny", metadata: { isClosed: "false" } }],
+      [...TWO_STAGES, { id: "ny", label: "ny", displayOrder: 2, archived: false, metadata: { isClosed: "false" } }],
       [TWO_STAGES[0]],
       [...TWO_STAGES, TWO_STAGES[1]],
     ]) {
-      const server = (c: Call): Resp => (c.method === "GET" ? { status: 200, json: { id: PIPE, stages } } : searchServer(1)(c));
+      const server = (c: Call): Resp => (c.method === "GET" ? { status: 200, json: { id: PIPE, archived: false, stages } } : searchServer(1)(c));
       expect(await run(server)).toMatchObject({ ok: false, errorCode: "CONTRACT_DRIFT" });
     }
   });

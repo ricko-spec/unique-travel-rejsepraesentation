@@ -20,7 +20,7 @@
 // search er en læseoperation; adapteren kan ikke nå create/update/archive.
 
 import { HUBSPOT_PIPELINE_ID } from "./contract";
-import type { AdapterFailureReason, DealPageResult, HubSpotReadAdapter, StageContractConfirmation } from "./hubspotAdapter";
+import type { AdapterFailureReason, DealPageResult, HubSpotReadAdapter, LiveStage, StageContractConfirmation } from "./hubspotAdapter";
 import type { HubSpotDealObservation } from "./types";
 
 export const HUBSPOT_API_BASE = "https://api.hubapi.com";
@@ -112,18 +112,26 @@ export function createHubSpotLiveAdapter(options: {
     async confirmStageContract(): Promise<StageContractConfirmation> {
       const r = await call("GET", HUBSPOT_API_BASE + PIPELINE_PATH);
       if (!r.ok) return { ok: false, reason: r.reason };
-      const p = r.json as { id?: unknown; stages?: unknown };
+      const p = r.json as { id?: unknown; archived?: unknown; stages?: unknown };
       if (!p || typeof p !== "object" || typeof p.id !== "string" || !Array.isArray(p.stages)) {
         return { ok: false, reason: "page-inconsistent" };
       }
-      const stages: { id: string; closed: boolean }[] = [];
-      for (const s of p.stages as { id?: unknown; metadata?: { isClosed?: unknown } }[]) {
+      const pipelineArchived = parseBool(p.archived);
+      if (pipelineArchived === null) return { ok: false, reason: "page-inconsistent" };
+      // Kun de felter klassifikationen bygger på; alt manglende/ugyldigt ⇒ fail-closed.
+      const stages: LiveStage[] = [];
+      for (const s of p.stages as { id?: unknown; label?: unknown; displayOrder?: unknown; archived?: unknown; metadata?: { isClosed?: unknown } }[]) {
         if (!s || typeof s.id !== "string" || s.id.trim() === "") return { ok: false, reason: "page-inconsistent" };
         const closed = parseBool(s.metadata?.isClosed);
-        if (closed === null) return { ok: false, reason: "page-inconsistent" };
-        stages.push({ id: s.id, closed });
+        const archived = parseBool(s.archived);
+        if (closed === null || archived === null) return { ok: false, reason: "page-inconsistent" };
+        if (typeof s.label !== "string" || s.label.trim() === "") return { ok: false, reason: "page-inconsistent" };
+        if (typeof s.displayOrder !== "number" || !Number.isInteger(s.displayOrder) || s.displayOrder < 0) {
+          return { ok: false, reason: "page-inconsistent" };
+        }
+        stages.push({ id: s.id, closed, label: s.label, displayOrder: s.displayOrder, archived });
       }
-      return { ok: true, pipelineId: p.id, stages };
+      return { ok: true, pipelineId: p.id, pipelineArchived, stages };
     },
 
     async readDealsPage(cursor: string | null): Promise<DealPageResult> {

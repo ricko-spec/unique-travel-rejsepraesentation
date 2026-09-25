@@ -53,14 +53,25 @@ export const STAGE_UPDATED_QUOTE = "1169407502";
  */
 export type StageClass = "PRE_QUOTE" | "QUOTE_OR_LATER" | "OUTCOME_WITHOUT_QUOTE_EVIDENCE" | "CLOSED_NO_QUOTE";
 
-/** Én stage i kontrakten: klasse + det forventede lukke-flag (= live metadata.isClosed). */
+/**
+ * Én stage i kontrakten: klasse + den live-metadata, klassen er begrundet i.
+ * `closed` (= metadata.isClosed), `label` (sammenlignes normaliseret),
+ * `displayOrder` og `archived` verificeres alle mod live — en omdøbt, flyttet
+ * eller (af)arkiveret stage er kontraktdrift, fordi klassifikationen (fx
+ * "før Tilbud sendt" ⇒ PRE_QUOTE) bygger på netop navn og placering.
+ */
 export type StageContractEntry = {
   class: StageClass;
   closed: boolean;
   label: string;
+  displayOrder: number;
+  archived: boolean;
   /** Sand for Dubletter/Test Leads: en ALLEREDE optaget deal, der ses her, markeres INVALIDATED_DUPLICATE_OR_TEST. */
   invalidatesEnrollment?: true;
 };
+
+/** Én live-stage, som adapteren leverer den (kun de felter kontrakten verificerer). */
+export type LiveStage = { id: string; closed: boolean; label: string; displayOrder: number; archived: boolean };
 
 export type PipelineStageContract = {
   pipelineId: string;
@@ -73,41 +84,63 @@ export type PipelineStageContract = {
  * v3: komplet klassifikation af alle 18 live-stages i pipeline 754595640
  * (read-only metadata hentet af Ricko 2026-09-25, Issue #84). `closed` er
  * stagens metadata.isClosed; hver deals hs_is_closed skal matche den, og den
- * live stage-liste (id + closed) skal matche kontrakten 1:1 — ellers
- * kontraktdrift. Vurderingen pr. stage er dokumenteret i
+ * live stage-liste (id, closed, normaliseret label, displayOrder, archived)
+ * skal matche kontrakten 1:1 — ellers kontraktdrift (Codex-review 5318246169). Vurderingen pr. stage er dokumenteret i
  * docs/VISION-3.0-PHASE-5-GATE-C1.md.
  */
 export const PIPELINE_STAGE_CONTRACT: PipelineStageContract = {
   pipelineId: HUBSPOT_PIPELINE_ID,
   complete: true,
   stages: {
-    "1098732865": { class: "PRE_QUOTE", closed: false, label: "Lead (Aktive)" },
-    "1098732866": { class: "PRE_QUOTE", closed: false, label: "Assigned" },
-    "1169086048": { class: "PRE_QUOTE", closed: false, label: "Forsøgt kontaktet (1)" },
-    "1400145244": { class: "PRE_QUOTE", closed: false, label: "Forsøgt kontaktet (2)" },
-    "1110279228": { class: "PRE_QUOTE", closed: false, label: "Følg op" },
-    "1098732867": { class: "PRE_QUOTE", closed: false, label: "Lav tilbud" },
-    [STAGE_QUOTE_SENT]: { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt" },
-    [STAGE_UPDATED_QUOTE]: { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud" },
-    "1098732870": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Solgt" },
-    "1419023367": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Solgt (I andet bookingnr.)" },
-    "1407668785": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Billetter sendt" },
-    "1354831680": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Afslag (Alle)" },
-    "1386314544": { class: "CLOSED_NO_QUOTE", closed: true, label: "Screenet" },
-    "1110279229": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: false, label: "På rejse" },
-    "1110279231": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: false, label: "Hjemvendt" },
-    "1110279230": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Aflyst rejse (Alle)" },
-    "1110279232": { class: "CLOSED_NO_QUOTE", closed: true, label: "Dubletter", invalidatesEnrollment: true },
-    "1110279233": { class: "CLOSED_NO_QUOTE", closed: true, label: "Test Leads", invalidatesEnrollment: true },
+    "1098732865": { class: "PRE_QUOTE", closed: false, label: "Lead (Aktive)", displayOrder: 0, archived: false },
+    "1098732866": { class: "PRE_QUOTE", closed: false, label: "Assigned", displayOrder: 1, archived: false },
+    "1169086048": { class: "PRE_QUOTE", closed: false, label: "Forsøgt kontaktet (1)", displayOrder: 2, archived: false },
+    "1400145244": { class: "PRE_QUOTE", closed: false, label: "Forsøgt kontaktet (2)", displayOrder: 3, archived: false },
+    "1110279228": { class: "PRE_QUOTE", closed: false, label: "Følg op", displayOrder: 4, archived: false },
+    "1098732867": { class: "PRE_QUOTE", closed: false, label: "Lav tilbud", displayOrder: 5, archived: false },
+    [STAGE_QUOTE_SENT]: { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt", displayOrder: 6, archived: false },
+    [STAGE_UPDATED_QUOTE]: { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud", displayOrder: 7, archived: false },
+    "1098732870": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Solgt", displayOrder: 8, archived: false },
+    "1419023367": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Solgt (I andet bookingnr.)", displayOrder: 9, archived: false },
+    "1407668785": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Billetter sendt", displayOrder: 10, archived: false },
+    "1354831680": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Afslag (Alle)", displayOrder: 11, archived: false },
+    "1386314544": { class: "CLOSED_NO_QUOTE", closed: true, label: "Screenet", displayOrder: 12, archived: false },
+    "1110279229": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: false, label: "På rejse", displayOrder: 13, archived: false },
+    "1110279231": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: false, label: "Hjemvendt", displayOrder: 14, archived: false },
+    "1110279230": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Aflyst rejse (Alle)", displayOrder: 15, archived: false },
+    "1110279232": { class: "CLOSED_NO_QUOTE", closed: true, label: "Dubletter", displayOrder: 16, archived: false, invalidatesEnrollment: true },
+    "1110279233": { class: "CLOSED_NO_QUOTE", closed: true, label: "Test Leads", displayOrder: 17, archived: false, invalidatesEnrollment: true },
   },
 };
 
-/** Intern konsistens: PRE_QUOTE skal være åben, CLOSED_NO_QUOTE lukket, mindst én QUOTE_OR_LATER. */
+/**
+ * Normaliseret stage-label til sammenligning: Unicode NFC, trim og sammenfoldet
+ * whitespace. Store/små bogstaver bevares bevidst (en ændring er fail-closed).
+ */
+export function normalizeStageLabel(label: string): string {
+  return label.normalize("NFC").replace(/\s+/gu, " ").trim();
+}
+
+/**
+ * Intern konsistens: PRE_QUOTE skal være åben, CLOSED_NO_QUOTE lukket, mindst én
+ * QUOTE_OR_LATER; labels ikke-tomme og unikke (normaliseret); displayOrder
+ * unikke heltal ≥ 0.
+ */
 export function stageContractViolation(c: PipelineStageContract): string | null {
   const entries = Object.values(c.stages);
+  const labels = new Set<string>();
+  const orders = new Set<number>();
   for (const e of entries) {
     if (e.class === "PRE_QUOTE" && e.closed) return "pre_quote_must_be_open";
     if (e.class === "CLOSED_NO_QUOTE" && !e.closed) return "closed_no_quote_must_be_closed";
+    const label = typeof e.label === "string" ? normalizeStageLabel(e.label) : "";
+    if (label === "") return "label_missing";
+    if (labels.has(label)) return "label_duplicate";
+    labels.add(label);
+    if (!Number.isInteger(e.displayOrder) || e.displayOrder < 0) return "display_order_invalid";
+    if (orders.has(e.displayOrder)) return "display_order_duplicate";
+    orders.add(e.displayOrder);
+    if (typeof e.archived !== "boolean") return "archived_invalid";
   }
   if (c.complete && !entries.some((e) => e.class === "QUOTE_OR_LATER")) return "no_qualifying_stage";
   return null;

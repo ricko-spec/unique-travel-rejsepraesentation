@@ -257,7 +257,7 @@ async function classifyAll(
     return { ok: false, code: "NETWORK_ERROR" };
   }
   if (!live.ok) return { ok: false, code: mapAdapterFailure(live.reason) };
-  const verified = verifyStageContract({ pipelineId: live.pipelineId, stages: live.stages }, ctx.contract);
+  const verified = verifyStageContract({ pipelineId: live.pipelineId, pipelineArchived: live.pipelineArchived, stages: live.stages }, ctx.contract);
   if (!verified.ok) return { ok: false, code: verified.code };
 
   const read = await readAllDeals(hubspot);
