@@ -13,7 +13,8 @@
   ved Dubletter/Test Leads) implementeret som efterfølgende udelukkelse; persistens kræver migration
   014 ved aktivering. Live-forsøg 1 (head `560fced`) fejlede sikkert med `PRECHECK_FAILED`
   (0 skrivninger, ingen DB-ændring); før/efter-tællingen rapporterer nu tabel + kategori.
-  **Udestående:** Rickos live-forsøg 2, review; intet aktiveret, ikke merget.
+  Live-forsøg 2 (head `e4490b1`): **PASS** — 2.652 observeret, 0 skrivninger, rækker 0/0/0
+  uændret, skema-fingeraftryk uændret. **Udestående:** Rickos review; intet aktiveret, ikke merget.
 
 ## Branch / HEAD
 

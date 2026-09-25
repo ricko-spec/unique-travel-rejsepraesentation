@@ -131,7 +131,49 @@ Rickos uafhængige efterkontrol: state/cohort/runs 0/0/0, 14 migrationer, ingen 
 kørsel; kodeanalysen viste, at en HEAD-fejl i postgrest-js kun bærer HTTP-status. Rettet
 test-first med kategorisk diagnose pr. tabel (§4). Ingen live-kørsel foretaget af agenten.
 
-**Forsøg 2:** *udfyldes efter Rickos kørsel (kun sanitiserede aggregater).*
+**Forsøg 2 (head `e4490b1`, 2026-09-25): `VERDICT: PASS`, node exit code 0.**
+
+| Måling | Resultat |
+|---|---|
+| stage-kontrakt | MATCH (18 stages, v3) |
+| side-/total-konsistens | PASS |
+| baseline-klassifikation | ja |
+| observeret i alt | 2.652 |
+| PRE_START_EXISTING | 2.489 |
+| ELIGIBLE_PENDING | 163 |
+| enrolled | 0 |
+| booket (observeret udfald) | 788 |
+| outcome-konflikter (data-health) | 28 |
+| skriveforsøg | 0 |
+| rækker før / efter (state/cohort/runs) | 0/0/0 / 0/0/0 — uændret: JA |
+
+**Nul-write-bevis (tre uafhængige kilder):** (1) værktøjets egne værn: 0 skriveforsøg og
+uændrede rækketal før/efter; (2) ChatGPTs read-only efterkontrol af production: 0/0/0 rækker,
+14 migrationer, ingen cron; (3) agentens read-only efter-snapshot via Supabase MCP med præcis
+samme forespørgsel som pre-snapshottet: 0/0/0 rækker, 14 migrationer, intet `cron`-schema og
+uændret skema-fingeraftryk `4f06ac47f147e646c7b75711ecfdd941`.
+
+**De 788 bookede er baseline-observationer — ikke konverteringer i målingen.** Kørslen er en
+baseline (målingen er ikke startet), og i en baseline optages ingen deal: alle eksisterende
+deals klassificeres enten som `PRE_START_EXISTING` (allerede på tilbud-eller-senere/lukket stage
+— terminal, indgår aldrig i kohorten) eller `ELIGIBLE_PENDING` (åben PRE_QUOTE-deal).
+`enrolled = 0` er derfor forventet. "Booket" tæller blot, hvor mange observerede deals der på
+observationstidspunktet har et BOOKED-udfaldssignal (dealstatus Solgt/Billetter sendt) — det er
+historik fra før målingsstart og indgår hverken i tæller, nævner, trend eller publicerede tal.
+Den fremadrettede kohorte består udelukkende af deals, der **efter** den officielle
+målingsstart observeres i en QUOTE_OR_LATER-stage for første gang som ny eller
+`ELIGIBLE_PENDING` deal (kohortestart = den sync'ens tidspunkt). De 163 `ELIGIBLE_PENDING` er
+kandidater, ikke kohortemedlemmer.
+
+**De 28 outcome-konflikter er data-health, ikke et måleresultat.** En outcome-konflikt betyder,
+at de to udfaldskilder i HubSpot er uenige om samme deal: enten dealstatus Solgt/Billetter sendt
+mens dealen er lukket-tabt, eller dealen er lukket-vundet mens dealstatus ikke er Solgt/Billetter
+sendt. Motoren gætter ikke — konflikten registreres som tidspunkt og tælles kun aggregeret. Ingen
+af de 28 er i en kohorte (enrolled = 0), så de påvirker ingen tal. Anbefalet opfølgning (ikke C1,
+Rickos beslutning): en data-health-gennemgang i HubSpot af hvilken kilde der er korrekt. Ingen
+deal-id'er, navne eller bookingnumre er udtrukket eller dokumenteret.
+
+Rå output er ikke gemt; kun ovenstående sanitiserede aggregater.
 
 ## 6. Stadig ikke aktiveret
 

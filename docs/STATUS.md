@@ -89,7 +89,8 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 **Gate B2 er gennemført og merget** (PR #83). **Aktivt: Gate C1** ([Issue #84](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/84)) —
 stagekontrakt v3 (alle 18 live-stages), snæver read-only HubSpot-adapter og én write-free
 operatør-dry-run; se `docs/VISION-3.0-PHASE-5-GATE-C1.md`. Live-forsøg 1 fejlede sikkert
-(`PRECHECK_FAILED`, 0 skrivninger); tællingen er nu kategorisk. Næste: Rickos live-forsøg 2 og review
+(`PRECHECK_FAILED`, 0 skrivninger); tællingen er nu kategorisk. Live-forsøg 2 er **PASS** (2.652
+observeret, 0 skrivninger, DB uændret — se gate-dokumentet §5). Næste: review
 af Gate C1-PR'en. Permanent aktivering (secrets, seed, cron, versionsløft, Gate D) kræver
 separate godkendelser.
 
