@@ -716,6 +716,12 @@ RPC'er (SECURITY INVOKER, EXECUTE kun `service_role`): `conversion_begin_sync_ru
 `conversion_commit_sync_run` (ÉN transaktion: kohorte + SUCCEEDED + friskhed),
 `conversion_fail_sync_run`, `conversion_parse_batch`.
 
+**Gate C1 (Issue #84):** `contract.ts` er v3 (alle 18 live-stages, klasser `PRE_QUOTE`/
+`QUOTE_OR_LATER`/`OUTCOME_WITHOUT_QUOTE_EVIDENCE`/`CLOSED_NO_QUOTE` + lukke-flag pr. stage);
+`hubspotLiveAdapter.ts` er den rigtige, snævre read-only adapter (to fastlåste endpoints på
+`api.hubapi.com`); `operatorDryRun.ts` + `scripts/operator/*` er den lokale, write-free
+operatør-dry-run (ikke en route). Se `docs/VISION-3.0-PHASE-5-GATE-C1.md`.
+
 **Kodearkitektur** (`src/lib/conversion/`): `contract.ts` (versioneret stage-kontrakt +
 udfaldssandhedstabel) → `dealKey.ts` (HMAC + secret-validering) → `classify.ts` (ren reducer:
 snapshot-kvalifikation, eksponering, delte referencer, udfald) → `hubspotAdapter.ts`

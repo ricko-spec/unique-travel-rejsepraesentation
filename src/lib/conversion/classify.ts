@@ -22,6 +22,9 @@
 import {
   PIPELINE_STAGE_CONTRACT,
   classifyOutcomeSignal,
+  normalizeStageLabel,
+  stageContractViolation,
+  type LiveStage,
   type PipelineStageContract,
   type StageClass,
 } from "./contract";
@@ -33,12 +36,15 @@ import type {
   ExposureGroup,
   HubSpotDealObservation,
   OutcomeStatus,
+  PostEnrollmentExclusionReason,
   TravelPlanIndex,
 } from "./types";
 
 export type ValidatedObservation = {
   stageClass: StageClass;
-  outcome: { booked: boolean; lostObserved: boolean; conflict: boolean };
+  /** Stagen ugyldiggør en allerede optaget deal (Dubletter/Test Leads). */
+  invalidatesEnrollment?: boolean;
+  outcome: { booked: boolean; lostObserved: boolean; conflict: boolean; otherReferenceUnresolved?: boolean };
 };
 
 /**
@@ -52,19 +58,26 @@ export function validateObservation(
   contract: PipelineStageContract = PIPELINE_STAGE_CONTRACT,
 ): { ok: true; value: ValidatedObservation } | { ok: false } {
   if (obs.pipelineId !== contract.pipelineId) return { ok: false };
-  const stageClass = Object.prototype.hasOwnProperty.call(contract.stages, obs.dealStageId)
+  const entry = Object.prototype.hasOwnProperty.call(contract.stages, obs.dealStageId)
     ? contract.stages[obs.dealStageId]
     : undefined;
-  if (!stageClass) return { ok: false };
-  if (stageClass === "PRE_QUOTE" && obs.hubspotClosed) return { ok: false };
-  if (stageClass === "CLOSED_AMBIGUOUS" && !obs.hubspotClosed) return { ok: false };
+  if (!entry) return { ok: false };
+  // v3: dealens hs_is_closed skal matche stagens lukke-flag fra live-metadata.
+  if (obs.hubspotClosed !== entry.closed) return { ok: false };
+  const stageClass = entry.class;
   const signal = classifyOutcomeSignal(obs);
   if (signal.kind === "contract-drift") return { ok: false };
   return {
     ok: true,
     value: {
       stageClass,
-      outcome: { booked: signal.booked, lostObserved: signal.lostObserved, conflict: signal.conflict },
+      invalidatesEnrollment: entry.invalidatesEnrollment === true,
+      outcome: {
+        booked: signal.booked,
+        lostObserved: signal.lostObserved,
+        conflict: signal.conflict,
+        otherReferenceUnresolved: signal.otherReferenceUnresolved,
+      },
     },
   };
 }
@@ -73,22 +86,34 @@ export function validateObservation(
  * Verificerer kontrakten mod pipelinens LIVE stage-liste (fra adapterens
  * confirmStageContract). Hver live-stage skal være klassificeret, og hver
  * klassificeret stage skal findes live — ellers er "Tilbud sendt eller
- * senere" ikke entydigt, og kørslen skal fejle lukket.
+ * senere" ikke entydigt, og kørslen skal fejle lukket. For hver kendt stage
+ * skal isClosed, normaliseret label, displayOrder og archived være uændrede,
+ * og pipelinen må ikke være arkiveret (Codex-review 5318246169): rename,
+ * reorder eller (af)arkivering ⇒ CONTRACT_DRIFT.
  */
 export function verifyStageContract(
-  live: { pipelineId: string; stageIds: readonly string[] },
+  live: { pipelineId: string; pipelineArchived: boolean; stages: readonly LiveStage[] },
   contract: PipelineStageContract = PIPELINE_STAGE_CONTRACT,
 ): { ok: true } | { ok: false; code: "CONTRACT_DRIFT" | "CONTRACT_INCOMPLETE" } {
   if (live.pipelineId !== contract.pipelineId) return { ok: false, code: "CONTRACT_DRIFT" };
-  const liveSet = new Set(live.stageIds);
-  if (liveSet.size !== live.stageIds.length) return { ok: false, code: "CONTRACT_DRIFT" };
+  if (live.pipelineArchived !== false) return { ok: false, code: "CONTRACT_DRIFT" };
+  if (stageContractViolation(contract)) return { ok: false, code: "CONTRACT_DRIFT" };
+  const liveIds = live.stages.map((s) => s.id);
+  const liveSet = new Set(liveIds);
+  if (liveSet.size !== liveIds.length) return { ok: false, code: "CONTRACT_DRIFT" };
   for (const id of Object.keys(contract.stages)) {
     if (!liveSet.has(id)) return { ok: false, code: "CONTRACT_DRIFT" };
   }
-  for (const id of live.stageIds) {
-    if (!Object.prototype.hasOwnProperty.call(contract.stages, id)) {
+  for (const s of live.stages) {
+    if (!Object.prototype.hasOwnProperty.call(contract.stages, s.id)) {
       return { ok: false, code: contract.complete ? "CONTRACT_DRIFT" : "CONTRACT_INCOMPLETE" };
     }
+    // v3: ændret lukke-flag, navn, placering eller arkivstatus på en kendt stage er kontraktdrift.
+    const e = contract.stages[s.id];
+    if (e.closed !== s.closed) return { ok: false, code: "CONTRACT_DRIFT" };
+    if (typeof s.label !== "string" || normalizeStageLabel(e.label) !== normalizeStageLabel(s.label)) return { ok: false, code: "CONTRACT_DRIFT" };
+    if (e.displayOrder !== s.displayOrder) return { ok: false, code: "CONTRACT_DRIFT" };
+    if (e.archived !== s.archived) return { ok: false, code: "CONTRACT_DRIFT" };
   }
   if (!contract.complete) return { ok: false, code: "CONTRACT_INCOMPLETE" };
   return { ok: true };
@@ -148,6 +173,13 @@ function reduceOutcome(
   };
 }
 
+/** Efterfølgende udelukkelse for en ALLEREDE optaget deal (ugyldiggørelse går forud for uafklaret booking). */
+function postEnrollmentReasonFor(v: ValidatedObservation): PostEnrollmentExclusionReason | null {
+  if (v.invalidatesEnrollment) return "INVALIDATED_DUPLICATE_OR_TEST";
+  if (v.outcome.otherReferenceUnresolved) return "BOOKED_OTHER_REFERENCE_UNRESOLVED";
+  return null;
+}
+
 function resolveExposure(bookingMatchKey: string, asOf: Date, index: TravelPlanIndex): ExposureGroup {
   const entry = index.get(bookingMatchKey);
   if (entry && entry.createdAt.getTime() <= asOf.getTime()) return "ONLINE";
@@ -183,11 +215,15 @@ export function reduceDealCohort(input: ReduceDealCohortInput): ClassifiedDealRe
       existing.eligibilityStatus === "ENROLLED" &&
       existing.bookingMatchKey !== null &&
       input.sharedBookingMatchKeys.has(existing.bookingMatchKey);
+    const postReason = existing.eligibilityStatus === "ENROLLED" ? postEnrollmentReasonFor(input.validated) : null;
     return {
       ...existing,
       dealKey: input.dealKey,
       lastObservedAt: observedAt,
       bookingConflictDetectedAt: existing.bookingConflictDetectedAt ?? (conflictNow ? observedAt : null),
+      // Første efterfølgende udelukkelse vinder og fjernes aldrig; den oprindelige observation røres ikke.
+      postEnrollmentExclusionReason: existing.postEnrollmentExclusionReason ?? postReason,
+      postEnrollmentExcludedAt: existing.postEnrollmentExcludedAt ?? (postReason ? observedAt : null),
       ...outcome,
       contractVersion: input.contractVersion,
     };
@@ -198,6 +234,8 @@ export function reduceDealCohort(input: ReduceDealCohortInput): ClassifiedDealRe
     firstSeenAt: existing?.firstSeenAt ?? observedAt,
     lastObservedAt: observedAt,
     bookingConflictDetectedAt: null,
+    postEnrollmentExclusionReason: null,
+    postEnrollmentExcludedAt: null,
     ...outcome,
     contractVersion: input.contractVersion,
   };
@@ -214,14 +252,18 @@ export function reduceDealCohort(input: ReduceDealCohortInput): ClassifiedDealRe
     // Baseline: alt der ikke er en åben PRE_QUOTE-deal, var allerede i gang
     // (eller afsluttet) før målingsstart og udelukkes permanent — dette er
     // mekanismen der forhindrer skjult historisk backfill.
+    // (CLOSED_NO_QUOTE er lukket ⇒ også PRE_START ved baseline.)
     return { ...base, ...none, eligibilityStatus: stage === "PRE_QUOTE" ? "ELIGIBLE_PENDING" : "PRE_START_EXISTING" };
   }
 
-  if (stage === "PRE_QUOTE") return { ...base, ...none, eligibilityStatus: "ELIGIBLE_PENDING" };
+  // Ingen tilbud sendt (åben PRE_QUOTE eller lukket uden tilbud: Screenet,
+  // Dubletter, Test Leads) ⇒ forbliver pending; optages aldrig på denne stage.
+  if (stage === "PRE_QUOTE" || stage === "CLOSED_NO_QUOTE") return { ...base, ...none, eligibilityStatus: "ELIGIBLE_PENDING" };
 
-  if (stage === "CLOSED_AMBIGUOUS") {
-    // Første observation er en lukket stage, der kan være nået før ELLER
-    // efter et tilbud. Kan ikke afgøres entydigt ⇒ eksplicit udelukket.
+  if (stage === "OUTCOME_WITHOUT_QUOTE_EVIDENCE") {
+    // Første observation er en senere fase/et udfald (åben eller lukket), der
+    // ikke beviser et observeret "Tilbud sendt" ⇒ eksplicit udelukket. (Årsags-
+    // koden er DB-bundet fra migration 013 og dækker også åbne post-salg-stages.)
     return {
       ...base,
       ...none,
@@ -251,8 +293,12 @@ export function reduceDealCohort(input: ReduceDealCohortInput): ClassifiedDealRe
     // reference også kan opdages som konflikt.
     return { ...qualified, eligibilityStatus: "EXCLUDED", exclusionReason: "SHARED_BOOKING_REFERENCE", bookingMatchKey: key };
   }
+  // Optages med "Solgt (andet booking nr.)" allerede sat ⇒ markeres i samme observation.
+  const enrollReason = input.validated.outcome.otherReferenceUnresolved ? ("BOOKED_OTHER_REFERENCE_UNRESOLVED" as const) : null;
   return {
     ...qualified,
+    postEnrollmentExclusionReason: enrollReason,
+    postEnrollmentExcludedAt: enrollReason ? observedAt : null,
     eligibilityStatus: "ENROLLED",
     bookingMatchKey: key,
     exposureGroup: resolveExposure(key, observedAt, input.travelPlanIndex),

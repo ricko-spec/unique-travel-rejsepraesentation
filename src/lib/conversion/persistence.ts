@@ -119,6 +119,8 @@ export function cohortRowViolation(r: CohortState): string | null {
     if (r.firstQualifiedObservationAt === null || r.bookingMatchKey === null) return "shared_fields";
   }
   if (r.bookingConflictDetectedAt !== null && r.eligibilityStatus !== "ENROLLED") return "conflict_requires_enrolled";
+  if ((r.postEnrollmentExclusionReason === null) !== (r.postEnrollmentExcludedAt === null)) return "post_enrollment_pair";
+  if (r.postEnrollmentExclusionReason !== null && r.eligibilityStatus !== "ENROLLED") return "post_enrollment_requires_enrolled";
   if ((r.outcomeStatus === "BOOKED") !== (r.firstBookedAt !== null)) return "booked_pair";
   return null;
 }
@@ -141,6 +143,12 @@ export function cohortTransitionViolation(old: CohortState, next: CohortState): 
   }
   if (old.bookingConflictDetectedAt !== null && !sameTime(old.bookingConflictDetectedAt, next.bookingConflictDetectedAt)) {
     return "conflict_frozen";
+  }
+  if (
+    old.postEnrollmentExclusionReason !== null &&
+    (old.postEnrollmentExclusionReason !== next.postEnrollmentExclusionReason || !sameTime(old.postEnrollmentExcludedAt, next.postEnrollmentExcludedAt))
+  ) {
+    return "post_enrollment_frozen";
   }
   if (old.outcomeStatus === "BOOKED" && (next.outcomeStatus !== "BOOKED" || !sameTime(old.firstBookedAt, next.firstBookedAt))) {
     return "booked_frozen";
@@ -247,6 +255,9 @@ export function parseCohortRow(raw: CohortRawRow): { dealKey: string; state: Coh
       firstQualifiedObservationAt: dates.firstQualifiedObservationAt as Date | null,
       exposureFrozenAt: dates.exposureFrozenAt as Date | null,
       bookingConflictDetectedAt: dates.bookingConflictDetectedAt as Date | null,
+      // Migration 013 har ingen kolonner til efterfølgende udelukkelse (kommer med migration 014).
+      postEnrollmentExclusionReason: null,
+      postEnrollmentExcludedAt: null,
       firstBookedAt: dates.firstBookedAt as Date | null,
       lostObservedAt: dates.lostObservedAt as Date | null,
       outcomeConflictObservedAt: dates.outcomeConflictObservedAt as Date | null,
@@ -390,6 +401,11 @@ export function supabaseConversionPersistence(
     },
 
     async commitSyncRun(req) {
+      // Fail-closed indtil migration 014: en markering kan ikke persisteres i 013-skemaet,
+      // så en commit, der ville bære den, afvises FØR noget sendes til databasen.
+      if (req.rows.some((r) => r.postEnrollmentExclusionReason !== null || r.postEnrollmentExcludedAt !== null)) {
+        return { ok: false, code: "COMMIT_REJECTED" };
+      }
       const { data, error } = await supabase.rpc("conversion_commit_sync_run", {
         p_run_id: req.runId,
         p_sync_generation: req.syncGeneration,

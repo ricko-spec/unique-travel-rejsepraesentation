@@ -269,7 +269,6 @@ Vercel Cron (Gate C)
 ## Åbne beslutninger til Ricko
 
 1. **Bekræft arkitektur A** (uændret fra rev. 1).
-2. **Stage-klassifikationen (Gate C-forudsætning):** de øvrige stages i pipeline `754595640`
-   (Screened, solgt, tabt/afvist m.fl.) skal hentes fra live-metadata og klassificeres
-   `PRE_QUOTE`/`QUOTE_OR_LATER`/`CLOSED_AMBIGUOUS` med Rickos bekræftelse, før `complete: true`.
-   Indtil da fejler enhver officiel sync lukket.
+2. ~~Stage-klassifikationen~~ — **løst i Gate C1 (Issue #84)**: kontrakt v3 med alle 18 live-stages
+   og to nye klasser (`OUTCOME_WITHOUT_QUOTE_EVIDENCE` erstatter `CLOSED_AMBIGUOUS`;
+   `CLOSED_NO_QUOTE`). Se `docs/VISION-3.0-PHASE-5-GATE-C1.md`. (Klassetabellen ovenfor er rev. 2-historik.)

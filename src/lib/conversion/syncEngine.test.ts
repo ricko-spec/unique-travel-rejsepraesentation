@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runConversionSync, type RunConversionSyncOptions } from "./syncEngine";
-import { createFixtureHubSpotAdapter, fixtureObservation } from "./hubspotAdapter";
+import { createFixtureHubSpotAdapter, fixtureObservation, liveStagesFromContract } from "./hubspotAdapter";
 import { createInMemoryConversionPersistence, type ConversionPersistence } from "./persistence";
 import { computeBookingKeyForConversion, computeDealKey } from "./dealKey";
 import { CONTRACT_VERSION, type PipelineStageContract } from "./contract";
@@ -18,14 +18,14 @@ const CONTRACT: PipelineStageContract = {
   pipelineId: "754595640",
   complete: true,
   stages: {
-    [STAGES.screened]: "PRE_QUOTE",
-    [STAGES.quote]: "QUOTE_OR_LATER",
-    [STAGES.updated]: "QUOTE_OR_LATER",
-    [STAGES.sold]: "QUOTE_OR_LATER",
-    [STAGES.lost]: "CLOSED_AMBIGUOUS",
+    [STAGES.screened]: { class: "PRE_QUOTE", closed: false, label: "screened", displayOrder: 0, archived: false },
+    [STAGES.quote]: { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt", displayOrder: 1, archived: false },
+    [STAGES.updated]: { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud", displayOrder: 2, archived: false },
+    [STAGES.sold]: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "solgt", displayOrder: 3, archived: false },
+    [STAGES.lost]: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "tabt", displayOrder: 4, archived: false },
   },
 };
-const LIVE_STAGES = Object.keys(CONTRACT.stages);
+const LIVE_STAGES = liveStagesFromContract(CONTRACT);
 
 const ARMED: MeasurementState = { status: "ACTIVE", contractVersion: CONTRACT_VERSION, measurementStartedAt: null, lastSuccessfulSyncAt: null };
 
@@ -99,11 +99,11 @@ describe("konfiguration og tilstand afvises FØR læsning og skrivning", () => {
     expect(p.getSyncRuns()).toEqual([]);
   });
 
-  it("den faktiske repo-kontrakt (ufuldstændig) ⇒ FAILED CONTRACT_INCOMPLETE, ingen kohorte", async () => {
+  it("repo-kontrakten v3 mod en live stage-liste, der ikke matcher ⇒ FAILED CONTRACT_DRIFT, ingen kohorte", async () => {
     const p = createInMemoryConversionPersistence({ measurementState: ARMED });
     const res = await runConversionSync(adapter([deal("1")]), p, { ...opts(T0), stageContract: undefined });
-    expect(res).toEqual({ ok: false, errorCode: "CONTRACT_INCOMPLETE", auditRecorded: true });
-    expect(p.getSyncRuns().map((r) => [r.status, r.errorCode])).toEqual([["FAILED", "CONTRACT_INCOMPLETE"]]);
+    expect(res).toEqual({ ok: false, errorCode: "CONTRACT_DRIFT", auditRecorded: true });
+    expect(p.getSyncRuns().map((r) => [r.status, r.errorCode])).toEqual([["FAILED", "CONTRACT_DRIFT"]]);
     expect(p.getAllCohortRows().size).toBe(0);
   });
 });

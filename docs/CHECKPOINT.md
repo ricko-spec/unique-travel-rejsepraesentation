@@ -3,7 +3,20 @@
 > Kort hand-off til næste session — **overskrives** ved meningsfulde milepæle (se `docs/WORKING_MODE.md` §5).
 > Ikke en anmodning om godkendelse. Operationel status (hvad er live) står i `docs/STATUS.md`.
 
-**Sidst opdateret:** 2026-09-24 (Gate B2 — migration 013 anvendt i production, Issue #82)
+**Sidst opdateret:** 2026-09-25 (Gate C1 — stagekontrakt v3 + write-free dry-run, Issue #84)
+
+## Gate C1 (Issue #84) — branch `feat/gate-c1-hubspot-dry-run-84`
+
+- Live read-only stage-metadata (18 stages) hentet af Ricko; kontrakt v3 komplet (se
+  `docs/VISION-3.0-PHASE-5-GATE-C1.md`). Snæver adapter, write-free operatør-dry-run, tests og
+  mutationstest grønne. Rickos to beslutninger (uafklaret "Solgt (andet booking nr.)", ugyldiggørelse
+  ved Dubletter/Test Leads) implementeret som efterfølgende udelukkelse; persistens kræver migration
+  014 ved aktivering. Live-forsøg 1 (head `560fced`) fejlede sikkert med `PRECHECK_FAILED`
+  (0 skrivninger, ingen DB-ændring); før/efter-tællingen rapporterer nu tabel + kategori.
+  Live-forsøg 2 (head `e4490b1`): **PASS** — 2.652 observeret, 0 skrivninger, rækker 0/0/0
+  uændret, skema-fingeraftryk uændret. Codex-review 5318246169 (blokerende) rettet: kontrakten
+  verificeres nu også på normaliseret label, displayOrder og archived (rename/reorder/arkivering ⇒
+  `CONTRACT_DRIFT`). **Udestående:** nyt review; intet aktiveret, ikke merget.
 
 ## Branch / HEAD
 

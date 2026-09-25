@@ -182,6 +182,8 @@ export function ConversionBody({ wire }: { wire: ConversionWire }) {
         Datakvalitet: {formatCount(dq.totalObserved)} deals observeret · {formatCount(dq.eligiblePending)} afventer
         tilbud · {formatCount(dq.preStartExisting)} udelukket (var allerede i gang før målingsstart) ·{" "}
         {excludedParts.join(" · ")} · {formatCount(dq.bookingConflicts)} taget ud pga. senere opdaget delt bookingnummer ·{" "}
+        {formatCount(dq.postEnrollmentExcluded.BOOKED_OTHER_REFERENCE_UNRESOLVED)} taget ud pga. salg på andet bookingnummer
+        (uafklaret) · {formatCount(dq.postEnrollmentExcluded.INVALIDATED_DUPLICATE_OR_TEST)} taget ud som dublet/test ·{" "}
         {formatCount(dq.lostObserved)} tabt/afvist observeret · {formatCount(dq.outcomeConflicts)} med modstridende
         status (tabt/afvist og konflikter er kun datakvalitet og indgår ikke i konverteringsprocenten). Små tal under
         10 vises ikke.

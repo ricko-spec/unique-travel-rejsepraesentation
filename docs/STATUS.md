@@ -86,12 +86,13 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Gate B2-migrationen er gennemført** (migration 013 anvendt i production som
-`20260924193406_conversion_measurement`, 0 rækker, intet aktiveret — Issue #82).
-**Næste handling: review og merge af [PR #83](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/83)**
-(schema-baseline + docs). **Derefter fortsætter vi med Gate C** (stage-klassifikation først, dernæst
-HubSpot-adapter, secrets, seed, dry-run og scheduler) og til sidst Gate D (officiel målingsstart) —
-hver med Rickos eksplicitte godkendelse, se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.
+**Gate B2 er gennemført og merget** (PR #83). **Aktivt: Gate C1** ([Issue #84](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/84)) —
+stagekontrakt v3 (alle 18 live-stages), snæver read-only HubSpot-adapter og én write-free
+operatør-dry-run; se `docs/VISION-3.0-PHASE-5-GATE-C1.md`. Live-forsøg 1 fejlede sikkert
+(`PRECHECK_FAILED`, 0 skrivninger); tællingen er nu kategorisk. Live-forsøg 2 er **PASS** (2.652
+observeret, 0 skrivninger, DB uændret — se gate-dokumentet §5). Næste: review
+af Gate C1-PR'en. Permanent aktivering (secrets, seed, cron, versionsløft, Gate D) kræver
+separate godkendelser.
 
 Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) — Vision 3.0: Customer Engagement & Sales Intelligence.
 Master-issue/produktkapitel, IKKE én stor PR. Fase 5 (prospektiv konverteringsmåling) er placeret i

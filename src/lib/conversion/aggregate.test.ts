@@ -19,6 +19,7 @@ function row(overrides: Partial<CohortAggregateRow> = {}): CohortAggregateRow {
     firstQualifiedObservationAt: new Date("2026-10-10T03:00:00Z"),
     exposureGroup: "ONLINE",
     bookingConflictDetectedAt: null,
+    postEnrollmentExclusionReason: null,
     outcomeStatus: "NOT_BOOKED",
     firstBookedAt: null,
     lostObservedAt: null,

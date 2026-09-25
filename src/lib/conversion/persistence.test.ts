@@ -234,6 +234,8 @@ function enrolledRow(overrides: Partial<ClassifiedDealResult> = {}): ClassifiedD
     exposureFrozenAt: T1,
     bookingMatchKey: hex("a"),
     bookingConflictDetectedAt: null,
+    postEnrollmentExclusionReason: null,
+    postEnrollmentExcludedAt: null,
     outcomeStatus: "NOT_BOOKED",
     firstBookedAt: null,
     lostObservedAt: null,

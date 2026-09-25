@@ -9,7 +9,7 @@ import {
   type ValidatedObservation,
 } from "./classify";
 import { CONTRACT_VERSION, classifyOutcomeSignal, type PipelineStageContract } from "./contract";
-import { fixtureObservation } from "./hubspotAdapter";
+import { fixtureObservation, liveStagesFromContract } from "./hubspotAdapter";
 import type { ClassifiedDealResult, CohortState } from "./types";
 
 const T0 = new Date("2026-10-01T03:00:00Z"); // baseline
@@ -24,11 +24,11 @@ const TEST_CONTRACT: PipelineStageContract = {
   pipelineId: "754595640",
   complete: true,
   stages: {
-    screened: "PRE_QUOTE",
-    "1098732868": "QUOTE_OR_LATER",
-    "1169407502": "QUOTE_OR_LATER",
-    solgt: "QUOTE_OR_LATER",
-    tabt: "CLOSED_AMBIGUOUS",
+    screened: { class: "PRE_QUOTE", closed: false, label: "screened", displayOrder: 0, archived: false },
+    "1098732868": { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt", displayOrder: 1, archived: false },
+    "1169407502": { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud", displayOrder: 2, archived: false },
+    solgt: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "solgt", displayOrder: 3, archived: false },
+    tabt: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "tabt", displayOrder: 4, archived: false },
   },
 };
 
@@ -61,11 +61,11 @@ describe("validateObservation / verifyStageContract — versioneret, fail-closed
   it("kendt stage giver sin klasse; ukendt stage, forkert pipeline eller umulige flag er kontraktdrift", () => {
     expect(validateObservation(fixtureObservation({ rawDealId: "1", dealStageId: "1169407502" }), TEST_CONTRACT)).toEqual({
       ok: true,
-      value: validated("QUOTE_OR_LATER"),
+      value: { stageClass: "QUOTE_OR_LATER", invalidatesEnrollment: false, outcome: { ...OPEN_NOT_BOOKED, otherReferenceUnresolved: false } },
     });
     expect(validateObservation(fixtureObservation({ rawDealId: "1", dealStageId: "ukendt" }), TEST_CONTRACT).ok).toBe(false);
     expect(validateObservation(fixtureObservation({ rawDealId: "1", pipelineId: "999" }), TEST_CONTRACT).ok).toBe(false);
-    // PRE_QUOTE må ikke være lukket; CLOSED_AMBIGUOUS skal være lukket.
+    // hs_is_closed skal matche stagens lukke-flag (v3).
     expect(
       validateObservation(fixtureObservation({ rawDealId: "1", dealStageId: "screened", hubspotClosed: true }), TEST_CONTRACT).ok,
     ).toBe(false);
@@ -77,23 +77,22 @@ describe("validateObservation / verifyStageContract — versioneret, fail-closed
   });
 
   it("stage-listen skal matche live 1:1 — ukendt live-stage, manglende stage eller dublet fejler lukket", () => {
-    const all = Object.keys(TEST_CONTRACT.stages);
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: all }, TEST_CONTRACT)).toEqual({ ok: true });
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: [...all, "ny"] }, TEST_CONTRACT)).toEqual({
+    const all = liveStagesFromContract(TEST_CONTRACT);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: all }, TEST_CONTRACT)).toEqual({ ok: true });
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: [...all, { id: "ny", closed: false, label: "ny", displayOrder: 99, archived: false }] }, TEST_CONTRACT)).toEqual({
       ok: false,
       code: "CONTRACT_DRIFT",
     });
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: all.slice(1) }, TEST_CONTRACT).ok).toBe(false);
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: [...all, all[0]] }, TEST_CONTRACT).ok).toBe(false);
-    expect(verifyStageContract({ pipelineId: "1", stageIds: all }, TEST_CONTRACT).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: all.slice(1) }, TEST_CONTRACT).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: [...all, all[0]] }, TEST_CONTRACT).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "1", pipelineArchived: false, stages: all }, TEST_CONTRACT).ok).toBe(false);
   });
 
-  it("den faktiske repo-kontrakt er ufuldstændig (kun Gate A's to stages) ⇒ CONTRACT_INCOMPLETE indtil Gate C", () => {
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: ["1098732868", "1169407502"] })).toEqual({
-      ok: false,
-      code: "CONTRACT_INCOMPLETE",
-    });
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: ["1098732868", "1169407502", "screened"] })).toEqual({
+  it("en ufuldstændig kontrakt giver stadig CONTRACT_INCOMPLETE (fail-closed)", () => {
+    const incomplete = { ...TEST_CONTRACT, complete: false };
+    const all = liveStagesFromContract(TEST_CONTRACT);
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: all }, incomplete)).toEqual({ ok: false, code: "CONTRACT_INCOMPLETE" });
+    expect(verifyStageContract({ pipelineId: "754595640", pipelineArchived: false, stages: [...all, { id: "ny", closed: false, label: "ny", displayOrder: 99, archived: false }] }, incomplete)).toEqual({
       ok: false,
       code: "CONTRACT_INCOMPLETE",
     });
@@ -102,13 +101,13 @@ describe("validateObservation / verifyStageContract — versioneret, fail-closed
 
 describe("classifyOutcomeSignal — én sandhedstabel (fund 7)", () => {
   const cases: [string | null, boolean, boolean, ReturnType<typeof classifyOutcomeSignal>][] = [
-    ["Solgt", true, true, { kind: "valid", booked: true, lostObserved: false, conflict: false }],
-    ["Billetter sendt", false, false, { kind: "valid", booked: true, lostObserved: false, conflict: false }],
-    ["Solgt", true, false, { kind: "valid", booked: true, lostObserved: false, conflict: true }],
-    [null, false, false, { kind: "valid", booked: false, lostObserved: false, conflict: false }],
-    ["Tilbud", true, false, { kind: "valid", booked: false, lostObserved: true, conflict: false }],
+    ["Solgt", true, true, { kind: "valid", booked: true, lostObserved: false, conflict: false, otherReferenceUnresolved: false }],
+    ["Billetter sendt", false, false, { kind: "valid", booked: true, lostObserved: false, conflict: false, otherReferenceUnresolved: false }],
+    ["Solgt", true, false, { kind: "valid", booked: true, lostObserved: false, conflict: true, otherReferenceUnresolved: false }],
+    [null, false, false, { kind: "valid", booked: false, lostObserved: false, conflict: false, otherReferenceUnresolved: false }],
+    ["Tilbud", true, false, { kind: "valid", booked: false, lostObserved: true, conflict: false, otherReferenceUnresolved: false }],
     // hs_is_closed_won ALENE giver aldrig BOOKED — kun datakvalitets-konflikt.
-    [null, true, true, { kind: "valid", booked: false, lostObserved: false, conflict: true }],
+    [null, true, true, { kind: "valid", booked: false, lostObserved: false, conflict: true, otherReferenceUnresolved: false }],
     ["Solgt", false, true, { kind: "contract-drift" }],
     [null, false, true, { kind: "contract-drift" }],
   ];
@@ -127,7 +126,7 @@ describe("reduceDealCohort — prospektiv baseline uden historik (fund 1)", () =
   });
 
   it("baseline: lukkede deals (også tvetydige) ⇒ PRE_START_EXISTING", () => {
-    const r = reduceDealCohort(input({ isBaseline: true, observedAt: T0, validated: validated("CLOSED_AMBIGUOUS") }));
+    const r = reduceDealCohort(input({ isBaseline: true, observedAt: T0, validated: validated("OUTCOME_WITHOUT_QUOTE_EVIDENCE") }));
     expect(r.eligibilityStatus).toBe("PRE_START_EXISTING");
   });
 
@@ -175,8 +174,8 @@ describe("reduceDealCohort — prospektiv baseline uden historik (fund 1)", () =
     expect(r.firstQualifiedObservationAt).toBeNull();
   });
 
-  it("efter baseline: første observation i en tvetydig lukket stage ⇒ EXCLUDED CLOSED_BEFORE_QUALIFIED_OBSERVATION, aldrig PDF_ONLY", () => {
-    const r = reduceDealCohort(input({ validated: validated("CLOSED_AMBIGUOUS") }));
+  it("efter baseline: første observation i en udfalds-/senere stage uden tilbudsbevis ⇒ EXCLUDED CLOSED_BEFORE_QUALIFIED_OBSERVATION, aldrig PDF_ONLY", () => {
+    const r = reduceDealCohort(input({ validated: validated("OUTCOME_WITHOUT_QUOTE_EVIDENCE") }));
     expect(r.eligibilityStatus).toBe("EXCLUDED");
     expect(r.exclusionReason).toBe("CLOSED_BEFORE_QUALIFIED_OBSERVATION");
     expect(r.exposureGroup).toBeNull();

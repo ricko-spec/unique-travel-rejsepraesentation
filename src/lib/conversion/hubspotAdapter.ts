@@ -8,6 +8,7 @@
 // aldrig en generel HubSpot-klient, og ALDRIG historik (ingen
 // dealstage-history, ingen closedate) — kun dealens aktuelle snapshot.
 
+import { PIPELINE_STAGE_CONTRACT, type LiveStage, type PipelineStageContract } from "./contract";
 import type { HubSpotDealObservation } from "./types";
 
 export type AdapterFailureReason =
@@ -20,12 +21,27 @@ export type AdapterFailureReason =
   | "total-mismatch";
 
 /**
- * Live pipeline-metadata: pipelinens id og den KOMPLETTE liste af stage-id'er.
- * Sync-motoren sammenholder den med PIPELINE_STAGE_CONTRACT (classify.ts
- * verifyStageContract) — en ukendt eller manglende stage er kontraktdrift.
+ * Live pipeline-metadata: pipelinens id + archived-flag og den KOMPLETTE liste
+ * af stages med den metadata, klassifikationen bygger på (id, isClosed, label,
+ * displayOrder, archived). Sync-motoren sammenholder den med
+ * PIPELINE_STAGE_CONTRACT (classify.ts verifyStageContract) — en ukendt,
+ * manglende, omdøbt, flyttet eller (af)arkiveret stage er kontraktdrift.
  */
+export type { LiveStage };
+
+/** Den live-stage-liste, der matcher en kontrakt præcis (fixture-default og tests). */
+export function liveStagesFromContract(contract: PipelineStageContract): LiveStage[] {
+  return Object.entries(contract.stages).map(([id, e]) => ({
+    id,
+    closed: e.closed,
+    label: e.label,
+    displayOrder: e.displayOrder,
+    archived: e.archived,
+  }));
+}
+
 export type StageContractConfirmation =
-  | { ok: true; pipelineId: string; stageIds: string[] }
+  | { ok: true; pipelineId: string; pipelineArchived: boolean; stages: LiveStage[] }
   | { ok: false; reason: AdapterFailureReason };
 
 export type DealPageResult =
@@ -80,7 +96,9 @@ export function createFixtureHubSpotAdapter(options: {
   deals: HubSpotDealObservation[];
   pageSize?: number;
   pipelineId?: string;
-  stages?: string[];
+  /** Simuleret live stage-liste. Default: præcis repo-kontraktens metadata. */
+  stages?: LiveStage[];
+  pipelineArchived?: boolean;
   contractFailure?: AdapterFailureReason;
   failOnPageIndex?: number;
   failReason?: AdapterFailureReason;
@@ -97,7 +115,8 @@ export function createFixtureHubSpotAdapter(options: {
       return {
         ok: true,
         pipelineId: options.pipelineId ?? "754595640",
-        stageIds: options.stages ?? ["1098732868", "1169407502"],
+        pipelineArchived: options.pipelineArchived ?? false,
+        stages: options.stages ?? liveStagesFromContract(PIPELINE_STAGE_CONTRACT),
       };
     },
     async readDealsPage(cursor) {
