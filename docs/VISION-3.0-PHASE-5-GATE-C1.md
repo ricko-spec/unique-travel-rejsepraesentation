@@ -124,12 +124,27 @@ Ingen Vercel-secrets · ingen singleton-seed · ingen cron · ingen DB-write · 
 baseline-sync · ingen status `ACTIVE` · ingen Gate D · ingen merge. Production-DB'ens
 `contract_version` er fortsat 2.
 
-## 7. Beslutninger/opmærksomhedspunkter til Ricko (ikke blokerende for C1)
+## 7. Rickos beslutninger før dry-run (2026-09-25) — implementeret
 
-1. **`unique_travel_dealstatus = "Solgt (andet booking nr.)"` tæller ikke som BOOKED** (bindende
-   regel: kun `Solgt`/`Billetter sendt`). En optaget deal, der sælges under et andet
-   bookingnummer, vil derfor tælle som ikke-booket. Skal afgøres før aktivering, hvis det er
-   forkert.
-2. **En deal der er optaget på "Tilbud sendt" og senere flyttes til Dubletter/Test Leads,
-   forbliver i kohorten** (terminal tilstand; en senere udelukkelse ville kræve en ny
-   DB-mekanisme). Skal afgøres før aktivering, hvis det er uønsket.
+Begge tidligere åbne punkter er lukket som **efterfølgende udelukkelse** af en allerede optaget
+deal (`postEnrollmentExclusionReason` + tidspunkt, samme mønster som bookingkonflikten): rækken
+bevares som revisionsspor, den oprindelige observation (kohortestart, eksponering, bookingnøgle)
+omskrives ikke, markeringen sættes én gang og fjernes aldrig (første årsag vinder), kun ENROLLED
+kan markeres, og en markeret deal indgår **aldrig** i publicerede tal — hverken tæller, nævner,
+gruppetotal, trend eller tabt/afvist. Den vises kun som small-cell-beskyttet datakvalitet.
+
+1. **`unique_travel_dealstatus = "Solgt (andet booking nr.)"`** ⇒ udfaldssignalet er *uafklaret*
+   (hverken BOOKED, NOT_BOOKED, tabt eller konflikt) og en optaget deal markeres
+   `BOOKED_OTHER_REFERENCE_UNRESOLVED` — også hvis den optages med statussen allerede sat. Den må
+   først tælle som BOOKED, når en senere, reviewet løsning sikkert forbinder den med det rigtige
+   bookingnummer (ikke en del af C1).
+2. **Optaget deal flyttes senere til Dubletter/Test Leads** (`invalidatesEnrollment` på de to
+   stages i kontrakten) ⇒ markeres `INVALIDATED_DUPLICATE_OR_TEST`. Screenet, Afslag og Solgt
+   ugyldiggør ikke. En pending deal i Dubletter/Test Leads forbliver pending.
+
+**Persistens kræver migration 014 (ikke i C1):** production-skemaet (migration 013) har ingen
+kolonner til markeringen, og C1 må ikke ændre databasen. Supabase-adapteren afviser derfor enhver
+commit, der ville bære en markering (`COMMIT_REJECTED`), før noget sendes — fail-closed. Dry-run'en
+påvirkes ikke (den skriver aldrig, og ved baseline kan ingen deal være optaget), og non-dry-run er
+i forvejen blokeret af `contract_version` 2 ≠ 3. Migration 014 (kolonner + CHECK + frys-trigger)
+er derfor en eksplicit forudsætning for aktiveringsgaten sammen med versionsløftet.

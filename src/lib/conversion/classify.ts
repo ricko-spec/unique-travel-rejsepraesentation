@@ -34,12 +34,15 @@ import type {
   ExposureGroup,
   HubSpotDealObservation,
   OutcomeStatus,
+  PostEnrollmentExclusionReason,
   TravelPlanIndex,
 } from "./types";
 
 export type ValidatedObservation = {
   stageClass: StageClass;
-  outcome: { booked: boolean; lostObserved: boolean; conflict: boolean };
+  /** Stagen ugyldiggør en allerede optaget deal (Dubletter/Test Leads). */
+  invalidatesEnrollment?: boolean;
+  outcome: { booked: boolean; lostObserved: boolean; conflict: boolean; otherReferenceUnresolved?: boolean };
 };
 
 /**
@@ -66,7 +69,13 @@ export function validateObservation(
     ok: true,
     value: {
       stageClass,
-      outcome: { booked: signal.booked, lostObserved: signal.lostObserved, conflict: signal.conflict },
+      invalidatesEnrollment: entry.invalidatesEnrollment === true,
+      outcome: {
+        booked: signal.booked,
+        lostObserved: signal.lostObserved,
+        conflict: signal.conflict,
+        otherReferenceUnresolved: signal.otherReferenceUnresolved,
+      },
     },
   };
 }
@@ -154,6 +163,13 @@ function reduceOutcome(
   };
 }
 
+/** Efterfølgende udelukkelse for en ALLEREDE optaget deal (ugyldiggørelse går forud for uafklaret booking). */
+function postEnrollmentReasonFor(v: ValidatedObservation): PostEnrollmentExclusionReason | null {
+  if (v.invalidatesEnrollment) return "INVALIDATED_DUPLICATE_OR_TEST";
+  if (v.outcome.otherReferenceUnresolved) return "BOOKED_OTHER_REFERENCE_UNRESOLVED";
+  return null;
+}
+
 function resolveExposure(bookingMatchKey: string, asOf: Date, index: TravelPlanIndex): ExposureGroup {
   const entry = index.get(bookingMatchKey);
   if (entry && entry.createdAt.getTime() <= asOf.getTime()) return "ONLINE";
@@ -189,11 +205,15 @@ export function reduceDealCohort(input: ReduceDealCohortInput): ClassifiedDealRe
       existing.eligibilityStatus === "ENROLLED" &&
       existing.bookingMatchKey !== null &&
       input.sharedBookingMatchKeys.has(existing.bookingMatchKey);
+    const postReason = existing.eligibilityStatus === "ENROLLED" ? postEnrollmentReasonFor(input.validated) : null;
     return {
       ...existing,
       dealKey: input.dealKey,
       lastObservedAt: observedAt,
       bookingConflictDetectedAt: existing.bookingConflictDetectedAt ?? (conflictNow ? observedAt : null),
+      // Første efterfølgende udelukkelse vinder og fjernes aldrig; den oprindelige observation røres ikke.
+      postEnrollmentExclusionReason: existing.postEnrollmentExclusionReason ?? postReason,
+      postEnrollmentExcludedAt: existing.postEnrollmentExcludedAt ?? (postReason ? observedAt : null),
       ...outcome,
       contractVersion: input.contractVersion,
     };
@@ -204,6 +224,8 @@ export function reduceDealCohort(input: ReduceDealCohortInput): ClassifiedDealRe
     firstSeenAt: existing?.firstSeenAt ?? observedAt,
     lastObservedAt: observedAt,
     bookingConflictDetectedAt: null,
+    postEnrollmentExclusionReason: null,
+    postEnrollmentExcludedAt: null,
     ...outcome,
     contractVersion: input.contractVersion,
   };
@@ -261,8 +283,12 @@ export function reduceDealCohort(input: ReduceDealCohortInput): ClassifiedDealRe
     // reference også kan opdages som konflikt.
     return { ...qualified, eligibilityStatus: "EXCLUDED", exclusionReason: "SHARED_BOOKING_REFERENCE", bookingMatchKey: key };
   }
+  // Optages med "Solgt (andet booking nr.)" allerede sat ⇒ markeres i samme observation.
+  const enrollReason = input.validated.outcome.otherReferenceUnresolved ? ("BOOKED_OTHER_REFERENCE_UNRESOLVED" as const) : null;
   return {
     ...qualified,
+    postEnrollmentExclusionReason: enrollReason,
+    postEnrollmentExcludedAt: enrollReason ? observedAt : null,
     eligibilityStatus: "ENROLLED",
     bookingMatchKey: key,
     exposureGroup: resolveExposure(key, observedAt, input.travelPlanIndex),

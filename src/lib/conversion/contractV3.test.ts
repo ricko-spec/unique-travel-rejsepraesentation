@@ -66,7 +66,8 @@ describe("stagekontrakt v3 — komplet og 1:1 med live-metadata", () => {
 
   it.each(LIVE)("displayOrder %s · %s (%s): klasse, closed-flag og label matcher live", (_o, id, label, closed) => {
     const entry = PIPELINE_STAGE_CONTRACT.stages[id];
-    expect(entry).toEqual({ class: EXPECTED[label], closed, label });
+    const invalidates = label === "Dubletter" || label === "Test Leads";
+    expect(entry).toEqual({ class: EXPECTED[label], closed, label, ...(invalidates ? { invalidatesEnrollment: true } : {}) });
   });
 
   it("kontrakten er internt konsistent (PRE_QUOTE åben, CLOSED_NO_QUOTE lukket, kun 'Tilbud sendt'/'Opdateret tilbud' kvalificerer)", () => {

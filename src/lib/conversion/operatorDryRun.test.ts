@@ -144,6 +144,7 @@ describe("formatOperatorReport — kun small-cell-sikre aggregater", () => {
         CLOSED_BEFORE_QUALIFIED_OBSERVATION: 0,
         BOOKED_BEFORE_QUALIFIED_OBSERVATION: 0,
       },
+      byPostEnrollmentExclusion: { BOOKED_OTHER_REFERENCE_UNRESOLVED: 4, INVALIDATED_DUPLICATE_OR_TEST: 0 },
       lostObserved: 7,
       outcomeConflicts: 0,
     },
@@ -156,6 +157,7 @@ describe("formatOperatorReport — kun small-cell-sikre aggregater", () => {
   it("1–9 vises aldrig; booket skjules når komplementet er lille; 0 og ≥ 10 vises", () => {
     const text = formatOperatorReport(report).join("\n");
     expect(text).toContain("MISSING_BOOKING_NO <10");
+    expect(text).toContain("efterfølgende udelukket: BOOKED_OTHER_REFERENCE_UNRESOLVED <10 · INVALIDATED_DUPLICATE_OR_TEST 0");
     expect(text).toContain("SHARED_BOOKING_REFERENCE 12");
     expect(text).toContain("tabt/afvist observeret: <10");
     expect(text).toContain("booked: <10 (komplement lille)");

@@ -381,6 +381,14 @@ endpoints, metoder, ingen query-parametre, præcis seks properties, stabil sorte
 `operatorDryRun.test.ts`: read-only-værn, ingen begin/commit/fail, uden singleton, rækkeændring/
 før-/efter-fejl ⇒ FAIL, small-cell-output. **Mutation: 22 mutanter, alle dræbt** (to overlevende
 i første kørsel lukket med nye tests). Hele suiten: 1014/1014.
+**Rickos to beslutninger før dry-run:** `postEnrollment.test.ts` (14 tests, skrevet først — 13 røde
+før implementeringen): uafklaret udfaldssignal for "Solgt (andet booking nr.)" (også ved
+lukket-tabt), markering ved senere status og ved optagelse, markering fjernes aldrig og første årsag
+vinder, Dubletter/Test Leads ugyldiggør (Screenet/Afslag/Solgt gør ikke), pending forbliver pending,
+kun ENROLLED markeres, invarianter/overgange, ekskluderede deals er hverken i tæller, nævner,
+gruppetotal, trend eller tabt (tæller aldrig som NOT_BOOKED), Supabase-commit afvises før RPC, og
+end-to-end i sync-motoren. **Mutation: 12 mutanter af de nye grene, alle dræbt** (én overlevende
+lukket med en ny test).
 
 **Migration 013 — kørt mod lokal in-memory Postgres (pglite 0.5.8, uden for repoet), ikke kun læst — 87/87 (runde 1; 90/90 efter runde 2):** Supabase-
 lignende roller + default ACL (auto-ALL); migrationen køres to gange (idempotens); grants (kun `service_role`

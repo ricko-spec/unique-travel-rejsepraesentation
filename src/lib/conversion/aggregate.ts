@@ -30,8 +30,8 @@
 // INGEN database-/HubSpot-imports her — ren funktion af rækker + "as of".
 
 import { MATURITY_WINDOWS_DAYS, SMALL_CELL_THRESHOLD, STALE_AFTER_HOURS, type MaturityWindowDays } from "./contract";
-import { EXCLUSION_REASONS } from "./types";
-import type { EligibilityStatus, ExclusionReason, ExposureGroup, MeasurementState, OutcomeStatus } from "./types";
+import { EXCLUSION_REASONS, POST_ENROLLMENT_EXCLUSION_REASONS } from "./types";
+import type { EligibilityStatus, ExclusionReason, ExposureGroup, MeasurementState, OutcomeStatus, PostEnrollmentExclusionReason } from "./types";
 
 export type CohortAggregateRow = {
   eligibilityStatus: EligibilityStatus;
@@ -39,6 +39,7 @@ export type CohortAggregateRow = {
   firstQualifiedObservationAt: Date | null;
   exposureGroup: ExposureGroup | null;
   bookingConflictDetectedAt: Date | null;
+  postEnrollmentExclusionReason: PostEnrollmentExclusionReason | null;
   outcomeStatus: OutcomeStatus;
   firstBookedAt: Date | null;
   lostObservedAt: Date | null;
@@ -82,6 +83,8 @@ export type DataQuality = {
   preStartExisting: number | null;
   bookingConflicts: number | null;
   excludedByReason: Record<ExclusionReason, number | null>;
+  /** Optagne deals, der efterfølgende er udelukket (uafklaret booking / dublet-test). Kun datakvalitet. */
+  postEnrollmentExcluded: Record<PostEnrollmentExclusionReason, number | null>;
   /** Tabt/afvist observeret og ikke booket — kun datakvalitet, aldrig i konverteringsprocenten. */
   lostObserved: number | null;
   /** Modstrid mellem UT-status og HubSpots lukke-flag — kun datakvalitet. */
@@ -120,6 +123,7 @@ function publishable(row: CohortAggregateRow): boolean {
   return (
     row.eligibilityStatus === "ENROLLED" &&
     row.bookingConflictDetectedAt === null &&
+    row.postEnrollmentExclusionReason === null &&
     row.exposureGroup !== null &&
     row.firstQualifiedObservationAt !== null &&
     // Fail-closed: en booking før kohortestart er en datafejl (DB-CHECK
@@ -247,13 +251,21 @@ export function buildConversionAggregate(
       perGroup.ONLINE.length,
       perGroup.PDF_ONLY.length,
       count((r) => r.eligibilityStatus === "ENROLLED" && r.bookingConflictDetectedAt !== null),
+      ...POST_ENROLLMENT_EXCLUSION_REASONS.map((reason) =>
+        count((r) => r.eligibilityStatus === "ENROLLED" && r.bookingConflictDetectedAt === null && r.postEnrollmentExclusionReason === reason),
+      ),
       count((r) => r.eligibilityStatus === "ELIGIBLE_PENDING"),
       count((r) => r.eligibilityStatus === "PRE_START_EXISTING"),
       ...reasonCounts,
     ],
     rows.length,
   );
-  const [onlineTotal, pdfTotal, conflicts, pending, preStart, ...reasons] = partition.cells;
+  const [onlineTotal, pdfTotal, conflicts, ...rest] = partition.cells;
+  const postCells = rest.slice(0, POST_ENROLLMENT_EXCLUSION_REASONS.length);
+  const [pending, preStart, ...reasons] = rest.slice(POST_ENROLLMENT_EXCLUSION_REASONS.length);
+  const postEnrollmentExcluded = Object.fromEntries(
+    POST_ENROLLMENT_EXCLUSION_REASONS.map((reason, i) => [reason, postCells[i]]),
+  ) as Record<PostEnrollmentExclusionReason, number | null>;
 
   const buildGroup = (list: CohortAggregateRow[], total: number | null): GroupStats => {
     const blocks = publicationBlocks(list, asOf);
@@ -300,7 +312,12 @@ export function buildConversionAggregate(
       preStartExisting: preStart,
       bookingConflicts: conflicts,
       excludedByReason,
-      lostObserved: suppressBinary(count((r) => r.lostObservedAt !== null && r.outcomeStatus === "NOT_BOOKED"), rows.length),
+      postEnrollmentExcluded,
+      // Efterfølgende udelukkede deals tælles aldrig som tabt/ikke-booket.
+      lostObserved: suppressBinary(
+        count((r) => r.lostObservedAt !== null && r.outcomeStatus === "NOT_BOOKED" && r.postEnrollmentExclusionReason === null),
+        rows.length,
+      ),
       outcomeConflicts: suppressBinary(count((r) => r.outcomeConflictObservedAt !== null), rows.length),
     },
   };

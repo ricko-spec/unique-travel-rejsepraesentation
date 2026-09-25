@@ -16,6 +16,20 @@ export type ExclusionReason = (typeof EXCLUSION_REASONS)[number];
 
 export type ExposureGroup = "ONLINE" | "PDF_ONLY";
 
+/**
+ * Efterfølgende udelukkelse af en ALLEREDE optaget deal (Rickos beslutning før
+ * Gate C1-dry-run). Rækken bevares som revisionsspor, den oprindelige
+ * observation omskrives ikke, men dealen indgår aldrig i publicerede tal.
+ *  - BOOKED_OTHER_REFERENCE_UNRESOLVED: unique_travel_dealstatus =
+ *    "Solgt (andet booking nr.)" — hverken BOOKED eller NOT_BOOKED, før en
+ *    senere løsning sikkert forbinder den med det rigtige bookingnummer.
+ *  - INVALIDATED_DUPLICATE_OR_TEST: dealen er senere flyttet til Dubletter/Test Leads.
+ * Kræver migration 014 for at kunne persisteres; indtil da afviser Supabase-
+ * adapteren enhver commit med en sådan markering (fail-closed).
+ */
+export const POST_ENROLLMENT_EXCLUSION_REASONS = ["BOOKED_OTHER_REFERENCE_UNRESOLVED", "INVALIDATED_DUPLICATE_OR_TEST"] as const;
+export type PostEnrollmentExclusionReason = (typeof POST_ENROLLMENT_EXCLUSION_REASONS)[number];
+
 export type OutcomeStatus = "NOT_BOOKED" | "BOOKED";
 
 /**
@@ -47,6 +61,9 @@ export type CohortState = {
   bookingMatchKey: string | null;
   /** Sat én gang, når en ENROLLED deals frosne bookingreference senere viser sig delt med en anden deal. */
   bookingConflictDetectedAt: Date | null;
+  /** Sat én gang (se POST_ENROLLMENT_EXCLUSION_REASONS); kun på ENROLLED; fjernes aldrig. */
+  postEnrollmentExclusionReason: PostEnrollmentExclusionReason | null;
+  postEnrollmentExcludedAt: Date | null;
   outcomeStatus: OutcomeStatus;
   firstBookedAt: Date | null;
   lostObservedAt: Date | null;

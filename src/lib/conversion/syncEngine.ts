@@ -29,13 +29,21 @@ import {
 import { computeBookingKeyForConversion, computeDealKey, secretsAreUsable, validateBookingNumber } from "./dealKey";
 import type { AdapterFailureReason, HubSpotReadAdapter } from "./hubspotAdapter";
 import type { CommitCounts, ConversionPersistence } from "./persistence";
-import { EXCLUSION_REASONS } from "./types";
-import type { ClassifiedDealResult, EligibilityStatus, ExclusionReason, HubSpotDealObservation, SyncRunErrorCode } from "./types";
+import { EXCLUSION_REASONS, POST_ENROLLMENT_EXCLUSION_REASONS } from "./types";
+import type {
+  ClassifiedDealResult,
+  EligibilityStatus,
+  ExclusionReason,
+  HubSpotDealObservation,
+  PostEnrollmentExclusionReason,
+  SyncRunErrorCode,
+} from "./types";
 
 /** Rene aggregater fra en dry-run (Gate C1) — ingen id'er, nøgler eller rækker. */
 export type DryRunSummary = {
   byEligibility: Record<EligibilityStatus, number>;
   byExclusionReason: Record<ExclusionReason, number>;
+  byPostEnrollmentExclusion: Record<PostEnrollmentExclusionReason, number>;
   lostObserved: number;
   outcomeConflicts: number;
 };
@@ -203,14 +211,20 @@ function summarize(rows: ClassifiedDealResult[]): DryRunSummary {
     EXCLUDED: 0,
   };
   const byExclusionReason = Object.fromEntries(EXCLUSION_REASONS.map((r) => [r, 0])) as Record<ExclusionReason, number>;
+  const byPostEnrollmentExclusion = Object.fromEntries(POST_ENROLLMENT_EXCLUSION_REASONS.map((r) => [r, 0])) as Record<
+    PostEnrollmentExclusionReason,
+    number
+  >;
   for (const r of rows) {
     byEligibility[r.eligibilityStatus] += 1;
     if (r.exclusionReason) byExclusionReason[r.exclusionReason] += 1;
+    if (r.postEnrollmentExclusionReason) byPostEnrollmentExclusion[r.postEnrollmentExclusionReason] += 1;
   }
   return {
     byEligibility,
     byExclusionReason,
-    lostObserved: rows.filter((r) => r.lostObservedAt !== null && r.outcomeStatus === "NOT_BOOKED").length,
+    byPostEnrollmentExclusion,
+    lostObserved: rows.filter((r) => r.lostObservedAt !== null && r.outcomeStatus === "NOT_BOOKED" && r.postEnrollmentExclusionReason === null).length,
     outcomeConflicts: rows.filter((r) => r.outcomeConflictObservedAt !== null).length,
   };
 }

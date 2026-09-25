@@ -9,7 +9,9 @@
 
 - Live read-only stage-metadata (18 stages) hentet af Ricko; kontrakt v3 komplet (se
   `docs/VISION-3.0-PHASE-5-GATE-C1.md`). Snæver adapter, write-free operatør-dry-run, tests og
-  mutationstest grønne. **Udestående:** Rickos live dry-run, review; intet aktiveret, ikke merget.
+  mutationstest grønne. Rickos to beslutninger (uafklaret "Solgt (andet booking nr.)", ugyldiggørelse
+  ved Dubletter/Test Leads) implementeret som efterfølgende udelukkelse; persistens kræver migration
+  014 ved aktivering. **Udestående:** Rickos live dry-run, review; intet aktiveret, ikke merget.
 
 ## Branch / HEAD
 

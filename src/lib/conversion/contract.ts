@@ -54,7 +54,13 @@ export const STAGE_UPDATED_QUOTE = "1169407502";
 export type StageClass = "PRE_QUOTE" | "QUOTE_OR_LATER" | "OUTCOME_WITHOUT_QUOTE_EVIDENCE" | "CLOSED_NO_QUOTE";
 
 /** Én stage i kontrakten: klasse + det forventede lukke-flag (= live metadata.isClosed). */
-export type StageContractEntry = { class: StageClass; closed: boolean; label: string };
+export type StageContractEntry = {
+  class: StageClass;
+  closed: boolean;
+  label: string;
+  /** Sand for Dubletter/Test Leads: en ALLEREDE optaget deal, der ses her, markeres INVALIDATED_DUPLICATE_OR_TEST. */
+  invalidatesEnrollment?: true;
+};
 
 export type PipelineStageContract = {
   pipelineId: string;
@@ -91,8 +97,8 @@ export const PIPELINE_STAGE_CONTRACT: PipelineStageContract = {
     "1110279229": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: false, label: "På rejse" },
     "1110279231": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: false, label: "Hjemvendt" },
     "1110279230": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Aflyst rejse (Alle)" },
-    "1110279232": { class: "CLOSED_NO_QUOTE", closed: true, label: "Dubletter" },
-    "1110279233": { class: "CLOSED_NO_QUOTE", closed: true, label: "Test Leads" },
+    "1110279232": { class: "CLOSED_NO_QUOTE", closed: true, label: "Dubletter", invalidatesEnrollment: true },
+    "1110279233": { class: "CLOSED_NO_QUOTE", closed: true, label: "Test Leads", invalidatesEnrollment: true },
   },
 };
 
@@ -123,8 +129,11 @@ export const BOOKED_DEAL_STATUS_VALUES: readonly string[] = ["Solgt", "Billetter
 export const HUBSPOT_CLOSED_PROPERTY = "hs_is_closed";
 export const HUBSPOT_CLOSED_WON_PROPERTY = "hs_is_closed_won";
 
+/** "Solgt (andet booking nr.)": salget er registreret på et andet bookingnummer — uafklaret, aldrig BOOKED/NOT_BOOKED. */
+export const OTHER_REFERENCE_DEAL_STATUS = "Solgt (andet booking nr.)";
+
 export type OutcomeSignal =
-  | { kind: "valid"; booked: boolean; lostObserved: boolean; conflict: boolean }
+  | { kind: "valid"; booked: boolean; lostObserved: boolean; conflict: boolean; otherReferenceUnresolved: boolean }
   | { kind: "contract-drift" };
 
 /**
@@ -140,6 +149,7 @@ export type OutcomeSignal =
  * | nej                                    | true         | false            | NOT_BOOKED + tabt/afvist (datakvalitet)     |
  * | nej                                    | true         | true             | NOT_BOOKED + outcome-konflikt (datakvalitet)|
  * | —                                      | false        | true             | umulig kombination ⇒ kontraktdrift (sync fejler lukket) |
+ * | "Solgt (andet booking nr.)"            | vilkårlig    | vilkårlig        | UAFKLARET: hverken BOOKED/NOT_BOOKED/tabt; en optaget deal markeres BOOKED_OTHER_REFERENCE_UNRESOLVED og udgår af tæller OG nævner |
  *
  * Tabt/afvist og konflikter indgår ALDRIG i konverteringsprocenten; de vises
  * kun som (small-cell-beskyttet) datakvalitet.
@@ -150,15 +160,21 @@ export function classifyOutcomeSignal(input: {
   hubspotClosedWon: boolean;
 }): OutcomeSignal {
   if (input.hubspotClosedWon && !input.hubspotClosed) return { kind: "contract-drift" };
-  const sold = input.dealStatusRaw !== null && BOOKED_DEAL_STATUS_VALUES.includes(input.dealStatusRaw.trim());
+  const status = input.dealStatusRaw === null ? null : input.dealStatusRaw.trim();
+  if (status === OTHER_REFERENCE_DEAL_STATUS) {
+    // Rickos beslutning: hverken booket, tabt eller konflikt — eksplicit uafklaret.
+    return { kind: "valid", booked: false, lostObserved: false, conflict: false, otherReferenceUnresolved: true };
+  }
+  const sold = status !== null && BOOKED_DEAL_STATUS_VALUES.includes(status);
   if (sold) {
-    return { kind: "valid", booked: true, lostObserved: false, conflict: input.hubspotClosed && !input.hubspotClosedWon };
+    return { kind: "valid", booked: true, lostObserved: false, conflict: input.hubspotClosed && !input.hubspotClosedWon, otherReferenceUnresolved: false };
   }
   return {
     kind: "valid",
     booked: false,
     lostObserved: input.hubspotClosed && !input.hubspotClosedWon,
     conflict: input.hubspotClosed && input.hubspotClosedWon,
+    otherReferenceUnresolved: false,
   };
 }
 

@@ -61,7 +61,7 @@ describe("validateObservation / verifyStageContract — versioneret, fail-closed
   it("kendt stage giver sin klasse; ukendt stage, forkert pipeline eller umulige flag er kontraktdrift", () => {
     expect(validateObservation(fixtureObservation({ rawDealId: "1", dealStageId: "1169407502" }), TEST_CONTRACT)).toEqual({
       ok: true,
-      value: validated("QUOTE_OR_LATER"),
+      value: { stageClass: "QUOTE_OR_LATER", invalidatesEnrollment: false, outcome: { ...OPEN_NOT_BOOKED, otherReferenceUnresolved: false } },
     });
     expect(validateObservation(fixtureObservation({ rawDealId: "1", dealStageId: "ukendt" }), TEST_CONTRACT).ok).toBe(false);
     expect(validateObservation(fixtureObservation({ rawDealId: "1", pipelineId: "999" }), TEST_CONTRACT).ok).toBe(false);
@@ -101,13 +101,13 @@ describe("validateObservation / verifyStageContract — versioneret, fail-closed
 
 describe("classifyOutcomeSignal — én sandhedstabel (fund 7)", () => {
   const cases: [string | null, boolean, boolean, ReturnType<typeof classifyOutcomeSignal>][] = [
-    ["Solgt", true, true, { kind: "valid", booked: true, lostObserved: false, conflict: false }],
-    ["Billetter sendt", false, false, { kind: "valid", booked: true, lostObserved: false, conflict: false }],
-    ["Solgt", true, false, { kind: "valid", booked: true, lostObserved: false, conflict: true }],
-    [null, false, false, { kind: "valid", booked: false, lostObserved: false, conflict: false }],
-    ["Tilbud", true, false, { kind: "valid", booked: false, lostObserved: true, conflict: false }],
+    ["Solgt", true, true, { kind: "valid", booked: true, lostObserved: false, conflict: false, otherReferenceUnresolved: false }],
+    ["Billetter sendt", false, false, { kind: "valid", booked: true, lostObserved: false, conflict: false, otherReferenceUnresolved: false }],
+    ["Solgt", true, false, { kind: "valid", booked: true, lostObserved: false, conflict: true, otherReferenceUnresolved: false }],
+    [null, false, false, { kind: "valid", booked: false, lostObserved: false, conflict: false, otherReferenceUnresolved: false }],
+    ["Tilbud", true, false, { kind: "valid", booked: false, lostObserved: true, conflict: false, otherReferenceUnresolved: false }],
     // hs_is_closed_won ALENE giver aldrig BOOKED — kun datakvalitets-konflikt.
-    [null, true, true, { kind: "valid", booked: false, lostObserved: false, conflict: true }],
+    [null, true, true, { kind: "valid", booked: false, lostObserved: false, conflict: true, otherReferenceUnresolved: false }],
     ["Solgt", false, true, { kind: "contract-drift" }],
     [null, false, true, { kind: "contract-drift" }],
   ];

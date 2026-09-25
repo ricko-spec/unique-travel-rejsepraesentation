@@ -163,6 +163,7 @@ export function formatOperatorReport(r: OperatorDryRunReport): string[] {
     lines.push(
       `eligibility: PRE_START_EXISTING ${safeCount10(e.PRE_START_EXISTING)} · ELIGIBLE_PENDING ${safeCount10(e.ELIGIBLE_PENDING)} · ENROLLED ${safeCount10(e.ENROLLED)} · EXCLUDED ${safeCount10(e.EXCLUDED)}`,
       `eksklusionsårsager: ${Object.entries(r.summary.byExclusionReason).map(([k, v]) => `${k} ${safeCount10(v)}`).join(" · ")}`,
+      `efterfølgende udelukket: ${Object.entries(r.summary.byPostEnrollmentExclusion ?? {}).map(([k, v]) => `${k} ${safeCount10(v)}`).join(" · ")}`,
       `tabt/afvist observeret: ${safeCount10(r.summary.lostObserved)} · outcome-konflikter: ${safeCount10(r.summary.outcomeConflicts)}`,
     );
   }

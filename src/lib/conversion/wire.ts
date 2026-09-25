@@ -64,6 +64,10 @@ export const conversionWireSchema = z.object({
       CLOSED_BEFORE_QUALIFIED_OBSERVATION: nullableCount,
       BOOKED_BEFORE_QUALIFIED_OBSERVATION: nullableCount,
     }),
+    postEnrollmentExcluded: z.object({
+      BOOKED_OTHER_REFERENCE_UNRESOLVED: nullableCount,
+      INVALIDATED_DUPLICATE_OR_TEST: nullableCount,
+    }),
     lostObserved: nullableCount,
     outcomeConflicts: nullableCount,
   }),

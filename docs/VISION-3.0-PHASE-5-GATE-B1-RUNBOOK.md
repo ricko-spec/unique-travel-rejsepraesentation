@@ -69,6 +69,10 @@ Den oprindelige procedure (bevaret som reference):
 > `CLOSED_NO_QUOTE`), den rigtige snævre adapter og en lokal operatør-dry-run
 > (`scripts/operator/Invoke-ConversionDryRun.ps1`). Se `docs/VISION-3.0-PHASE-5-GATE-C1.md`. Trin 3, 4, 6 (secrets, seed, cron)
 > og versionsløftet af production-DB'ens `contract_version` (2 → 3) er **ikke** en del af C1.
+> **Aktiveringsforudsætning fra C1:** migration 014 (kolonner + CHECK + frys-trigger for
+> efterfølgende udelukkelse: `BOOKED_OTHER_REFERENCE_UNRESOLVED`/`INVALIDATED_DUPLICATE_OR_TEST`)
+> skal være reviewet og anvendt, før nogen non-dry-run; indtil da afviser Supabase-adapteren enhver
+> commit med en markering.
 
 1. **Udfyld stage-kontrakten (forudsætning).** Operatøren (Ricko) henter pipeline `754595640`'s
    komplette stage-liste read-only (samme operatør-kørte mønster som Gate A — agenten ser aldrig
