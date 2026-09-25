@@ -134,10 +134,9 @@ eller GitHub Issues.
 
 - **Vision 3.0 Fase 5 — Gate B2-migrationen er gennemført (Issue #82).** Gate B0+B1 er merget
   (PR #81), og migration 013 er anvendt i production (0 rækker, intet aktiveret). **Næste handling:
-  review og merge af PR #83** (schema-baseline + docs). **Derefter fortsætter vi med Gate C**, hvis
-  første forudsætning er at klassificere pipelinens øvrige stages
-  (`PRE_QUOTE`/`QUOTE_OR_LATER`/`CLOSED_AMBIGUOUS`) fra live-metadata — indtil da fejler enhver
-  officiel sync lukket (`CONTRACT_INCOMPLETE`). Se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`. Udfaldsdefinitionen er
+  review og merge af PR #83** — gjort. **Gate C1 i gang (Issue #84):** stagekontrakt v3 (alle 18
+  stages), snæver read-only adapter og én write-free dry-run — se `docs/VISION-3.0-PHASE-5-GATE-C1.md`.
+  Permanent aktivering (secrets, seed, cron, DB-versionsløft, Gate D) er separate gates. Udfaldsdefinitionen er
   fastlagt fra Gate A (kun `unique_travel_dealstatus` ⇒ Booket; `hs_is_closed_won` aldrig).
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af

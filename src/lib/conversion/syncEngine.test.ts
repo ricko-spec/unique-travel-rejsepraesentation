@@ -18,14 +18,14 @@ const CONTRACT: PipelineStageContract = {
   pipelineId: "754595640",
   complete: true,
   stages: {
-    [STAGES.screened]: "PRE_QUOTE",
-    [STAGES.quote]: "QUOTE_OR_LATER",
-    [STAGES.updated]: "QUOTE_OR_LATER",
-    [STAGES.sold]: "QUOTE_OR_LATER",
-    [STAGES.lost]: "CLOSED_AMBIGUOUS",
+    [STAGES.screened]: { class: "PRE_QUOTE", closed: false, label: "screened" },
+    [STAGES.quote]: { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt" },
+    [STAGES.updated]: { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud" },
+    [STAGES.sold]: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "solgt" },
+    [STAGES.lost]: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "tabt" },
   },
 };
-const LIVE_STAGES = Object.keys(CONTRACT.stages);
+const LIVE_STAGES = Object.entries(CONTRACT.stages).map(([id, e]) => ({ id, closed: e.closed }));
 
 const ARMED: MeasurementState = { status: "ACTIVE", contractVersion: CONTRACT_VERSION, measurementStartedAt: null, lastSuccessfulSyncAt: null };
 
@@ -99,11 +99,11 @@ describe("konfiguration og tilstand afvises FØR læsning og skrivning", () => {
     expect(p.getSyncRuns()).toEqual([]);
   });
 
-  it("den faktiske repo-kontrakt (ufuldstændig) ⇒ FAILED CONTRACT_INCOMPLETE, ingen kohorte", async () => {
+  it("repo-kontrakten v3 mod en live stage-liste, der ikke matcher ⇒ FAILED CONTRACT_DRIFT, ingen kohorte", async () => {
     const p = createInMemoryConversionPersistence({ measurementState: ARMED });
     const res = await runConversionSync(adapter([deal("1")]), p, { ...opts(T0), stageContract: undefined });
-    expect(res).toEqual({ ok: false, errorCode: "CONTRACT_INCOMPLETE", auditRecorded: true });
-    expect(p.getSyncRuns().map((r) => [r.status, r.errorCode])).toEqual([["FAILED", "CONTRACT_INCOMPLETE"]]);
+    expect(res).toEqual({ ok: false, errorCode: "CONTRACT_DRIFT", auditRecorded: true });
+    expect(p.getSyncRuns().map((r) => [r.status, r.errorCode])).toEqual([["FAILED", "CONTRACT_DRIFT"]]);
     expect(p.getAllCohortRows().size).toBe(0);
   });
 });

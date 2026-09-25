@@ -5,8 +5,9 @@ const deal = (id: string) => fixtureObservation({ rawDealId: id });
 
 describe("createFixtureHubSpotAdapter", () => {
   it("confirmStageContract() returnerer pipeline og den komplette live stage-liste", async () => {
-    const adapter = createFixtureHubSpotAdapter({ deals: [], stages: ["a", "b"] });
-    expect(await adapter.confirmStageContract()).toEqual({ ok: true, pipelineId: "754595640", stageIds: ["a", "b"] });
+    const stages = [{ id: "a", closed: false }, { id: "b", closed: true }];
+    const adapter = createFixtureHubSpotAdapter({ deals: [], stages });
+    expect(await adapter.confirmStageContract()).toEqual({ ok: true, pipelineId: "754595640", stages });
   });
 
   it("confirmStageContract() kan simulere en HTTP-fejl på metadata-kaldet", async () => {

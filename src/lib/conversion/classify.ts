@@ -22,6 +22,7 @@
 import {
   PIPELINE_STAGE_CONTRACT,
   classifyOutcomeSignal,
+  stageContractViolation,
   type PipelineStageContract,
   type StageClass,
 } from "./contract";
@@ -52,12 +53,13 @@ export function validateObservation(
   contract: PipelineStageContract = PIPELINE_STAGE_CONTRACT,
 ): { ok: true; value: ValidatedObservation } | { ok: false } {
   if (obs.pipelineId !== contract.pipelineId) return { ok: false };
-  const stageClass = Object.prototype.hasOwnProperty.call(contract.stages, obs.dealStageId)
+  const entry = Object.prototype.hasOwnProperty.call(contract.stages, obs.dealStageId)
     ? contract.stages[obs.dealStageId]
     : undefined;
-  if (!stageClass) return { ok: false };
-  if (stageClass === "PRE_QUOTE" && obs.hubspotClosed) return { ok: false };
-  if (stageClass === "CLOSED_AMBIGUOUS" && !obs.hubspotClosed) return { ok: false };
+  if (!entry) return { ok: false };
+  // v3: dealens hs_is_closed skal matche stagens lukke-flag fra live-metadata.
+  if (obs.hubspotClosed !== entry.closed) return { ok: false };
+  const stageClass = entry.class;
   const signal = classifyOutcomeSignal(obs);
   if (signal.kind === "contract-drift") return { ok: false };
   return {
@@ -76,19 +78,23 @@ export function validateObservation(
  * senere" ikke entydigt, og kørslen skal fejle lukket.
  */
 export function verifyStageContract(
-  live: { pipelineId: string; stageIds: readonly string[] },
+  live: { pipelineId: string; stages: readonly { id: string; closed: boolean }[] },
   contract: PipelineStageContract = PIPELINE_STAGE_CONTRACT,
 ): { ok: true } | { ok: false; code: "CONTRACT_DRIFT" | "CONTRACT_INCOMPLETE" } {
   if (live.pipelineId !== contract.pipelineId) return { ok: false, code: "CONTRACT_DRIFT" };
-  const liveSet = new Set(live.stageIds);
-  if (liveSet.size !== live.stageIds.length) return { ok: false, code: "CONTRACT_DRIFT" };
+  if (stageContractViolation(contract)) return { ok: false, code: "CONTRACT_DRIFT" };
+  const liveIds = live.stages.map((s) => s.id);
+  const liveSet = new Set(liveIds);
+  if (liveSet.size !== liveIds.length) return { ok: false, code: "CONTRACT_DRIFT" };
   for (const id of Object.keys(contract.stages)) {
     if (!liveSet.has(id)) return { ok: false, code: "CONTRACT_DRIFT" };
   }
-  for (const id of live.stageIds) {
-    if (!Object.prototype.hasOwnProperty.call(contract.stages, id)) {
+  for (const s of live.stages) {
+    if (!Object.prototype.hasOwnProperty.call(contract.stages, s.id)) {
       return { ok: false, code: contract.complete ? "CONTRACT_DRIFT" : "CONTRACT_INCOMPLETE" };
     }
+    // v3: et ændret lukke-flag på en kendt stage er kontraktdrift.
+    if (contract.stages[s.id].closed !== s.closed) return { ok: false, code: "CONTRACT_DRIFT" };
   }
   if (!contract.complete) return { ok: false, code: "CONTRACT_INCOMPLETE" };
   return { ok: true };
@@ -214,14 +220,18 @@ export function reduceDealCohort(input: ReduceDealCohortInput): ClassifiedDealRe
     // Baseline: alt der ikke er en åben PRE_QUOTE-deal, var allerede i gang
     // (eller afsluttet) før målingsstart og udelukkes permanent — dette er
     // mekanismen der forhindrer skjult historisk backfill.
+    // (CLOSED_NO_QUOTE er lukket ⇒ også PRE_START ved baseline.)
     return { ...base, ...none, eligibilityStatus: stage === "PRE_QUOTE" ? "ELIGIBLE_PENDING" : "PRE_START_EXISTING" };
   }
 
-  if (stage === "PRE_QUOTE") return { ...base, ...none, eligibilityStatus: "ELIGIBLE_PENDING" };
+  // Ingen tilbud sendt (åben PRE_QUOTE eller lukket uden tilbud: Screenet,
+  // Dubletter, Test Leads) ⇒ forbliver pending; optages aldrig på denne stage.
+  if (stage === "PRE_QUOTE" || stage === "CLOSED_NO_QUOTE") return { ...base, ...none, eligibilityStatus: "ELIGIBLE_PENDING" };
 
-  if (stage === "CLOSED_AMBIGUOUS") {
-    // Første observation er en lukket stage, der kan være nået før ELLER
-    // efter et tilbud. Kan ikke afgøres entydigt ⇒ eksplicit udelukket.
+  if (stage === "OUTCOME_WITHOUT_QUOTE_EVIDENCE") {
+    // Første observation er en senere fase/et udfald (åben eller lukket), der
+    // ikke beviser et observeret "Tilbud sendt" ⇒ eksplicit udelukket. (Årsags-
+    // koden er DB-bundet fra migration 013 og dækker også åbne post-salg-stages.)
     return {
       ...base,
       ...none,

@@ -24,11 +24,11 @@ const TEST_CONTRACT: PipelineStageContract = {
   pipelineId: "754595640",
   complete: true,
   stages: {
-    screened: "PRE_QUOTE",
-    "1098732868": "QUOTE_OR_LATER",
-    "1169407502": "QUOTE_OR_LATER",
-    solgt: "QUOTE_OR_LATER",
-    tabt: "CLOSED_AMBIGUOUS",
+    screened: { class: "PRE_QUOTE", closed: false, label: "screened" },
+    "1098732868": { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt" },
+    "1169407502": { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud" },
+    solgt: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "solgt" },
+    tabt: { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "tabt" },
   },
 };
 
@@ -65,7 +65,7 @@ describe("validateObservation / verifyStageContract — versioneret, fail-closed
     });
     expect(validateObservation(fixtureObservation({ rawDealId: "1", dealStageId: "ukendt" }), TEST_CONTRACT).ok).toBe(false);
     expect(validateObservation(fixtureObservation({ rawDealId: "1", pipelineId: "999" }), TEST_CONTRACT).ok).toBe(false);
-    // PRE_QUOTE må ikke være lukket; CLOSED_AMBIGUOUS skal være lukket.
+    // hs_is_closed skal matche stagens lukke-flag (v3).
     expect(
       validateObservation(fixtureObservation({ rawDealId: "1", dealStageId: "screened", hubspotClosed: true }), TEST_CONTRACT).ok,
     ).toBe(false);
@@ -77,23 +77,22 @@ describe("validateObservation / verifyStageContract — versioneret, fail-closed
   });
 
   it("stage-listen skal matche live 1:1 — ukendt live-stage, manglende stage eller dublet fejler lukket", () => {
-    const all = Object.keys(TEST_CONTRACT.stages);
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: all }, TEST_CONTRACT)).toEqual({ ok: true });
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: [...all, "ny"] }, TEST_CONTRACT)).toEqual({
+    const all = Object.entries(TEST_CONTRACT.stages).map(([id, e]) => ({ id, closed: e.closed }));
+    expect(verifyStageContract({ pipelineId: "754595640", stages: all }, TEST_CONTRACT)).toEqual({ ok: true });
+    expect(verifyStageContract({ pipelineId: "754595640", stages: [...all, { id: "ny", closed: false }] }, TEST_CONTRACT)).toEqual({
       ok: false,
       code: "CONTRACT_DRIFT",
     });
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: all.slice(1) }, TEST_CONTRACT).ok).toBe(false);
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: [...all, all[0]] }, TEST_CONTRACT).ok).toBe(false);
-    expect(verifyStageContract({ pipelineId: "1", stageIds: all }, TEST_CONTRACT).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", stages: all.slice(1) }, TEST_CONTRACT).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "754595640", stages: [...all, all[0]] }, TEST_CONTRACT).ok).toBe(false);
+    expect(verifyStageContract({ pipelineId: "1", stages: all }, TEST_CONTRACT).ok).toBe(false);
   });
 
-  it("den faktiske repo-kontrakt er ufuldstændig (kun Gate A's to stages) ⇒ CONTRACT_INCOMPLETE indtil Gate C", () => {
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: ["1098732868", "1169407502"] })).toEqual({
-      ok: false,
-      code: "CONTRACT_INCOMPLETE",
-    });
-    expect(verifyStageContract({ pipelineId: "754595640", stageIds: ["1098732868", "1169407502", "screened"] })).toEqual({
+  it("en ufuldstændig kontrakt giver stadig CONTRACT_INCOMPLETE (fail-closed)", () => {
+    const incomplete = { ...TEST_CONTRACT, complete: false };
+    const all = Object.entries(TEST_CONTRACT.stages).map(([id, e]) => ({ id, closed: e.closed }));
+    expect(verifyStageContract({ pipelineId: "754595640", stages: all }, incomplete)).toEqual({ ok: false, code: "CONTRACT_INCOMPLETE" });
+    expect(verifyStageContract({ pipelineId: "754595640", stages: [...all, { id: "ny", closed: false }] }, incomplete)).toEqual({
       ok: false,
       code: "CONTRACT_INCOMPLETE",
     });
@@ -127,7 +126,7 @@ describe("reduceDealCohort — prospektiv baseline uden historik (fund 1)", () =
   });
 
   it("baseline: lukkede deals (også tvetydige) ⇒ PRE_START_EXISTING", () => {
-    const r = reduceDealCohort(input({ isBaseline: true, observedAt: T0, validated: validated("CLOSED_AMBIGUOUS") }));
+    const r = reduceDealCohort(input({ isBaseline: true, observedAt: T0, validated: validated("OUTCOME_WITHOUT_QUOTE_EVIDENCE") }));
     expect(r.eligibilityStatus).toBe("PRE_START_EXISTING");
   });
 
@@ -175,8 +174,8 @@ describe("reduceDealCohort — prospektiv baseline uden historik (fund 1)", () =
     expect(r.firstQualifiedObservationAt).toBeNull();
   });
 
-  it("efter baseline: første observation i en tvetydig lukket stage ⇒ EXCLUDED CLOSED_BEFORE_QUALIFIED_OBSERVATION, aldrig PDF_ONLY", () => {
-    const r = reduceDealCohort(input({ validated: validated("CLOSED_AMBIGUOUS") }));
+  it("efter baseline: første observation i en udfalds-/senere stage uden tilbudsbevis ⇒ EXCLUDED CLOSED_BEFORE_QUALIFIED_OBSERVATION, aldrig PDF_ONLY", () => {
+    const r = reduceDealCohort(input({ validated: validated("OUTCOME_WITHOUT_QUOTE_EVIDENCE") }));
     expect(r.eligibilityStatus).toBe("EXCLUDED");
     expect(r.exclusionReason).toBe("CLOSED_BEFORE_QUALIFIED_OBSERVATION");
     expect(r.exposureGroup).toBeNull();

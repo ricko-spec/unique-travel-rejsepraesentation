@@ -368,6 +368,20 @@ migration, grønne efter) ⇒ **90/90**; 13 SQL-mutanter (inkl. de to nye CHECKs
 måned fik identisk identitet; ingen "Periode 2" i UI; nøglen var måneden) og er grønne nu. Wire-skemaet
 afviser dublerede `periodIndex`.
 
+**Gate C1 (Issue #84):** `contractV3.test.ts` (44 tests, skrevet før implementeringen — 41 røde mod
+kontrakt v2): alle 18 live-stages med klasse/lukke-flag/label, intern konsistens, 1:1 mod live
+(ukendt/manglende/dubleret stage eller ændret lukke-flag ⇒ `CONTRACT_DRIFT`), deal-niveau
+lukke-flag, Screenet/Dubletter/Test Leads optages aldrig, Solgt/Solgt (I andet bookingnr.)/
+Billetter sendt/Afslag/Aflyst/På rejse/Hjemvendt optager aldrig en ny/pending deal, BOOKED kun via
+dealstatus, end-to-end live-svarform → adapter → operatør-dry-run (PASS, 0 skrivninger), og DB v2
+blokerer non-dry-run men ikke dry-run. `hubspotLiveAdapter.test.ts`: API-grænse (host, to
+endpoints, metoder, ingen query-parametre, præcis seks properties, stabil sortering), 401/403/429/
+5xx/andre 4xx/netværk/ugyldig JSON, total > 10.000, ugyldige deals/cursor, rate-afstand,
+2.600 deals over 26 sider, ændret total, tom mellemside, ustabil paginering, forkert pipeline.
+`operatorDryRun.test.ts`: read-only-værn, ingen begin/commit/fail, uden singleton, rækkeændring/
+før-/efter-fejl ⇒ FAIL, small-cell-output. **Mutation: 22 mutanter, alle dræbt** (to overlevende
+i første kørsel lukket med nye tests). Hele suiten: 1014/1014.
+
 **Migration 013 — kørt mod lokal in-memory Postgres (pglite 0.5.8, uden for repoet), ikke kun læst — 87/87 (runde 1; 90/90 efter runde 2):** Supabase-
 lignende roller + default ACL (auto-ALL); migrationen køres to gange (idempotens); grants (kun `service_role`
 SELECT/INSERT/UPDATE), RLS + én policy pr. tabel, funktioner SECURITY INVOKER + `search_path`, EXECUTE kun

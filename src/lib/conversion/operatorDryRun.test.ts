@@ -7,11 +7,11 @@ import { createInMemoryConversionPersistence, type ConversionPersistence } from 
 import { CONTRACT_VERSION } from "./contract";
 
 const SECRETS = { dealKeySecret: "d".repeat(64), bookingMatchSecret: "b".repeat(64) };
-const STAGES = ["screened", "1098732868", "1169407502"];
 
 function deals(n: number) {
   return Array.from({ length: n }, (_, i) =>
-    fixtureObservation({ rawDealId: String(i + 1), dealStageId: i % 3 === 0 ? "screened" : "1098732868", bookingNumberRaw: String(70000 + i) }),
+    // Rigtige v3-stage-id'er: hver tredje er "Lead (Aktive)" (PRE_QUOTE), resten "Tilbud sendt".
+    fixtureObservation({ rawDealId: String(i + 1), dealStageId: i % 3 === 0 ? "1098732865" : "1098732868", bookingNumberRaw: String(70000 + i) }),
   );
 }
 
@@ -47,8 +47,8 @@ describe("readOnlyPersistence — skrivemetoder kan ikke nås", () => {
 describe("runOperatorDryRun", () => {
   it("kalder aldrig beginSyncRun/commitSyncRun/failSyncRun — heller ikke ved fejl i kilden", async () => {
     for (const adapter of [
-      createFixtureHubSpotAdapter({ deals: deals(30), stages: STAGES }),
-      createFixtureHubSpotAdapter({ deals: deals(30), stages: STAGES, failOnPageIndex: 0, failReason: "http-5xx" }),
+      createFixtureHubSpotAdapter({ deals: deals(30) }),
+      createFixtureHubSpotAdapter({ deals: deals(30), failOnPageIndex: 0, failReason: "http-5xx" }),
     ]) {
       const { p, calls } = spied(createInMemoryConversionPersistence({ measurementState: null }));
       const r = await runOperatorDryRun({ adapter, persistence: p, countRows: counts({ state: 0, cohort: 0, runs: 0 }), ...SECRETS });
@@ -57,24 +57,22 @@ describe("runOperatorDryRun", () => {
     }
   });
 
-  it("uden singleton-række og med DB-default v2 (kode v3) blokeres dry-run ikke af versionen", async () => {
-    // Repo-kontrakten er (endnu) ufuldstændig ⇒ forventet CONTRACT_INCOMPLETE, men IKKE NOT_ACTIVE/CONTRACT_VERSION_MISMATCH.
+  it("uden singleton-række og med DB-default v2 (kode v3) gennemføres dry-run (PASS) — versionen blokerer kun non-dry-run", async () => {
     for (const state of [null, { status: "NOT_STARTED" as const, contractVersion: 2, measurementStartedAt: null, lastSuccessfulSyncAt: null }]) {
       const r = await runOperatorDryRun({
-        adapter: createFixtureHubSpotAdapter({ deals: deals(3), stages: STAGES }),
+        adapter: createFixtureHubSpotAdapter({ deals: deals(3) }),
         persistence: createInMemoryConversionPersistence({ measurementState: state }),
         countRows: counts({ state: state ? 1 : 0, cohort: 0, runs: 0 }),
         ...SECRETS,
       });
-      expect(r.errorCode).not.toBe("NOT_ACTIVE");
-      expect(r.errorCode).not.toBe("CONTRACT_VERSION_MISMATCH");
+      expect(r).toMatchObject({ verdict: "PASS", errorCode: null, stageContract: "MATCH", writeAttempts: 0, rowsUnchanged: true, observed: 3 });
     }
   });
 
   it("ændrede rækkeantal ⇒ FAIL ROWS_CHANGED; manglende før/efter-tælling ⇒ PRECHECK/POSTCHECK_FAILED", async () => {
     let n = 0;
     const changing = async () => ({ state: 0, cohort: 0, runs: n++ });
-    const base = { adapter: createFixtureHubSpotAdapter({ deals: deals(3), stages: STAGES }), persistence: createInMemoryConversionPersistence({ measurementState: null }), ...SECRETS };
+    const base = { adapter: createFixtureHubSpotAdapter({ deals: deals(3) }), persistence: createInMemoryConversionPersistence({ measurementState: null }), ...SECRETS };
     expect(await runOperatorDryRun({ ...base, countRows: changing })).toMatchObject({ verdict: "FAIL", errorCode: "ROWS_CHANGED", rowsUnchanged: false });
     expect(await runOperatorDryRun({ ...base, countRows: async () => null })).toMatchObject({ verdict: "FAIL", errorCode: "PRECHECK_FAILED" });
     let first = true;
@@ -91,7 +89,7 @@ describe("runOperatorDryRun", () => {
   it("et skriveforsøg (fx en fremtidig motor-regression) giver altid FAIL WRITE_ATTEMPTED og når aldrig persistence", async () => {
     const { p, calls } = spied(createInMemoryConversionPersistence({ measurementState: null }));
     const r = await runOperatorDryRun({
-      adapter: createFixtureHubSpotAdapter({ deals: deals(3), stages: STAGES }),
+      adapter: createFixtureHubSpotAdapter({ deals: deals(3) }),
       persistence: p,
       countRows: counts({ state: 0, cohort: 0, runs: 0 }),
       ...SECRETS,
@@ -106,7 +104,7 @@ describe("runOperatorDryRun", () => {
 
   it("en PASS kræver ok dry-run, 0 skriveforsøg og uændrede rækker", async () => {
     const r = await runOperatorDryRun({
-      adapter: createFixtureHubSpotAdapter({ deals: deals(3), stages: STAGES }),
+      adapter: createFixtureHubSpotAdapter({ deals: deals(3) }),
       persistence: createInMemoryConversionPersistence({ measurementState: null }),
       countRows: counts({ state: 0, cohort: 0, runs: 0 }),
       ...SECRETS,
@@ -115,14 +113,14 @@ describe("runOperatorDryRun", () => {
     expect(r).toMatchObject({ verdict: "PASS", errorCode: null, stageContract: "MATCH", rowsUnchanged: true, writeAttempts: 0 });
   });
 
-  it("CONTRACT_INCOMPLETE rapporteres som stage-kontrakt-verdict", async () => {
+  it("en live stage-liste, der ikke matcher kontrakt v3, rapporteres som CONTRACT_DRIFT", async () => {
     const r = await runOperatorDryRun({
-      adapter: createFixtureHubSpotAdapter({ deals: deals(3), stages: ["1098732868", "1169407502", "ukendt"] }),
+      adapter: createFixtureHubSpotAdapter({ deals: deals(3), stages: [{ id: "1098732868", closed: false }, { id: "ukendt", closed: false }] }),
       persistence: createInMemoryConversionPersistence({ measurementState: null }),
       countRows: counts({ state: 0, cohort: 0, runs: 0 }),
       ...SECRETS,
     });
-    expect(r).toMatchObject({ verdict: "FAIL", stageContract: "CONTRACT_INCOMPLETE", writeAttempts: 0, rowsUnchanged: true });
+    expect(r).toMatchObject({ verdict: "FAIL", stageContract: "CONTRACT_DRIFT", writeAttempts: 0, rowsUnchanged: true });
   });
 });
 

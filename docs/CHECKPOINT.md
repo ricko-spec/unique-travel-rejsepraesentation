@@ -3,7 +3,13 @@
 > Kort hand-off til næste session — **overskrives** ved meningsfulde milepæle (se `docs/WORKING_MODE.md` §5).
 > Ikke en anmodning om godkendelse. Operationel status (hvad er live) står i `docs/STATUS.md`.
 
-**Sidst opdateret:** 2026-09-24 (Gate B2 — migration 013 anvendt i production, Issue #82)
+**Sidst opdateret:** 2026-09-25 (Gate C1 — stagekontrakt v3 + write-free dry-run, Issue #84)
+
+## Gate C1 (Issue #84) — branch `feat/gate-c1-hubspot-dry-run-84`
+
+- Live read-only stage-metadata (18 stages) hentet af Ricko; kontrakt v3 komplet (se
+  `docs/VISION-3.0-PHASE-5-GATE-C1.md`). Snæver adapter, write-free operatør-dry-run, tests og
+  mutationstest grønne. **Udestående:** Rickos live dry-run, review; intet aktiveret, ikke merget.
 
 ## Branch / HEAD
 

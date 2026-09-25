@@ -13,66 +13,99 @@
 // v2 (PR #81 review-runde 1): kvalifikation er et AKTUELT snapshot af dealens
 // stage (ingen historisk dealstage-rekonstruktion — Gate A: UNUSABLE), og
 // udfaldet følger den eksplicitte sandhedstabel i `classifyOutcomeSignal`.
+// v3 (Gate C1, Issue #84): komplet stagekontrakt for alle 18 live-stages med
+// forventet lukke-flag; nye klasser OUTCOME_WITHOUT_QUOTE_EVIDENCE og
+// CLOSED_NO_QUOTE. Production-DB'ens default er bevidst stadig 2, så enhver
+// non-dry-run fejler lukket (CONTRACT_VERSION_MISMATCH) indtil en senere,
+// separat reviewet aktiveringsgate løfter versionen.
 
-export const CONTRACT_VERSION = 2;
+export const CONTRACT_VERSION = 3;
 
-/** Unique Travels HubSpot deal-pipeline. Live-bekræftet, Gate A §3.1. */
+/** Unique Travels HubSpot deal-pipeline. Live-bekræftet, Gate A §3.1 og Gate C1. */
 export const HUBSPOT_PIPELINE_ID = "754595640";
 
-/** "Tilbud sendt" — kvalifikationstærsklen for tilbudskohorten. Gate A §3.1. */
+/** "Tilbud sendt" — første kvalificerende punkt for tilbudskohorten. */
 export const STAGE_QUOTE_SENT = "1098732868";
 
 /**
- * "Opdateret tilbud" — er kvalificeret (tilbud ER sendt), men starter ALDRIG
- * en ny kohorte: en deal der allerede er ENROLLED har frosset kohortestart og
- * eksponering, og en deal der første gang ses her, optages med den aktuelle
- * observation som start — præcis som "Tilbud sendt". Gate A §3.1/§5.
+ * "Opdateret tilbud" — tilbud eller senere; starter ALDRIG en ny kohorte og
+ * nulstiller ALDRIG kohortestart eller eksponering (terminal tilstand i
+ * reduceren + DB-trigger).
  */
 export const STAGE_UPDATED_QUOTE = "1169407502";
 
 /**
- * Hvordan en AKTUEL dealstage i pipelinen fortolkes. Afgøres udelukkende af
+ * Hvordan en AKTUEL dealstage fortolkes (v3, Gate C1). Afgøres udelukkende af
  * dealens stage på observationstidspunktet — aldrig af historik.
  *
- *  - PRE_QUOTE:        åben, tilbud endnu ikke sendt (fx Screened). Må ikke
- *                      være lukket (hs_is_closed=true ⇒ kontraktdrift).
- *  - QUOTE_OR_LATER:   "Tilbud sendt eller senere" — dealen HAR fået tilbud.
- *                      Må være åben eller lukket (fx en solgt-stage).
- *  - CLOSED_AMBIGUOUS: lukket stage der kan nås både før og efter et tilbud
- *                      (typisk tabt/afvist). En deal der FØRSTE gang ses her
- *                      efter baseline, kan ikke afgøres entydigt og udelukkes
- *                      med CLOSED_BEFORE_QUALIFIED_OBSERVATION (aldrig
- *                      stiltiende optaget eller PDF_ONLY). Skal være lukket.
+ *  - PRE_QUOTE: åben; tilbud endnu ikke sendt. Deal forbliver ELIGIBLE_PENDING.
+ *  - QUOTE_OR_LATER: "Tilbud sendt"/"Opdateret tilbud". Første prospektive
+ *    observation her optager dealen (kohortestart = observationen).
+ *  - OUTCOME_WITHOUT_QUOTE_EVIDENCE: en senere fase eller et udfald (solgt,
+ *    billetter, afslag, aflyst, på rejse, hjemvendt) — åben ELLER lukket — der
+ *    IKKE beviser, at "Tilbud sendt" er observeret. En ny eller pending deal,
+ *    der første gang ses her, udelukkes (EXCLUDED/
+ *    CLOSED_BEFORE_QUALIFIED_OBSERVATION) og optages aldrig. (Erstatter v2's
+ *    CLOSED_AMBIGUOUS, som kun kunne udtrykke lukkede stages.)
+ *  - CLOSED_NO_QUOTE: lukket UDEN tilbud (Screenet, Dubletter, Test Leads). Ved
+ *    baseline PRE_START_EXISTING; derefter ELIGIBLE_PENDING — optages aldrig på
+ *    denne stage alene, kun hvis dealen senere observeres i QUOTE_OR_LATER.
  */
-export type StageClass = "PRE_QUOTE" | "QUOTE_OR_LATER" | "CLOSED_AMBIGUOUS";
+export type StageClass = "PRE_QUOTE" | "QUOTE_OR_LATER" | "OUTCOME_WITHOUT_QUOTE_EVIDENCE" | "CLOSED_NO_QUOTE";
+
+/** Én stage i kontrakten: klasse + det forventede lukke-flag (= live metadata.isClosed). */
+export type StageContractEntry = { class: StageClass; closed: boolean; label: string };
 
 export type PipelineStageContract = {
   pipelineId: string;
-  /**
-   * `true` først når HVER live-stage i pipelinen er klassificeret herunder og
-   * bekræftet af Ricko ved Gate C (live-metadata må ikke læses i Gate B).
-   * `false` ⇒ enhver ikke-dry-run sync fejler lukket med CONTRACT_INCOMPLETE.
-   */
+  /** `true` når HVER live-stage er klassificeret. `false` ⇒ enhver sync fejler lukket (CONTRACT_INCOMPLETE). */
   complete: boolean;
-  stages: Readonly<Record<string, StageClass>>;
+  stages: Readonly<Record<string, StageContractEntry>>;
 };
 
 /**
- * Den eneste kilde til "Tilbud sendt eller senere". Kun de to stages Gate A
- * har live-bekræftet er udfyldt. De øvrige stage-id'er i pipelinen (Screened,
- * solgt, tabt/afvist m.fl.) er IKKE kendt i repoet — Gate A brugte historik
- * og havde derfor ikke brug for dem. De skal tilføjes her fra live-metadata
- * ved Gate C (med CONTRACT_VERSION-bump), og `complete` sættes til `true`
- * først da. Indtil da kan ingen officiel sync gennemføres — bevidst fail-closed.
+ * v3: komplet klassifikation af alle 18 live-stages i pipeline 754595640
+ * (read-only metadata hentet af Ricko 2026-09-25, Issue #84). `closed` er
+ * stagens metadata.isClosed; hver deals hs_is_closed skal matche den, og den
+ * live stage-liste (id + closed) skal matche kontrakten 1:1 — ellers
+ * kontraktdrift. Vurderingen pr. stage er dokumenteret i
+ * docs/VISION-3.0-PHASE-5-GATE-C1.md.
  */
 export const PIPELINE_STAGE_CONTRACT: PipelineStageContract = {
   pipelineId: HUBSPOT_PIPELINE_ID,
-  complete: false,
+  complete: true,
   stages: {
-    [STAGE_QUOTE_SENT]: "QUOTE_OR_LATER",
-    [STAGE_UPDATED_QUOTE]: "QUOTE_OR_LATER",
+    "1098732865": { class: "PRE_QUOTE", closed: false, label: "Lead (Aktive)" },
+    "1098732866": { class: "PRE_QUOTE", closed: false, label: "Assigned" },
+    "1169086048": { class: "PRE_QUOTE", closed: false, label: "Forsøgt kontaktet (1)" },
+    "1400145244": { class: "PRE_QUOTE", closed: false, label: "Forsøgt kontaktet (2)" },
+    "1110279228": { class: "PRE_QUOTE", closed: false, label: "Følg op" },
+    "1098732867": { class: "PRE_QUOTE", closed: false, label: "Lav tilbud" },
+    [STAGE_QUOTE_SENT]: { class: "QUOTE_OR_LATER", closed: false, label: "Tilbud sendt" },
+    [STAGE_UPDATED_QUOTE]: { class: "QUOTE_OR_LATER", closed: false, label: "Opdateret tilbud" },
+    "1098732870": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Solgt" },
+    "1419023367": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Solgt (I andet bookingnr.)" },
+    "1407668785": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Billetter sendt" },
+    "1354831680": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Afslag (Alle)" },
+    "1386314544": { class: "CLOSED_NO_QUOTE", closed: true, label: "Screenet" },
+    "1110279229": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: false, label: "På rejse" },
+    "1110279231": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: false, label: "Hjemvendt" },
+    "1110279230": { class: "OUTCOME_WITHOUT_QUOTE_EVIDENCE", closed: true, label: "Aflyst rejse (Alle)" },
+    "1110279232": { class: "CLOSED_NO_QUOTE", closed: true, label: "Dubletter" },
+    "1110279233": { class: "CLOSED_NO_QUOTE", closed: true, label: "Test Leads" },
   },
 };
+
+/** Intern konsistens: PRE_QUOTE skal være åben, CLOSED_NO_QUOTE lukket, mindst én QUOTE_OR_LATER. */
+export function stageContractViolation(c: PipelineStageContract): string | null {
+  const entries = Object.values(c.stages);
+  for (const e of entries) {
+    if (e.class === "PRE_QUOTE" && e.closed) return "pre_quote_must_be_open";
+    if (e.class === "CLOSED_NO_QUOTE" && !e.closed) return "closed_no_quote_must_be_closed";
+  }
+  if (c.complete && !entries.some((e) => e.class === "QUOTE_OR_LATER")) return "no_qualifying_stage";
+  return null;
+}
 
 /** TravelWire-bookingnummer-property. Semantik live-bekræftet, Gate A §3.1. */
 export const BOOKING_NUMBER_PROPERTY = "unique_travel_bookingno";

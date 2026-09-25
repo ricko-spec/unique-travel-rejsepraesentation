@@ -116,12 +116,14 @@ export function createHubSpotLiveAdapter(options: {
       if (!p || typeof p !== "object" || typeof p.id !== "string" || !Array.isArray(p.stages)) {
         return { ok: false, reason: "page-inconsistent" };
       }
-      const stageIds: string[] = [];
-      for (const s of p.stages as { id?: unknown }[]) {
+      const stages: { id: string; closed: boolean }[] = [];
+      for (const s of p.stages as { id?: unknown; metadata?: { isClosed?: unknown } }[]) {
         if (!s || typeof s.id !== "string" || s.id.trim() === "") return { ok: false, reason: "page-inconsistent" };
-        stageIds.push(s.id);
+        const closed = parseBool(s.metadata?.isClosed);
+        if (closed === null) return { ok: false, reason: "page-inconsistent" };
+        stages.push({ id: s.id, closed });
       }
-      return { ok: true, pipelineId: p.id, stageIds };
+      return { ok: true, pipelineId: p.id, stages };
     },
 
     async readDealsPage(cursor: string | null): Promise<DealPageResult> {
