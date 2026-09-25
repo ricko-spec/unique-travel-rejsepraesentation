@@ -29,7 +29,7 @@ function spied(p: ConversionPersistence) {
 }
 
 // runOperatorDryRun bruger altid repo-kontrakten (PIPELINE_STAGE_CONTRACT).
-const counts = (c: RowCounts) => async () => c;
+const counts = (c: RowCounts) => async () => ({ ok: true as const, counts: c });
 
 describe("readOnlyPersistence — skrivemetoder kan ikke nås", () => {
   it("begin/commit/fail kaster og tælles; læsemetoder går igennem", async () => {
@@ -71,15 +71,20 @@ describe("runOperatorDryRun", () => {
 
   it("ændrede rækkeantal ⇒ FAIL ROWS_CHANGED; manglende før/efter-tælling ⇒ PRECHECK/POSTCHECK_FAILED", async () => {
     let n = 0;
-    const changing = async () => ({ state: 0, cohort: 0, runs: n++ });
+    const changing = async () => ({ ok: true as const, counts: { state: 0, cohort: 0, runs: n++ } });
     const base = { adapter: createFixtureHubSpotAdapter({ deals: deals(3) }), persistence: createInMemoryConversionPersistence({ measurementState: null }), ...SECRETS };
     expect(await runOperatorDryRun({ ...base, countRows: changing })).toMatchObject({ verdict: "FAIL", errorCode: "ROWS_CHANGED", rowsUnchanged: false });
-    expect(await runOperatorDryRun({ ...base, countRows: async () => null })).toMatchObject({ verdict: "FAIL", errorCode: "PRECHECK_FAILED" });
+    expect(await runOperatorDryRun({ ...base, countRows: async () => null as never })).toMatchObject({ verdict: "FAIL", errorCode: "PRECHECK_FAILED", precheckFailures: [] });
+    // Ugyldige tal i et "ok"-svar er stadig fail-closed.
+    expect(await runOperatorDryRun({ ...base, countRows: async () => ({ ok: true, counts: { state: -1, cohort: 0, runs: 0 } }) })).toMatchObject({ verdict: "FAIL", errorCode: "PRECHECK_FAILED" });
+    // Ukendte tabeller/kategorier (fx rå tekst) filtreres væk fra rapporten.
+    const junk = await runOperatorDryRun({ ...base, countRows: async () => ({ ok: false, failures: [{ table: "x?select=*" as never, category: "permission denied" as never }] }) });
+    expect(junk).toMatchObject({ verdict: "FAIL", errorCode: "PRECHECK_FAILED", precheckFailures: [] });
     let first = true;
     const postFails = async () => {
       if (first) {
         first = false;
-        return { state: 0, cohort: 0, runs: 0 };
+        return { ok: true as const, counts: { state: 0, cohort: 0, runs: 0 } };
       }
       throw new Error("db nede");
     };
@@ -151,6 +156,8 @@ describe("formatOperatorReport — kun small-cell-sikre aggregater", () => {
     writeAttempts: 0,
     pre: { state: 0, cohort: 0, runs: 0 },
     post: { state: 0, cohort: 0, runs: 0 },
+    precheckFailures: null,
+    postcheckFailures: null,
     rowsUnchanged: true,
   };
 

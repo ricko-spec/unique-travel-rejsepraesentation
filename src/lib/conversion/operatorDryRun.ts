@@ -11,14 +11,88 @@
 // Output er KUN aggregater. `formatOperatorReport` small-cell-undertrykker
 // alle tal 1–9 (og booket, hvis komplementet er 1–9), så resultatet kan
 // dokumenteres offentligt. Ingen id'er, nøgler, bookingnumre eller payloads.
+//
+// Før/efter-tællingen er kategorisk: ved fejl rapporteres KUN tabelnavn +
+// kategori (AUTH/PERMISSION/TABLE_NOT_FOUND/NETWORK/INVALID_RESPONSE), udledt af
+// HTTP-status og PostgREST/Postgres-fejlkode — aldrig af fejltekst. Rå
+// fejlbeskeder, URL'er, headers og nøgler forlader aldrig klassifikationen.
 
 import { SMALL_CELL_THRESHOLD } from "./contract";
 import type { HubSpotReadAdapter } from "./hubspotAdapter";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ConversionPersistence } from "./persistence";
 import { runConversionSync, type DryRunSummary } from "./syncEngine";
 import type { SyncRunErrorCode } from "./types";
 
 export type RowCounts = { state: number; cohort: number; runs: number };
+
+/** De tre tabeller, der tælles før og efter — fast rækkefølge. */
+export const COUNT_TABLES = ["conversion_measurement_state", "conversion_deal_cohort", "conversion_sync_runs"] as const;
+export type CountTable = (typeof COUNT_TABLES)[number];
+export type CountFailureCategory = "AUTH" | "PERMISSION" | "TABLE_NOT_FOUND" | "NETWORK" | "INVALID_RESPONSE";
+export type CountFailure = { table: CountTable; category: CountFailureCategory };
+export type RowCountResult = { ok: true; counts: RowCounts } | { ok: false; failures: CountFailure[] };
+/** Den del af et postgrest-js-svar, klassifikationen må se (status, count, fejlkode). */
+export type TableCountResponse = { status?: unknown; count?: unknown; error?: unknown };
+
+const AUTH_CODES = new Set(["PGRST300", "PGRST301", "PGRST302", "PGRST303"]);
+const PERMISSION_CODES = new Set(["42501"]);
+const NOT_FOUND_CODES = new Set(["42P01", "PGRST205"]);
+
+/**
+ * Klassificerer ét HEAD-optællingssvar. Bemærk postgrest-js ved HEAD: der er
+ * ingen body, så fejlkoden mangler typisk og kun HTTP-status bærer information;
+ * en tom 404 omskrives af klienten til status 204 uden count og uden fejl, og en
+ * fanget fetch-fejl giver status 0. Kun kode og status læses — aldrig tekst.
+ */
+export function classifyCountResponse(r: unknown): { ok: true; count: number } | { ok: false; category: CountFailureCategory } {
+  if (typeof r !== "object" || r === null) return { ok: false, category: "INVALID_RESPONSE" };
+  const { status, count, error } = r as TableCountResponse;
+  const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+  if (typeof code === "string") {
+    if (PERMISSION_CODES.has(code)) return { ok: false, category: "PERMISSION" };
+    if (NOT_FOUND_CODES.has(code)) return { ok: false, category: "TABLE_NOT_FOUND" };
+    if (AUTH_CODES.has(code)) return { ok: false, category: "AUTH" };
+  }
+  if (status === 0) return { ok: false, category: "NETWORK" };
+  if (status === 401) return { ok: false, category: "AUTH" };
+  if (status === 403) return { ok: false, category: "PERMISSION" };
+  if (status === 404 || (status === 204 && count == null && error == null)) return { ok: false, category: "TABLE_NOT_FOUND" };
+  if (status === 200 && error == null && typeof count === "number" && Number.isInteger(count) && count >= 0) return { ok: true, count };
+  return { ok: false, category: "INVALID_RESPONSE" };
+}
+
+/** Tæller de tre tabeller; ved fejl kun tabel + kategori (kastet exception ⇒ NETWORK). */
+export async function countConversionTables(countOne: (table: CountTable) => Promise<unknown>): Promise<RowCountResult> {
+  const results = await Promise.all(
+    COUNT_TABLES.map(async (table) => {
+      try {
+        return { table, r: classifyCountResponse(await countOne(table)) };
+      } catch {
+        return { table, r: { ok: false as const, category: "NETWORK" as const } };
+      }
+    }),
+  );
+  const failures: CountFailure[] = [];
+  const n: number[] = [];
+  for (const { table, r } of results) {
+    if (r.ok) n.push(r.count);
+    else failures.push({ table, category: r.category });
+  }
+  if (failures.length) return { ok: false, failures };
+  return { ok: true, counts: { state: n[0], cohort: n[1], runs: n[2] } };
+}
+
+/**
+ * Read-only HEAD-optælling (count=exact) — ingen rækker hentes. Ingen retry:
+ * en fejl rapporteres kategorisk og dry-run'en fejler lukket.
+ */
+export function supabaseTableCounter(client: SupabaseClient): (table: CountTable) => Promise<unknown> {
+  return async (table) => {
+    const { status, count, error } = await client.from(table).select("*", { count: "exact", head: true }).retry(false);
+    return { status, count, error };
+  };
+}
 
 export type OperatorDryRunReport = {
   verdict: "PASS" | "FAIL";
@@ -34,6 +108,9 @@ export type OperatorDryRunReport = {
   writeAttempts: number;
   pre: RowCounts | null;
   post: RowCounts | null;
+  /** Kun tabel + kategori; [] = tællingen fejlede uden kategori (fx exception). */
+  precheckFailures: CountFailure[] | null;
+  postcheckFailures: CountFailure[] | null;
   rowsUnchanged: boolean;
 };
 
@@ -58,7 +135,7 @@ export function readOnlyPersistence(inner: ConversionPersistence): ConversionPer
 export async function runOperatorDryRun(deps: {
   adapter: HubSpotReadAdapter;
   persistence: ConversionPersistence;
-  countRows: () => Promise<RowCounts | null>;
+  countRows: () => Promise<RowCountResult>;
   dealKeySecret: string;
   bookingMatchSecret: string;
   now?: Date;
@@ -80,11 +157,14 @@ export async function runOperatorDryRun(deps: {
     writeAttempts: 0,
     pre: null,
     post: null,
+    precheckFailures: null,
+    postcheckFailures: null,
     rowsUnchanged: false,
   };
 
-  const pre = await safeCount(deps.countRows);
-  if (!pre) return { ...base, errorCode: "PRECHECK_FAILED" };
+  const preResult = await safeCount(deps.countRows);
+  if (!preResult.ok) return { ...base, errorCode: "PRECHECK_FAILED", precheckFailures: preResult.failures };
+  const pre = preResult.counts;
 
   let outcome;
   try {
@@ -98,10 +178,18 @@ export async function runOperatorDryRun(deps: {
     outcome = { ok: false as const, errorCode: "UNKNOWN" as const, auditRecorded: false };
   }
 
-  const post = await safeCount(deps.countRows);
+  const postResult = await safeCount(deps.countRows);
+  const post = postResult.ok ? postResult.counts : null;
   const writeAttempts = guarded.writeAttempts();
   const rowsUnchanged = post !== null && pre.state === post.state && pre.cohort === post.cohort && pre.runs === post.runs;
-  const report: OperatorDryRunReport = { ...base, pre, post, writeAttempts, rowsUnchanged };
+  const report: OperatorDryRunReport = {
+    ...base,
+    pre,
+    post,
+    postcheckFailures: postResult.ok ? null : postResult.failures,
+    writeAttempts,
+    rowsUnchanged,
+  };
 
   if (outcome.ok) {
     Object.assign(report, {
@@ -128,14 +216,33 @@ export async function runOperatorDryRun(deps: {
   return { ...report, verdict: "PASS", errorCode: null };
 }
 
-async function safeCount(fn: () => Promise<RowCounts | null>): Promise<RowCounts | null> {
+/** Fail-closed: exception, ugyldig form eller ugyldige tal ⇒ fejl (ukategoriseret = []). */
+async function safeCount(fn: () => Promise<RowCountResult>): Promise<RowCountResult> {
   try {
-    const c = await fn();
-    if (!c || ![c.state, c.cohort, c.runs].every((n) => Number.isInteger(n) && n >= 0)) return null;
-    return c;
+    const r = await fn();
+    if (r && r.ok === true) {
+      const c = r.counts;
+      if (c && [c.state, c.cohort, c.runs].every((n) => Number.isInteger(n) && n >= 0)) return { ok: true, counts: c };
+      return { ok: false, failures: [] };
+    }
+    if (r && r.ok === false && Array.isArray(r.failures)) return { ok: false, failures: sanitizeFailures(r.failures) };
+    return { ok: false, failures: [] };
   } catch {
-    return null;
+    return { ok: false, failures: [] };
   }
+}
+
+const CATEGORIES: readonly CountFailureCategory[] = ["AUTH", "PERMISSION", "TABLE_NOT_FOUND", "NETWORK", "INVALID_RESPONSE"];
+/** Kun kendte tabelnavne og kategorier slipper igennem til rapporten. */
+function sanitizeFailures(fs: CountFailure[]): CountFailure[] {
+  return fs
+    .filter((f) => (COUNT_TABLES as readonly string[]).includes(f?.table) && CATEGORIES.includes(f?.category))
+    .map((f) => ({ table: f.table, category: f.category }));
+}
+
+function formatFailures(label: string, fs: CountFailure[] | null): string[] {
+  if (fs === null) return [];
+  return [`${label}: ${fs.length ? fs.map((f) => `${f.table}=${f.category}`).join(" · ") : "IKKE KATEGORISERET"}`];
 }
 
 /** Small-cell: 1–9 vises aldrig som tal. 0 og ≥ 10 vises. */
@@ -168,6 +275,8 @@ export function formatOperatorReport(r: OperatorDryRunReport): string[] {
     );
   }
   lines.push(
+    ...formatFailures("precheck-fejl", r.precheckFailures),
+    ...formatFailures("postcheck-fejl", r.postcheckFailures),
     `skriveforsøg: ${r.writeAttempts}`,
     `rækker før  (state/cohort/runs): ${r.pre ? `${r.pre.state}/${r.pre.cohort}/${r.pre.runs}` : "—"}`,
     `rækker efter (state/cohort/runs): ${r.post ? `${r.post.state}/${r.post.cohort}/${r.post.runs}` : "—"}`,

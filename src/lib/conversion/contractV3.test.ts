@@ -201,7 +201,7 @@ describe("end-to-end: live-svarform (18 stages) → live-adapter → operatør-d
     const r = await runOperatorDryRun({
       adapter: adapter(),
       persistence: createInMemoryConversionPersistence({ measurementState: null }),
-      countRows: async () => ({ state: 0, cohort: 0, runs: 0 }),
+      countRows: async () => ({ ok: true, counts: { state: 0, cohort: 0, runs: 0 } }),
       dealKeySecret: "d".repeat(64),
       bookingMatchSecret: "b".repeat(64),
     });

@@ -13,7 +13,12 @@
 import { randomBytes } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { createHubSpotLiveAdapter } from "../../src/lib/conversion/hubspotLiveAdapter";
-import { formatOperatorReport, runOperatorDryRun, type RowCounts } from "../../src/lib/conversion/operatorDryRun";
+import {
+  countConversionTables,
+  formatOperatorReport,
+  runOperatorDryRun,
+  supabaseTableCounter,
+} from "../../src/lib/conversion/operatorDryRun";
 import { supabaseConversionPersistence } from "../../src/lib/conversion/persistence";
 
 const SUPABASE_URL = "https://iunixfpthdftmkgpugex.supabase.co";
@@ -34,18 +39,9 @@ async function main(): Promise<number> {
   const dealKeySecret = randomBytes(32).toString("hex");
 
   const supabase = createClient(SUPABASE_URL, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const countRows = async (): Promise<RowCounts | null> => {
-    const count = async (table: string) => {
-      const { count: n, error } = await supabase.from(table).select("*", { count: "exact", head: true });
-      return error || typeof n !== "number" ? null : n;
-    };
-    const [state, cohort, runs] = await Promise.all([
-      count("conversion_measurement_state"),
-      count("conversion_deal_cohort"),
-      count("conversion_sync_runs"),
-    ]);
-    return state === null || cohort === null || runs === null ? null : { state, cohort, runs };
-  };
+  // Kategorisk før/efter-tælling: ved fejl kun tabel + AUTH/PERMISSION/
+  // TABLE_NOT_FOUND/NETWORK/INVALID_RESPONSE — aldrig rå fejltekst.
+  const countRows = () => countConversionTables(supabaseTableCounter(supabase));
 
   let adapter;
   try {

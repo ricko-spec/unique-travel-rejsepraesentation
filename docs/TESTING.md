@@ -381,6 +381,12 @@ endpoints, metoder, ingen query-parametre, præcis seks properties, stabil sorte
 `operatorDryRun.test.ts`: read-only-værn, ingen begin/commit/fail, uden singleton, rækkeændring/
 før-/efter-fejl ⇒ FAIL, small-cell-output. **Mutation: 22 mutanter, alle dræbt** (to overlevende
 i første kørsel lukket med nye tests). Hele suiten: 1014/1014.
+**Kategoriseret precheck (efter live-forsøg 1 = PRECHECK_FAILED):** `operatorPrecheck.test.ts`
+(skrevet først, røde før implementeringen): status/kode → AUTH/PERMISSION/TABLE_NOT_FOUND/NETWORK/
+INVALID_RESPONSE, fejl pr. tabel i fast rækkefølge, exception ⇒ NETWORK, ende-til-ende gennem den
+ægte supabase-js med falsk fetch (HEAD, `count=exact`, ingen retry, HEAD-404→204-omskrivningen), og
+at output aldrig indeholder rå fejltekst, URL, headers, nøgler eller navne. **Mutation: 22 mutanter
+af mapning/rapport, alle dræbt** (to overlevende lukket med nye cases). Hele suiten: 1076/1076.
 **Rickos to beslutninger før dry-run:** `postEnrollment.test.ts` (14 tests, skrevet først — 13 røde
 før implementeringen): uafklaret udfaldssignal for "Solgt (andet booking nr.)" (også ved
 lukket-tabt), markering ved senere status og ved optagelse, markering fjernes aldrig og første årsag

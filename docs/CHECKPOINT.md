@@ -11,7 +11,9 @@
   `docs/VISION-3.0-PHASE-5-GATE-C1.md`). Snæver adapter, write-free operatør-dry-run, tests og
   mutationstest grønne. Rickos to beslutninger (uafklaret "Solgt (andet booking nr.)", ugyldiggørelse
   ved Dubletter/Test Leads) implementeret som efterfølgende udelukkelse; persistens kræver migration
-  014 ved aktivering. **Udestående:** Rickos live dry-run, review; intet aktiveret, ikke merget.
+  014 ved aktivering. Live-forsøg 1 (head `560fced`) fejlede sikkert med `PRECHECK_FAILED`
+  (0 skrivninger, ingen DB-ændring); før/efter-tællingen rapporterer nu tabel + kategori.
+  **Udestående:** Rickos live-forsøg 2, review; intet aktiveret, ikke merget.
 
 ## Branch / HEAD
 

@@ -113,10 +113,25 @@ bevidst stadig 2** (ingen DB-ændring i C1), så enhver non-dry-run fejler lukke
   `failSyncRun` er erstattet af et værn, der kaster og tælles. Rækker i de tre tabeller tælles før
   og efter; enhver forskel eller ethvert skriveforsøg ⇒ `FAIL`.
 - Output: kun aggregater; 1–9 vises som `<10` (booket også, hvis komplementet er 1–9).
+- Før/efter-tællingen er **kategorisk**: fejler en optælling, rapporteres kun tabel + kategori,
+  fx `precheck-fejl: conversion_sync_runs=AUTH`. Kategorier: `AUTH` (401 / PGRST30x — nøgle
+  afvist, eller ikke en service-role-/secret-nøgle for projektet), `PERMISSION` (403 / 42501),
+  `TABLE_NOT_FOUND` (404 / 42P01 / PGRST205 — inkl. postgrest-js' HEAD-omskrivning af tom 404
+  til 204 uden count), `NETWORK` (fetch-fejl / status 0 / exception), `INVALID_RESPONSE` (alt
+  andet, fx 5xx eller manglende/ugyldigt count). Udledes kun af status og fejlkode — aldrig af
+  fejltekst; URL, headers, nøgler og rå DB-fejl forlader aldrig klassifikationen. Tællingen er
+  HEAD med `count=exact` (ingen rækker hentes) og uden retry. Stadig fail-closed.
 
 ## 5. Dry-run-resultat
 
-*Udfyldes efter Rickos live-kørsel (kun sanitiserede aggregater).*
+**Forsøg 1 (head `560fced`, 2026-09-25):** `VERDICT: FAIL (PRECHECK_FAILED)` · stage-kontrakt
+`NOT_REACHED` · skriveforsøg 0 · exit 1. Fejlede sikkert i før-tællingen, før HubSpot blev kaldt.
+Rickos uafhængige efterkontrol: state/cohort/runs 0/0/0, 14 migrationer, ingen cron — ingen
+ændring. Værktøjet kasserede dengang al fejlinformation, så årsagen kunne ikke udledes uden en ny
+kørsel; kodeanalysen viste, at en HEAD-fejl i postgrest-js kun bærer HTTP-status. Rettet
+test-first med kategorisk diagnose pr. tabel (§4). Ingen live-kørsel foretaget af agenten.
+
+**Forsøg 2:** *udfyldes efter Rickos kørsel (kun sanitiserede aggregater).*
 
 ## 6. Stadig ikke aktiveret
 
