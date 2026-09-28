@@ -12,7 +12,9 @@ import { buildConversionAggregate, type CohortAggregateRow } from "./aggregate";
 import { CONTRACT_VERSION } from "./contract";
 import { COHORT_COLUMNS, parseCohortRow, type CohortRawRow } from "./persistence";
 import type { MeasurementState } from "./types";
-import { toConversionWire, type ConversionWire } from "./wire";
+import { SMALL_CELL_THRESHOLD } from "./contract";
+import { SYNC_RUN_ERROR_CODES, type SyncRunErrorCode } from "./types";
+import { toConversionWire, type ConversionWire, type LastSyncRunWire } from "./wire";
 
 export type ConversionAdminResult = { ok: true; wire: ConversionWire } | { ok: false; reason: "degraded" };
 
@@ -31,6 +33,40 @@ function parseIso(v: string | null): Date | null | "invalid" {
   if (v === null) return null;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? "invalid" : d;
+}
+
+/**
+ * Seneste sync-kørsel (Gate D). Streng parsing: en uventet værdi ⇒ fejl
+ * (degraded), aldrig en stille default. Manglende tabel ⇒ ingen kørsel.
+ */
+async function loadLastSyncRun(supabase: SupabaseClient): Promise<{ ok: true; run: LastSyncRunWire | null } | { ok: false }> {
+  const { data, error } = await supabase
+    .from("conversion_sync_runs")
+    .select("status, started_at, finished_at, error_code, is_baseline, deals_observed_count")
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return isMissingTableError(error) ? { ok: true, run: null } : { ok: false };
+  if (!data) return { ok: true, run: null };
+  const started = parseIso(data.started_at);
+  const finished = parseIso(data.finished_at);
+  if (started === null || started === "invalid" || finished === "invalid") return { ok: false };
+  if (data.status !== "RUNNING" && data.status !== "SUCCEEDED" && data.status !== "FAILED") return { ok: false };
+  if (data.error_code !== null && !SYNC_RUN_ERROR_CODES.includes(data.error_code as SyncRunErrorCode)) return { ok: false };
+  if (data.is_baseline !== null && typeof data.is_baseline !== "boolean") return { ok: false };
+  const n = data.deals_observed_count;
+  if (n !== null && !(Number.isInteger(n) && n >= 0)) return { ok: false };
+  return {
+    ok: true,
+    run: {
+      status: data.status,
+      startedAt: started.toISOString(),
+      finishedAt: finished ? finished.toISOString() : null,
+      errorCode: data.error_code as SyncRunErrorCode | null,
+      isBaseline: data.is_baseline,
+      observed: n === null || (n > 0 && n < SMALL_CELL_THRESHOLD) ? null : n,
+    },
+  };
 }
 
 export async function loadConversionAdminOverview(
@@ -73,10 +109,17 @@ export async function loadConversionAdminOverview(
     lastSuccessfulSyncAt: lastSync,
   };
 
+  const lastRunRes = await loadLastSyncRun(supabase);
+  if (!lastRunRes.ok) {
+    console.error("[conversion] læsning af seneste sync-kørsel fejlede");
+    return { ok: false, reason: "degraded" };
+  }
+  const lastRun = lastRunRes.run;
+
   // Ingen baseline endnu (NOT_STARTED, eller ACTIVE der afventer baseline):
-  // der findes ingen kohorte at vise.
+  // der findes ingen kohorte at vise — men et mislykket baseline-forsøg vises.
   if (!measurement.measurementStartedAt) {
-    return { ok: true, wire: toConversionWire(buildConversionAggregate([], measurement, asOf)) };
+    return { ok: true, wire: toConversionWire(buildConversionAggregate([], measurement, asOf), lastRun) };
   }
 
   type Raw = CohortRawRow;
@@ -101,5 +144,5 @@ export async function loadConversionAdminOverview(
     if (!parsed) return { ok: false, reason: "degraded" };
     rows.push(parsed.state);
   }
-  return { ok: true, wire: toConversionWire(buildConversionAggregate(rows, measurement, asOf)) };
+  return { ok: true, wire: toConversionWire(buildConversionAggregate(rows, measurement, asOf), lastRun) };
 }

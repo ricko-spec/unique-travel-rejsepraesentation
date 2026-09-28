@@ -135,6 +135,58 @@ describe("GET /admin/api/conversion → ConversionBody (faktisk JSON-form)", () 
     expect(render(json)).toContain('data-freshness="stale"');
   });
 
+  describe("Gate D (Issue #89) — seneste sync-kørsel som fejlalarm", () => {
+    const run = (over: Record<string, unknown> = {}) => ({
+      status: "SUCCEEDED",
+      started_at: "2027-03-01T03:00:00Z",
+      finished_at: "2027-03-01T03:02:00Z",
+      error_code: null,
+      is_baseline: true,
+      deals_observed_count: 2652,
+      ...over,
+    });
+    const awaiting = { ...ACTIVE, measurement_started_at: null, last_successful_sync_at: null };
+
+    it("mislykket baseline vises som fejl med kategorisk kode, mens målingen afventer baseline", async () => {
+      const { json } = await routeJson(
+        fakeAdminSupabase({ stateRow: awaiting, lastRun: run({ status: "FAILED", error_code: "HTTP_5XX", deals_observed_count: null }) }),
+      );
+      const html = render(json);
+      expect(html).toContain('data-state="awaiting-baseline"');
+      expect(html).toContain('data-last-run="failed"');
+      expect(html).toContain("fejlkode HTTP_5XX");
+      expect(html).toContain("baseline-synkronisering");
+    });
+
+    it("gennemført kørsel viser tidspunkt og observeret total; 1–9 vises aldrig", async () => {
+      const ok = render((await routeJson(fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: monthRows("ONLINE", "2027-02-20T03:00:00Z", 15, 0, 1), lastRun: run({ is_baseline: false }) }))).json);
+      expect(ok).toContain('data-last-run="succeeded"');
+      expect(ok).toContain("2652 deals observeret");
+      const small = render((await routeJson(fakeAdminSupabase({ stateRow: awaiting, lastRun: run({ deals_observed_count: 7 }) }))).json);
+      expect(small).toContain('data-last-run="succeeded"');
+      expect(small).not.toContain("7 deals");
+    });
+
+    it("igangværende kørsel vises; ugyldig kørselsrække eller læsefejl ⇒ degraded (500)", async () => {
+      expect(render((await routeJson(fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: [], lastRun: run({ status: "RUNNING", finished_at: null }) }))).json)).toContain(
+        'data-last-run="running"',
+      );
+      for (const client of [
+        fakeAdminSupabase({ stateRow: ACTIVE, lastRun: run({ error_code: "NOGET_ANDET" }) }),
+        fakeAdminSupabase({ stateRow: ACTIVE, lastRun: run({ status: "HMM" }) }),
+        fakeAdminSupabase({ stateRow: ACTIVE, lastRun: run({ started_at: "x" }) }),
+        fakeAdminSupabase({ stateRow: ACTIVE, lastRunError: { code: "53300", message: "intern" } }),
+      ]) {
+        expect((await routeJson(client)).status).toBe(500);
+      }
+    });
+
+    it("ingen singleton ⇒ kørsler læses ikke (NOT_STARTED)", async () => {
+      const { json } = await routeJson(fakeAdminSupabase({ stateRow: null, lastRunError: { code: "53300", message: "må ikke læses" } }));
+      expect(render(json)).toContain('data-state="not-started"');
+    });
+  });
+
   it("degraded ⇒ 500 med generisk tekst (ingen interne detaljer)", async () => {
     const { status, json } = await routeJson(fakeAdminSupabase({ stateError: { code: "53300", message: "intern hemmelig detalje" } }));
     expect(status).toBe(500);

@@ -103,6 +103,37 @@ export function ConversionMeasurement() {
 
 const NOTE_STYLE = { background: "rgba(0,78,80,0.04)", color: "var(--grey-text)" } as const;
 
+/**
+ * Seneste sync-kørsel (Gate D, Issue #89): fejlalarmering i admin. En FAILED-
+ * kørsel vises som fejl med kategorisk kode; aldrig tal for optagne/bookede.
+ */
+export function LastRunNotice({ run }: { run: ConversionWire["lastRun"] }) {
+  if (!run) return null;
+  const when = formatIsoDate(run.finishedAt ?? run.startedAt, true);
+  const kind = run.isBaseline ? "baseline-synkronisering" : "synkronisering";
+  if (run.status === "FAILED") {
+    return (
+      <div className="admin-error" style={{ marginBottom: 12 }} data-last-run="failed">
+        Seneste {kind} fejlede {when} (fejlkode {run.errorCode ?? "ukendt"}). Intet blev ændret i målingen; næste
+        planlagte kørsel forsøger igen.
+      </div>
+    );
+  }
+  if (run.status === "RUNNING") {
+    return (
+      <div style={{ fontSize: 12, color: "var(--grey-text)", marginBottom: 12 }} data-last-run="running">
+        En synkronisering er i gang (startet {formatIsoDate(run.startedAt, true)}).
+      </div>
+    );
+  }
+  return (
+    <div style={{ fontSize: 12, color: "var(--grey-text)", marginBottom: 12 }} data-last-run="succeeded">
+      Seneste {kind} gennemført {when}
+      {run.observed !== null ? ` · ${run.observed} deals observeret i pipelinen` : ""}.
+    </div>
+  );
+}
+
 export function ConversionBody({ wire }: { wire: ConversionWire }) {
   const m = wire.measurement;
   if (m.status === "NOT_STARTED") {
@@ -115,8 +146,11 @@ export function ConversionBody({ wire }: { wire: ConversionWire }) {
   }
   if (!m.measurementStartedAt) {
     return (
-      <div className="admin-success" style={NOTE_STYLE} data-state="awaiting-baseline">
-        Målingen er aktiveret og afventer den første officielle baseline-synkronisering.
+      <div data-state="awaiting-baseline">
+        <LastRunNotice run={wire.lastRun} />
+        <div className="admin-success" style={NOTE_STYLE}>
+          Målingen er aktiveret og afventer den første officielle baseline-synkronisering.
+        </div>
       </div>
     );
   }
@@ -134,6 +168,8 @@ export function ConversionBody({ wire }: { wire: ConversionWire }) {
         Seneste succesfulde synkronisering: {m.lastSuccessfulSyncAt ? formatIsoDate(m.lastSuccessfulSyncAt, true) : "endnu ingen"}
         {m.status === "PAUSED" && " · Målingen er sat på pause"}
       </div>
+
+      <LastRunNotice run={wire.lastRun} />
 
       {wire.freshness === "STALE" && (
         <div className="admin-error" style={{ marginBottom: 12 }} data-freshness="stale">
