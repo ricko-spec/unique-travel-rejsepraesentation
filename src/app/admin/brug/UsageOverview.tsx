@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { UsagePeriod, UsageSummary } from "@/lib/usage";
 
@@ -21,7 +20,10 @@ function formatDateTime(iso: string | null): string {
   });
 }
 
-export function UsageOverview() {
+// Issue #92: indholdet af fanen "Intern brug" under Analyse (/admin/brug). Uændret
+// datakilde (GET /admin/api/usage) og uændret visning — kun sidens skal og header
+// er flyttet til analysesiden.
+export function UsagePanel() {
   const [period, setPeriod] = useState<UsagePeriod>("30d");
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,20 +60,6 @@ export function UsageOverview() {
   }, [period]);
 
   return (
-    <div className="admin-shell">
-      <div className="admin-wrap">
-        <div className="admin-header">
-          <div>
-            <div className="admin-title">Brugsoverblik</div>
-            <div className="admin-sub">Unique Travel · Upload-tracking pr. sælger</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <Link className="admin-btn admin-btn-secondary" href="/admin">
-              Til administration
-            </Link>
-          </div>
-        </div>
-
         <div className="admin-card">
           <div
             style={{
@@ -203,8 +191,6 @@ export function UsageOverview() {
             </>
           )}
         </div>
-      </div>
-    </div>
   );
 }
 

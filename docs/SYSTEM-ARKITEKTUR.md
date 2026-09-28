@@ -115,7 +115,7 @@ uniquetravel-rejsepraesentation/
 │   │       ├── page.tsx          # Session-gate: viser AdminLogin eller AdminDashboard
 │   │       ├── AdminLogin.tsx    # Client: email+password-formular mod POST /admin/api/auth
 │   │       ├── AdminDashboard.tsx# Client: PDF-dropzone, parse-preview, opret/opdater; viser salgsoversigten
-│   │       ├── SalesOverviewTable.tsx # Client: salgsoversigten — kolonner, filtre, sortering, pagination (Issue #76)
+│   │       ├── SalesOverviewTable.tsx # Client: salgsoversigten i to tilstande — "admin" (forsiden) og "behavior" (Analyse → Kundeadfærd) (Issue #76, #92)
 │   │       ├── DestinationManager.tsx  # Client: billede-bibliotek pr. destination — opret destination + 3-trins signed-URL-upload (hero + 3 galleri-slots)
 │   │       │
 │   │       ├── trips/[id]/       # Detalje-side pr. rejse
@@ -369,7 +369,12 @@ Verificeret ved gennemlæsning af samtlige 12 `route.ts`-filer under `src/app/` 
 
 Der findes **5 admin-sider** i produktion: `/admin`, `/admin/trips/[id]`, `/admin/qa/[slug]`, `/admin/profil`, `/admin/brug`. **Bemærk:** en separat `/admin/upload`-side findes ikke — PDF-upload er en sektion på selve `/admin`-dashboardet. Alle sider er `force-dynamic`, `noindex`, og gater på `getSessionUser()`.
 
-**`/admin/brug`** (`brug/page.tsx` + `UsageOverview.tsx`, Issue #38, live): periodevælger (7/30 dage/alt), stat-tiles (uploads/aktive/0-brugere), tracking-health-tekst (stalled events, historiske actor-events, "tracking gælder fra ..."), og en tabel pr. sælger (inkl. 0-uploads-sælgere). Linkes fra `/admin`-headeren ("Brugsoverblik"). Samme auth-gate som de øvrige sider — ingen ny rollemodel. *API:* `GET /admin/api/usage`.
+**`/admin/brug`** — samlet analyseområde (overskrift "Brugsoverblik", linket fra `/admin`-headeren som **"Analyse"**; Issue #92). Tre faner i `brug/AnalyseTabs.tsx` med URL-tilstand `?visning=kunder|brug|konvertering` (standard `kunder`; `history.pushState` + `popstate`, WAI-ARIA-faner med piletaster/Home/End). Hvert panel henter sine egne data med egen loading-/fejltilstand og monteres første gang det vises:
+- **Kundeadfærd** (`brug/CustomerBehaviorPanel.tsx`): `SalesOverviewTable mode="behavior"` — Åbnet, Set, Kontakt, Seneste aktivitet, aktivitetsfilter, sortering, pagination, degraderingsbemærkning og kun Detaljer-linket som handling. Datakilde: `GET /admin/api/trips` via `src/lib/sales-overview-client.ts` (samme kompakte DTO som forsiden).
+- **Intern brug** (`brug/UsageOverview.tsx` → `UsagePanel`, Issue #38): periodevælger (7/30 dage/alt), stat-tiles (uploads/aktive/0-brugere), tracking-health-tekst og tabel pr. sælger. *API:* `GET /admin/api/usage`.
+- **Konvertering** (`ConversionMeasurement.tsx`): uændret `GET /admin/api/conversion`; forklaring når målingen er ACTIVE med 0 optagne, fremhævet "afventer tilbud" (`ELIGIBLE_PENDING`), datakvalitet sammenklappet i `<details>`, mens FAILED/STALE altid står synligt ovenfor.
+
+Admin-forsiden (`AdminDashboard.tsx`) viser `SalesOverviewTable mode="admin"`: administrationslisten (søg, "mine", "vis inaktive"; Kopiér link, Åbn, Detaljer, Sammenlign, Aktivér/Deaktivér) uden adfærdskolonner, plus et link til Analyse. Samme auth-gate som de øvrige sider — ingen ny rollemodel.
 
 ### `/admin` — Dashboard (`page.tsx` + `AdminDashboard.tsx` + `DestinationManager.tsx`)
 

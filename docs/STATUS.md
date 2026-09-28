@@ -68,12 +68,14 @@
 
 ## Seneste 3 relevante ændringer
 
-1. **Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)), 2026-09-28:** PR #87 merget (`a11516a`); migration 014 anvendt i production
+1. **[Issue #92](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/92), 2026-09-28 (i review):** `/admin/brug` er samlet analyseområde med fanerne Kundeadfærd,
+   Intern brug og Konvertering (`?visning=…`). Forsiden beholder administrationslisten med handlinger
+   (løsning A: samme `SalesOverviewTable`/DTO i to tilstande); konverteringsvisningen findes kun i fanen.
+   Ingen ændring af tracking, data eller adgang.
+2. **Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)), 2026-09-28:** PR #87 merget (`a11516a`); migration 014 anvendt i production
    (`20260928103248_conversion_post_enrollment_v3`) efter bestået drift-kontrol; 0 rækker, intet aktiveret. Baseline + docs i separat PR.
-2. **[PR #85](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/85) — Issue #84: Gate C1, 2026-09-25.**
+3. **[PR #85](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/85) — Issue #84: Gate C1, 2026-09-25.**
    Stagekontrakt v3, snæver read-only HubSpot-adapter, write-free dry-run PASS. Merge-commit `487fa64`.
-3. **Gate B2 (Issue #82), 2026-09-24:** migration 013 anvendt i production (`20260924193406_conversion_measurement`), 0 rækker, intet
-   aktiveret.
 
 Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pulls?q=is%3Apr+is%3Amerged).
 

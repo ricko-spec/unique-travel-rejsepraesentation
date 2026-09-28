@@ -16,8 +16,10 @@ function code(rel: string): string {
 describe("SalesOverviewTable", () => {
   const src = code("src/app/admin/SalesOverviewTable.tsx");
 
-  it("starter i den godkendte default-visning og bruger applyView + paginate", () => {
-    expect(src).toMatch(/useState<SalesViewState>\(DEFAULT_VIEW\)/);
+  it("starter i den godkendte default-visning (Kundeadfærd) / nyeste først (admin) og bruger applyView + paginate", () => {
+    expect(src).toMatch(/useState<SalesViewState>\(INITIAL_VIEW\[mode\]\)/);
+    expect(src).toMatch(/behavior: DEFAULT_VIEW/);
+    expect(src).toMatch(/admin: \{ \.\.\.DEFAULT_VIEW, sort: "created" \}/);
     expect(src).toMatch(/applyView\(trips, view\)/);
     expect(src).toMatch(/paginate\(matched, visibleCount\)/);
   });
@@ -78,8 +80,12 @@ describe("AdminDashboard", () => {
   });
 
   it("modtager kun det kompakte DTO (viewer + degraded) — ingen rå felter refereres", () => {
-    expect(src).toMatch(/j\.viewer\?\.mineAvailable/);
-    expect(src).toMatch(/j\.degraded/);
+    // Issue #92: parsingen ligger i den fælles læsevej, som både forsiden og Kundeadfærd bruger.
+    expect(src).toMatch(/fetchSalesOverview\(\)/);
     expect(src).not.toMatch(/raw_pdf_text|created_by\b|\.data\b/);
+    const client = code("src/lib/sales-overview-client.ts");
+    expect(client).toMatch(/j\.viewer\?\.mineAvailable/);
+    expect(client).toMatch(/j\.degraded/);
+    expect(client).not.toMatch(/raw_pdf_text|created_by\b|\.data\b/);
   });
 });
