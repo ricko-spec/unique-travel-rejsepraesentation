@@ -295,6 +295,52 @@ describe("migration 014 — anvendelse, idempotens og kontraktløft", () => {
   });
 });
 
+describe("Gate D (Issue #89) — aktiveringssekvensen på rigtig Postgres (013 + 014)", () => {
+  it("seed → ACTIVE → mislykket baseline (FAILED, nulpunkt tomt) → dobbelt begin afvist → baseline gennemført", { timeout: TIMEOUT }, async () => {
+    const db = await freshDb();
+    await db.exec(SQL_014);
+    // Runbookens seed + aktivering (præcis de to SQL-sætninger).
+    await db.exec("insert into public.conversion_measurement_state (id) values (1)");
+    expect(await stateRow(db)).toEqual([{ contract_version: 3, status: "NOT_STARTED", sync_generation: 0 }]);
+    await db.exec("update public.conversion_measurement_state set status = 'ACTIVE'");
+
+    // Mislykket baseline: lease taget, kørslen fejler (fx HubSpot 5xx) ⇒ FAILED, intet andet ændret.
+    const begin = await asRole(db, "service_role", () =>
+      db.query<{ run_id: string }>("select * from public.conversion_begin_sync_run(3, 600)"),
+    );
+    // Samtidig kørsel mens den første holder leasen ⇒ afvist.
+    await expect(asRole(db, "service_role", () => db.query("select * from public.conversion_begin_sync_run(3, 600)"))).rejects.toThrow(
+      /CONVERSION_SYNC_ALREADY_RUNNING/,
+    );
+    await asRole(db, "service_role", () => db.query("select public.conversion_fail_sync_run($1, 'HTTP_5XX')", [begin.rows[0].run_id]));
+    const afterFail = await db.query<{ measurement_started_at: Date | null; sync_generation: number }>(
+      "select measurement_started_at, sync_generation from public.conversion_measurement_state",
+    );
+    expect(afterFail.rows).toEqual([{ measurement_started_at: null, sync_generation: 0 }]);
+    expect((await db.query("select 1 from public.conversion_deal_cohort")).rows).toHaveLength(0);
+
+    // Genkørsel: stadig baseline, og nu gennemføres den.
+    await sync(db, T0, [pendingRow(1, T0), pendingRow(2, T0)], { baseline: true });
+    const started = await db.query<{ measurement_started_at: Date; sync_generation: number }>(
+      "select measurement_started_at, sync_generation from public.conversion_measurement_state",
+    );
+    expect(started.rows[0].measurement_started_at.toISOString()).toBe(T0.toISOString());
+    expect(started.rows[0].sync_generation).toBe(1);
+    const runs = await db.query<{ status: string; error_code: string | null; is_baseline: boolean | null }>(
+      "select status, error_code, is_baseline from public.conversion_sync_runs order by started_at",
+    );
+    expect(runs.rows).toEqual([
+      { status: "FAILED", error_code: "HTTP_5XX", is_baseline: null },
+      { status: "SUCCEEDED", error_code: null, is_baseline: true },
+    ]);
+    // PAUSED stopper næste kørsel før lease (rollback-/pausetrinnet i runbooken).
+    await db.exec("update public.conversion_measurement_state set status = 'PAUSED'");
+    await expect(asRole(db, "service_role", () => db.query("select * from public.conversion_begin_sync_run(3, 600)"))).rejects.toThrow(
+      /CONVERSION_NOT_ACTIVE/,
+    );
+  });
+});
+
 describe("migration 014 — invarianter håndhævet af databasen", () => {
   it("begge årsager kan sættes på ENROLLED (ved optagelse og senere), og genkørsel ændrer intet", { timeout: TIMEOUT }, async () => {
     const { db } = await buildMainScenario();
