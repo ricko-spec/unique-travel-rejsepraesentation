@@ -51,17 +51,19 @@
     Runbook til Gate C/D: `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`.
 - **Gate C1 afsluttet og merget:** [PR #85](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/85)
   (Issue #84) merget 2026-09-25 (merge-commit `487fa64`) efter Codex-godkendelse — stagekontrakt v3
-  i koden, live write-free dry-run PASS. Production-DB'ens `contract_version` er fortsat 2.
-- **Aktivt: Gate C2** ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)) — migration 014 (efterfølgende udelukkelse af optagne deals +
-  databasekontrakt v3) **bygget som fil og testet mod pglite, IKKE anvendt**. Én reviewklar PR;
-  ingen Supabase-writes, secrets, seed, cron, `ACTIVE` eller Gate D. Se runbooken § Gate C2.
+  i koden, live write-free dry-run PASS.
+- **Gate C2** ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)): PR #87 merget (`a11516a`). Drift-kontrol mod production BESTÅET
+  (2026-09-28 10:24 UTC, fingerprint `453e5ad9…1777` = baseline). **migration 014 anvendt i production 2026-09-28T10:32:48Z som `20260928103248_conversion_post_enrollment_v3` via Supabase MCP `apply_migration`; lagret SQL byte-identisk med filen (sha256 `291ead2e…164c`).** Fuld
+  post-verifikation grøn; **0 rækker i alle tre tabeller, ingen singleton-række** — DB-default for
+  `contract_version` er nu 3. Baseline opdateret fra det verificerede skema (kun 014-objekter).
+  **Intet aktiveret:** ingen secrets, seed, cron, sync, `ACTIVE` eller Gate D.
 - **Kendt driftsopfølgning (ikke en blocker):** production UI-smoketest af Fase 1C, 2, 3 og 4 er
   udsat (Ricko kan ikke teste lige nu).
 
 ## Seneste 3 relevante ændringer
 
-1. **Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)), 2026-09-28:** migration 014 + v3-skrivevej som fil, pglite-tests i CI,
-   rollback-SQL. Ikke anvendt, ikke merget.
+1. **Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)), 2026-09-28:** PR #87 merget (`a11516a`); migration 014 anvendt i production
+   (`20260928103248_conversion_post_enrollment_v3`) efter bestået drift-kontrol; 0 rækker, intet aktiveret. Baseline + docs i separat PR.
 2. **[PR #85](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/85) — Issue #84: Gate C1, 2026-09-25.**
    Stagekontrakt v3, snæver read-only HubSpot-adapter, write-free dry-run PASS. Merge-commit `487fa64`.
 3. **Gate B2 (Issue #82), 2026-09-24:** migration 013 anvendt i production (`20260924193406_conversion_measurement`), 0 rækker, intet
@@ -76,9 +78,9 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
   (mod prod-DB) eller på production efter merge.
 - **Storage bucket-config uden for drift-tjekket** (kendt blind vinkel).
 - Repo er public — secrets/kundedata-disciplin er procesbåret, ikke teknisk håndhævet.
-- **Migration 014 må ikke anvendes, før en fuld schema-drift-kontrol mod production er bestået**
-  (`node scripts/check-schema-drift.mjs`, kræver `.env.local`/production-adgang — ikke kørt i Gate C2).
-  `schema-baseline.json` opdateres først ved selve anvendelsen (samme mønster som 013/Gate B2).
+- **Drift-kontrollen kørte som MCP-ækvivalent** (samme `schema_snapshot()` + kanonisk sammenligning),
+  fordi agentens worktree ikke har `.env.local`. Backup/PITR-status var ikke synlig for agenten
+  (samme forbehold som Gate B2; migrationen er additiv og tabellerne tomme).
 - **GitHub Actions (PR #81):** `.github/workflows/ci.yml` kører test, typecheck, lint og build på
   pull requests (`contents: read`, ingen secrets, ingen deploy). Findes på `main` siden PR #81.
 - **Privacy-beslutning (Ricko, 2026-09-24):** risikoen ved sent opdagede delte bookingreferencer i
@@ -92,10 +94,9 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Gate C1 er merget** (PR #85, `487fa64`). **Aktivt: Gate C2** ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)) — review af Gate
-C2-PR'en (migration 014 som fil + tests, ikke anvendt). Derefter, hver med separat godkendelse:
-(1) fuld schema-drift-kontrol mod production, (2) anvendelse af 014 + baseline-opdatering,
-(3) aktivering (secrets, seed, cron, `ACTIVE`, Gate D). Se runbooken.
+**Migration 014 er anvendt og verificeret** ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)). Næste: review og merge af PR'en med
+baseline- og dokumentationsopdateringen. Derefter — hver med separat godkendelse — aktivering
+(secrets, singleton-seed, cron, `ACTIVE`) og Gate D (officiel baseline-sync). Se runbooken.
 
 Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) — Vision 3.0: Customer Engagement & Sales Intelligence.
 Master-issue/produktkapitel, IKKE én stor PR. Fase 5 (prospektiv konverteringsmåling) er placeret i

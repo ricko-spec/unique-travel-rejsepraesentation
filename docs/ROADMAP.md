@@ -136,9 +136,9 @@ eller GitHub Issues.
   (PR #81), og migration 013 er anvendt i production (0 rækker, intet aktiveret). **Næste handling:
   review og merge af PR #83** — gjort. **Gate C1 (Issue #84) er merget** (PR #85, `487fa64`):
   stagekontrakt v3, snæver read-only adapter, write-free dry-run PASS — se
-  `docs/VISION-3.0-PHASE-5-GATE-C1.md`. **Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)) i review:** migration 014 + DB-kontrakt v3
-  som fil (ikke anvendt). KRÆVER RICKO, hver for sig: fuld drift-kontrol → anvendelse af 014 →
-  aktivering (secrets, seed, cron, `ACTIVE`, Gate D). Udfaldsdefinitionen er
+  `docs/VISION-3.0-PHASE-5-GATE-C1.md`. **Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)) gennemført:** PR #87 merget, drift-kontrol
+  bestået og migration 014 anvendt i production (`20260928103248_conversion_post_enrollment_v3`), 0 rækker, intet aktiveret.
+  KRÆVER RICKO, hver for sig: aktivering (secrets, seed, cron, `ACTIVE`) → Gate D. Udfaldsdefinitionen er
   fastlagt fra Gate A (kun `unique_travel_dealstatus` ⇒ Booket; `hs_is_closed_won` aldrig).
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af

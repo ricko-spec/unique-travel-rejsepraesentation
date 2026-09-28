@@ -102,7 +102,15 @@ Den oprindelige procedure (bevaret som reference):
    Den gør intet før Gate D (status `NOT_STARTED` ⇒ `NOT_ACTIVE`, ingen skrivning).
 7. Rollback: fjern cronnen; secrets kan fjernes uden datatab.
 
-## Gate C2 — migration 014 og databasekontrakt v3 (Issue #86) — FIL, IKKE ANVENDT
+## Gate C2 — migration 014 og databasekontrakt v3 (Issue #86) — ✅ ANVENDT 2026-09-28T10:32:48Z
+
+**Resultat:** PR #87 merget (`a11516a`); drift-kontrol BESTÅET (MCP-ækvivalent, 287/287,
+fingerprint `453e5ad9…1777`); preflight PASS; anvendt præcis én gang som `20260928103248_conversion_post_enrollment_v3`
+(lagret SQL = filen, sha256 `291ead2e…164c`); post-verifikation grøn (se `docs/CHECKPOINT.md`);
+0 rækker, ingen singleton-række; baseline opdateret (kun 014-objekter). Den write-free operatør-
+dry-run kan køres igen (skema og kode matcher), men kræver ny godkendelse. Intet aktiveret.
+
+Den oprindelige leverance og procedure (bevaret som reference):
 
 Leveret: `supabase/014_conversion_post_enrollment_v3.sql`, rollback-SQL i
 `supabase/rollback/014_conversion_post_enrollment_v3_rollback.sql`, v3-skrivevej i
