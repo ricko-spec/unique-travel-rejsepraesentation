@@ -24,6 +24,7 @@ i nummerorden i [SQL Editor](https://supabase.com/dashboard/project/iunixfpthdft
 | `011_trip_section_engagement.sql` | trip_section_engagement + eksplicitte table grants + RLS + `record_trip_section_engagement` RPC — sektionsengagement (Issue #71) | 2026-09-18T18:41:05Z (`20260918184105_trip_section_engagement`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
 | `012_trip_contact_intent.sql` | trip_contact_intent + eksplicitte table grants + RLS + `record_trip_contact_intent` RPC — kontakt-intent, max 2 rækker/trip (Issue #73) | 2026-09-19T07:43:41Z (`20260919074341_trip_contact_intent`) — DB kun, koden er endnu ikke merget/deployet. `schema-baseline.json` opdateret efter live-kørslen |
 | `013_conversion_measurement.sql` | conversion_measurement_state (singleton) + conversion_deal_cohort (pseudonymiseret) + conversion_sync_runs, eksplicitte table grants + RLS + guard-triggere + sync-RPC'er (`conversion_begin_sync_run`/`conversion_commit_sync_run`/`conversion_fail_sync_run`/`conversion_parse_batch`) — prospektiv konverteringsmåling, Gate B (Issue #80, barn af Gate A/Issue #78) | 2026-09-24T19:34:06Z (`20260924193406_conversion_measurement`) via Supabase MCP `apply_migration` (Gate B2, Issue #82) — DB kun; koden er merget (PR #81). 0 rækker, ingen seed/aktivering. `schema-baseline.json` opdateret (kun 013-objekter, +606/−0) |
+| `014_conversion_post_enrollment_v3.sql` | Efterfølgende udelukkelse af optagne deals (`post_enrollment_exclusion_reason`/`post_enrollment_excluded_at` + 5 CHECKs + frys-/slet-/truncate-triggere), skrivevej `conversion_commit_sync_run_v3`/`conversion_parse_batch_v3` (013's commit/parse mister EXECUTE for service_role), kontraktversion 2 → 3 — Gate C2 (Issue #86) | **Nej — bygget som fil, IKKE anvendt.** Kræver bestået fuld drift-kontrol + Rickos separate godkendelse. Rollback: `rollback/014_conversion_post_enrollment_v3_rollback.sql` |
 
 Derudover kræves Storage-bucket **`destinations`** (offentlige URLs) — oprettes manuelt i
 Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Add user.
@@ -168,6 +169,38 @@ Dashboard → Storage. Auth-brugere oprettes invite-only i Authentication → Ad
 - Verificeret lokalt mod pglite før production (90 asserts + SQL-mutationer), se `docs/TESTING.md`.
 - **Retention** for `conversion_sync_runs`/`conversion_deal_cohort` er, som `010b`/kontakt-intent,
   bevidst IKKE defineret eller aktiveret i denne migration — en separat, fremtidig beslutning.
+
+## Driftsnote: migration 014 (Issue #86, Gate C2) — IKKE anvendt
+
+- **Formål:** persisterer Rickos beslutninger 2026-09-25 (efterfølgende udelukkelse af en ALLEREDE
+  optaget deal: `BOOKED_OTHER_REFERENCE_UNRESOLVED` for "Solgt (andet booking nr.)",
+  `INVALIDATED_DUPLICATE_OR_TEST` for senere Dubletter/Test Leads) og løfter DB-kontrakten til v3.
+- **Invarianter i databasen:** `..._post_enrollment_reason_check` (gyldig årsag),
+  `..._pair_check` (begge eller ingen), `..._requires_enrolled_check` (kun ENROLLED),
+  `..._order_check` (tidspunkt i [kohortestart, `last_observed_at`]), `..._contract_check`
+  (kun `contract_version >= 3`). Triggeren `conversion_deal_cohort_post_enrollment_guard` afviser
+  fjernelse/ændring (`CONVERSION_COHORT_POST_ENROLLMENT_FROZEN`) og sletning af en markeret række
+  (`..._DELETE_FORBIDDEN`); `conversion_deal_cohort_truncate_guard` afviser TRUNCATE, når
+  markeringer findes. Kohortestart/eksponering er i forvejen frosset for ENROLLED (013-triggeren).
+  Commit-RPC'en kræver, at en NY markering bærer kørslens `observed_at`
+  (`CONVERSION_POST_ENROLLMENT_AT_INVALID`).
+- **Rettigheder:** ingen nye table grants; ingen DELETE/TRUNCATE; v3-RPC'erne kun `service_role`;
+  triggerfunktionerne har ingen EXECUTE for nogen API-rolle; 013's commit/parse har ikke længere
+  EXECUTE for `service_role` (bevares kun til rollback).
+- **Kontraktversion:** default 3. En eksisterende singleton løftes kun, hvis den er `NOT_STARTED`
+  uden `measurement_started_at`; er målingen startet under en anden version, fejler migrationen med
+  `CONVERSION_014_REQUIRES_NOT_STARTED`, og intet ændres. Ingen singleton-række oprettes.
+- **Forudsætninger for anvendelse (KRÆVER RICKO):** (1) fuld schema-drift-kontrol mod production
+  bestået (`node scripts/check-schema-drift.mjs`, exit 0) — ikke kørt i Gate C2; (2) anvendelse via
+  Supabase MCP `apply_migration` (samme vej som 010-013); (3) `--update-baseline` i samme ombæring.
+  Baselinen er bevidst IKKE opdateret i Gate C2: den skal afspejle production, og 014 er ikke anvendt.
+- **Rollback** (`rollback/014_conversion_post_enrollment_v3_rollback.sql`, én transaktion): giver
+  EXECUTE tilbage til 013's commit/parse, dropper v3-RPC'erne, triggere, constraints og kolonner,
+  default og en ikke-startet singleton tilbage til 2, og 013's kommentarer ordret. Verificeret i
+  pglite: katalog efter 014 + rollback = katalog efter ren 013. **Irreversibelt med vilje:** rollback
+  afbrydes, hvis blot én markering findes (`CONVERSION_014_ROLLBACK_WOULD_DROP_AUDIT_TRAIL`) eller
+  målingen er startet (`..._REQUIRES_NOT_STARTED`) — det kræver en separat beslutning. App-koden fra
+  Gate C2-PR'en skal rulles tilbage samtidig (den fejler lukket mod et 013-skema).
 
 ## Drift-tjek
 

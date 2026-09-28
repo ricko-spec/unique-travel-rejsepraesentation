@@ -700,7 +700,7 @@ read-only HubSpot-læsning i dette projekt). Fuldt design: `docs/VISION-3.0-PHAS
 Tre tabeller, alle service-role-only (RLS + eksplicitte table grants, samme mønster som 010-012):
 
 - **`conversion_measurement_state`** — singleton (id=1): status (`NOT_STARTED`/`ACTIVE`/`PAUSED`),
-  `contract_version` (skal = runtime `CONTRACT_VERSION`, pt. 2), `measurement_started_at` (sættes
+  `contract_version` (skal = runtime `CONTRACT_VERSION` = 3; production-DB står på 2, indtil migration 014 anvendes), `measurement_started_at` (sættes
   KUN af baseline-commit, derefter uforanderlig), `last_successful_sync_at`, `sync_generation`.
   Guard-trigger: de tre sidste kan kun ændres inde i commit-RPC'en.
 - **`conversion_deal_cohort`** — én pseudonymiseret række pr. HubSpot-deal (`deal_key` =
@@ -721,6 +721,18 @@ RPC'er (SECURITY INVOKER, EXECUTE kun `service_role`): `conversion_begin_sync_ru
 `hubspotLiveAdapter.ts` er den rigtige, snævre read-only adapter (to fastlåste endpoints på
 `api.hubapi.com`); `operatorDryRun.ts` + `scripts/operator/*` er den lokale, write-free
 operatør-dry-run (ikke en route). Se `docs/VISION-3.0-PHASE-5-GATE-C1.md`.
+
+**Gate C2 (Issue #86) — migration 014, BYGGET SOM FIL, IKKE ANVENDT:**
+`supabase/014_conversion_post_enrollment_v3.sql` tilføjer `post_enrollment_exclusion_reason`
+(`BOOKED_OTHER_REFERENCE_UNRESOLVED`/`INVALIDATED_DUPLICATE_OR_TEST`) + `post_enrollment_excluded_at`
+på `conversion_deal_cohort` med 5 CHECKs, triggeren `conversion_deal_cohort_post_enrollment_guard`
+(BEFORE UPDATE OR DELETE: markering frosset, markeret række kan ikke slettes) og
+`conversion_deal_cohort_truncate_guard` (BEFORE TRUNCATE). Skrivevejen bliver
+`conversion_commit_sync_run_v3` (+ `conversion_parse_batch_v3`); 013's commit/parse mister EXECUTE
+for `service_role`. Default `contract_version` = 3. `persistence.ts` og `adminServer.ts` deler
+`COHORT_COLUMNS`, så en markeret deal aldrig kan læses uden markeringen; mod et 013-skema fejler
+både læsning og commit lukket. Rollback: `supabase/rollback/014_conversion_post_enrollment_v3_rollback.sql`.
+Indtil 014 anvendes, gælder beskrivelsen ovenfor (013) for production.
 
 **Kodearkitektur** (`src/lib/conversion/`): `contract.ts` (versioneret stage-kontrakt +
 udfaldssandhedstabel) → `dealKey.ts` (HMAC + secret-validering) → `classify.ts` (ren reducer:

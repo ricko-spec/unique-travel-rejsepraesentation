@@ -17,8 +17,10 @@ parse-fejl-klassificering — se `src/lib/*.test.ts`.
 
 **GitHub Actions:** `.github/workflows/ci.yml` kører `npm ci`, `npm test`, `npm run typecheck`,
 `npm run lint` og `npm run build` på hver pull request (Node 24, `contents: read`, ingen secrets, ingen
-deploy, actions pinnet til commit-SHA). Schema-/storage-drift og pglite-migrationsverifikationen kræver
-henholdsvis live-credentials og et harness uden for repoet og køres fortsat manuelt.
+deploy, actions pinnet til commit-SHA). Schema-/storage-drift kræver live-credentials og køres fortsat
+manuelt. **Fra Gate C2 (Issue #86)** kører migrationsverifikationen for 013 + 014 i repoet
+(`src/lib/conversion/migration014.sql.test.ts`, pglite som devDependency) og dermed også i CI;
+013-verifikationen fra Gate B1 lå i et harness uden for repoet.
 
 ## Testniveau efter ændringstype
 
@@ -418,6 +420,45 @@ højst én RUNNING (unikt indeks); `measurement_started_at` uforanderlig; PAUSED
 klartekst-kolonner. **SQL-mutationer (11 unikke):** hvert fjernet værn (terminal-frys, skrivning uden for sync, generation,
 booket-frys, lease-udløb, kohortestart, unikt RUNNING-indeks, anon-revoke, konflikt-frys, nulpunkt, baseline-mismatch
 m.fl.) fælder scriptet. Selve production-kørslen er Gate B2 og IKKE sket.
+
+**Gate C2 (Issue #86) — migration 014 kørt mod rigtig Postgres i CI (pglite 0.5.8, devDependency):**
+`migration014.sql.test.ts` (20 tests) anvender 013 og derefter 014 på Supabase-lignende roller med default-ACL
+(og én variant uden). Den beviser:
+- afvisning uden 013; ingen singleton-række oprettes; default = `CONTRACT_VERSION` = 3; en NOT_STARTED
+  v2-række løftes; en startet v2-måling ⇒ `CONVERSION_014_REQUIRES_NOT_STARTED`, og intet ændres (heller ikke
+  kolonner);
+- eksisterende gyldige 013-rækker er byte-uændrede, og alle CHECKs er validerede;
+- begge årsager kan sættes ved optagelse og senere; genkørsel ændrer intet (idempotens).
+- Afvisninger: markering på ikke-ENROLLED, historisk tidspunkt på ny markering, fjernelse, ændret
+  årsag, flyttet tidspunkt, omskrevet eksponering/kohortestart, alt-eller-intet-batch og kontrakt < 3.
+  Direkte CHECKs (par, årsag, rækkefølge begge veje, kontrakt ≥ 3). Sletning og TRUNCATE af en
+  markeret række afvises også for ejeren. Skrivning uden for commit afvises fortsat.
+- Publicering: rækker læst via `COHORT_COLUMNS` → `parseCohortRow` → `buildConversionAggregate` giver
+  21 publicerede af 45 (12 + 12 markerede kun i datakvalitet). Kontrafaktisk uden markeringen: 45.
+- Rettigheder og rollback: grants/RLS/policies er byte-identiske før/efter; EXECUTE-matrix for alle
+  konverteringsfunktioner; ingen SECURITY DEFINER; fast `search_path` overalt. Rollback-SQL giver et
+  katalog identisk med ren 013 og afbrydes ved en markering eller en startet måling.
+
+Derudover opdaterede tests i `persistence.test.ts`/`postEnrollment.test.ts`/`adminServer.test.ts`:
+v3-RPC, 013-skema ⇒ fail-closed ved både læsning og commit, ny markering = `observedAt`, CHECK-spejling.
+
+**SQL-mutation, 25 mutanter af 014, 24 dræbt:**
+- **Dræbt:** hver CHECK, frys-trigger, slet- og truncate-værn, AT-regel, kontrakt-grænse,
+  upsert-kolonne, hver revoke/grant, default, versionsløft, precheck og "ny grant til anon".
+- **Overlevet (ækvivalent):** at udvide versionsløftets `WHERE` til startede målinger. Precheck'en har
+  på det tidspunkt allerede afvist enhver startet måling under anden version.
+- Første kørsel fandt yderligere to overlevende, som blev lukket med nye tests: kontrakt < 3 via en
+  manuelt nedgraderet state, og grant uden Supabases default-ACL.
+
+**TS-mutation, 11 mutanter af persistence-grenene, 10 dræbt:** den overlevende (fjernet
+`undefined`-værn i `parseCohortRow`) er ækvivalent, fordi årsagsvalideringen og dato-parseren allerede
+afviser `undefined`.
+
+**Hele suiten:** 1155/1155; typecheck, lint (kun kendte `no-img-element`-advarsler) og build er grønne.
+pglite indgår ikke i server-bundlet: 0 filer i `.next/server`, og den importeres kun af `*.test.ts`.
+
+**Ikke kørt (kræver production-adgang):** fuld schema-drift-kontrol mod production. Den er en
+forudsætning for at anvende 014, se runbooken § Gate C2.
 
 ## Efter enhver testrunde
 
