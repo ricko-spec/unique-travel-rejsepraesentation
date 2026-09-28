@@ -1456,6 +1456,39 @@ section { width: 100%; }
   border: 1px solid rgba(183, 88, 58, 0.5);
 }
 .admin-btn-danger:hover:not(:disabled) { background: rgba(183, 88, 58, 0.05); }
+/* Issue #92: faner i Analyse (/admin/brug). Vandret rulning på smal skærm i stedet for
+   ombrydning; tydelig aktiv tilstand og fokusmarkering (tastaturnavigation). */
+.admin-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(0, 78, 80, 0.15);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.admin-tab {
+  flex: 0 0 auto;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 12px 18px;
+  min-height: 44px;
+  font-family: var(--font-open-sans), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--grey-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.admin-tab:hover { color: var(--rainforest); }
+.admin-tab-active {
+  color: var(--rainforest);
+  border-bottom-color: var(--rainforest);
+}
+.admin-tab:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 .admin-table {
   width: 100%;
   border-collapse: collapse;

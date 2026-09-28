@@ -181,7 +181,16 @@ export function ConversionBody({ wire }: { wire: ConversionWire }) {
       <div style={{ display: "flex", gap: 24, marginBottom: 16, flexWrap: "wrap" }}>
         <GroupCard label="PDF + online rejseplan" total={wire.groups.ONLINE.totalEnrolled} />
         <GroupCard label="Kun PDF" total={wire.groups.PDF_ONLY.totalEnrolled} />
+        <PendingCard total={dq.eligiblePending} />
       </div>
+
+      {m.status === "ACTIVE" && wire.groups.ONLINE.totalEnrolled === 0 && wire.groups.PDF_ONLY.totalEnrolled === 0 && (
+        <div className="admin-success" style={{ ...NOTE_STYLE, marginBottom: 12 }} data-state="awaiting-first-enrollment">
+          Målingen kører og synkroniseres dagligt. Der er endnu ingen tilbud i målingen: en deal optages, første
+          gang en daglig synkronisering efter målingsstart ser den i &quot;Tilbud sendt&quot; eller &quot;Opdateret
+          tilbud&quot;. Deals, der allerede var i gang før målingsstart, indgår aldrig.
+        </div>
+      )}
 
       {!wire.hasPublishableComparison ? (
         <div className="admin-success" style={NOTE_STYLE}>
@@ -214,7 +223,10 @@ export function ConversionBody({ wire }: { wire: ConversionWire }) {
         </>
       )}
 
-      <div style={{ fontSize: 12, color: "var(--grey-text)" }}>
+      <details style={{ fontSize: 12, color: "var(--grey-text)" }} data-details="data-quality">
+        <summary style={{ cursor: "pointer", color: "var(--rainforest)", marginBottom: 6 }}>
+          Vis datakvalitet og detaljer
+        </summary>
         Datakvalitet: {formatCount(dq.totalObserved)} deals observeret · {formatCount(dq.eligiblePending)} afventer
         tilbud · {formatCount(dq.preStartExisting)} udelukket (var allerede i gang før målingsstart) ·{" "}
         {excludedParts.join(" · ")} · {formatCount(dq.bookingConflicts)} taget ud pga. senere opdaget delt bookingnummer ·{" "}
@@ -223,13 +235,12 @@ export function ConversionBody({ wire }: { wire: ConversionWire }) {
         {formatCount(dq.lostObserved)} tabt/afvist observeret · {formatCount(dq.outcomeConflicts)} med modstridende
         status (tabt/afvist og konflikter er kun datakvalitet og indgår ikke i konverteringsprocenten). Små tal under
         10 vises ikke.
-      </div>
-
-      <p style={{ fontSize: 11, color: "var(--grey-text)", marginTop: 12, fontStyle: "italic" }}>
-        Forskellen er en observeret sammenhæng, ikke et bevis for at online rejseplanen forårsager højere
-        konvertering — sælgere, destinationer og kundeprofil kan variere mellem grupperne. &quot;Online rejseplan&quot;
-        betyder at planen eksisterede, da tilbuddet første gang blev observeret — ikke at kunden åbnede den.
-      </p>
+        <p style={{ fontSize: 11, marginTop: 12, fontStyle: "italic" }}>
+          Forskellen er en observeret sammenhæng, ikke et bevis for at online rejseplanen forårsager højere
+          konvertering — sælgere, destinationer og kundeprofil kan variere mellem grupperne. &quot;Online rejseplan&quot;
+          betyder at planen eksisterede, da tilbuddet første gang blev observeret — ikke at kunden åbnede den.
+        </p>
+      </details>
     </div>
   );
 }
@@ -242,6 +253,22 @@ function GroupCard({ label, total }: { label: string; total: number | null }) {
       </div>
       <div style={{ fontSize: 22, fontFamily: "var(--font-cormorant), serif" }}>{formatCount(total)}</div>
       <div style={{ fontSize: 11, color: "var(--grey-text)" }}>tilbud i målingen</div>
+    </div>
+  );
+}
+
+/** Fremhævet, dynamisk antal ELIGIBLE_PENDING-deals ("afventer tilbud") — samme small-cell-regel som resten. */
+function PendingCard({ total }: { total: number | null }) {
+  return (
+    <div
+      style={{ flex: 1, minWidth: 160, padding: 12, background: "rgba(209,146,103,0.10)", borderRadius: 2 }}
+      data-stat="eligible-pending"
+    >
+      <div style={{ fontSize: 12, color: "var(--grey-text)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+        Afventer tilbud
+      </div>
+      <div style={{ fontSize: 22, fontFamily: "var(--font-cormorant), serif" }}>{formatCount(total)}</div>
+      <div style={{ fontSize: 11, color: "var(--grey-text)" }}>kan optages, når tilbud sendes</div>
     </div>
   );
 }

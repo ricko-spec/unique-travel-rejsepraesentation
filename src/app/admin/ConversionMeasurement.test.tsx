@@ -135,6 +135,63 @@ describe("GET /admin/api/conversion → ConversionBody (faktisk JSON-form)", () 
     expect(render(json)).toContain('data-freshness="stale"');
   });
 
+  describe("Issue #92 — Konvertering-fanen er lettere at forstå", () => {
+    const pendingRows = (n: number) =>
+      Array.from({ length: n }, (_, i) =>
+        cohortRawRow(9000 + i, {
+          eligibility_status: "ELIGIBLE_PENDING",
+          exposure_group: null,
+          exposure_frozen_at: null,
+          first_qualified_observation_at: null,
+          booking_match_key: null,
+        }),
+      );
+
+    it("ACTIVE med 0 optagne i begge grupper: forklarer at målingen kører og afventer nye tilbud; 'afventer tilbud' fremhæves dynamisk", async () => {
+      const { json } = await routeJson(fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: pendingRows(168) }));
+      const out = render(json);
+      expect(out).toContain('data-state="awaiting-first-enrollment"');
+      expect(out).toContain("Målingen kører");
+      expect(out).toMatch(/data-stat="eligible-pending"[\s\S]*?Afventer tilbud[\s\S]*?>168</);
+    });
+
+    it("med optagne tilbud vises forklaringen ikke; 1–9 afventende vises aldrig som tal", async () => {
+      const rows = [...monthRows("ONLINE", "2027-02-20T03:00:00Z", 15, 0, 1), ...pendingRows(4)];
+      const out = render((await routeJson(fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: rows }))).json);
+      expect(out).not.toContain('data-state="awaiting-first-enrollment"');
+      expect(out).toMatch(/data-stat="eligible-pending"[\s\S]*?skjult \(lille tal\)/);
+    });
+
+    it("datakvalitet er sammenklappet som standard (details uden open) og i samme markup — ingen ny hentning", async () => {
+      const out = render((await routeJson(fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: pendingRows(168) }))).json);
+      const details = out.match(/<details[^>]*data-details="data-quality"[^>]*>[\s\S]*?<\/details>/)?.[0] ?? "";
+      expect(details).not.toBe("");
+      expect(details).not.toMatch(/<details[^>]*\sopen/);
+      expect(details).toContain("Vis datakvalitet og detaljer");
+      expect(details).toContain("Datakvalitet:");
+    });
+
+    it("FAILED og STALE vises tydeligt UDEN FOR det sammenklappede felt", async () => {
+      const out = render(
+        (
+          await routeJson(
+            fakeAdminSupabase({
+              stateRow: { ...ACTIVE, last_successful_sync_at: "2027-02-20T03:00:00Z" },
+              cohortRows: pendingRows(168),
+              lastRun: { status: "FAILED", started_at: "2027-03-01T03:00:00Z", finished_at: "2027-03-01T03:01:00Z", error_code: "HTTP_5XX", is_baseline: false, deals_observed_count: null },
+            }),
+          )
+        ).json,
+      );
+      const details = out.match(/<details[\s\S]*?<\/details>/)?.[0] ?? "";
+      const outside = out.replace(details, "");
+      expect(outside).toContain('data-last-run="failed"');
+      expect(outside).toContain('data-freshness="stale"');
+      expect(details).not.toContain("data-last-run");
+      expect(details).not.toContain("data-freshness");
+    });
+  });
+
   describe("Gate D (Issue #89) — seneste sync-kørsel som fejlalarm", () => {
     const run = (over: Record<string, unknown> = {}) => ({
       status: "SUCCEEDED",
