@@ -305,6 +305,7 @@ Verificeret ved gennemlæsning af samtlige 12 `route.ts`-filer under `src/app/` 
 | `/admin/api/health` | GET | Ja | Driftsdiagnostik: env-sanity + Supabase-probe | — | `{ env, supabaseReachable, supabaseError, nodeVersion }` |
 | `/admin/api/usage` | GET | Ja | Brugsoverblik (Issue #38, live): uploads/publiceret/fejl pr. sælger, inkl. 0-brugere | Query `?period=7d\|30d\|all` | `{ period, totalUploads, activeUsers, zeroUploadUsers, trackingSince, stalledEvents, historicalActorEvents, users: [...] }` / 500 (aldrig falske nul-tal) |
 | `/admin/api/conversion` | GET | Ja | Konverteringsmåling (Gate B, Issue #80, IKKE aktiveret i production — se `docs/VISION-3.0-PHASE-5-GATE-B1-RUNBOOK.md`): aggregater kun, blok-baseret small-cell/komplement-privacy. Manglende tabel behandles fail-closed som "ikke startet", aldrig som fejl | — | `ConversionWire` (ISO-strenge, `src/lib/conversion/wire.ts`) / 401 / 500 (generisk tekst) |
+| `/api/internal/conversion/sync` | GET | **Bearer-token** (`CRON_SECRET`; kun `VERCEL_ENV=production`) | Gate D (Issue #89): daglig sync af konverteringsmålingen (Vercel Cron — aktiveres separat) og operatørstyret baseline. `runConversionSync` med lease/atomisk commit; `SKIPPED` uden ACTIVE-måling. Kun kategorisk svar | — | `{ result, errorCode, baseline, observed, auditRecorded }` / 401 / 403 / 409 / 500 / 502 |
 | `/api/internal/analytics/travel-plans` | GET | **Bearer-token** (`ANALYTICS_BRIDGE_API_KEY`, ikke Supabase-session) | Analytics Bridge (Issue #45, se `docs/ANALYTICS-BRIDGE-API.md`) — read-only server-to-server-eksport af online rejseplaner til Marketing Dashboard. v1: fuld eksport hvert kald, intet `since`. Ingen kundedata; bookingnummer aldrig i klartekst (kun HMAC-SHA256 med separat `BOOKING_MATCH_SECRET`) | Query `?cursor?&limit?` | `{ schema_version, data: [{ trip_id, booking_match_key, online_plan_created_at, active, destination }], pagination: { next_cursor, has_more } }` / 400 / 401 / 500 |
 
 **Særlige noter:**
@@ -745,6 +746,12 @@ lease → fail-closed læsning → klassifikation → commit/fail; dry-run) → 
 API: `GET /admin/api/conversion` (401 før læsning).
 
 Tilstand i production efter Gate B2: tabeller og RPC'er findes, 0 rækker, ingen singleton-række — admin viser "ikke startet".
+
+**Gate D (Issue #89) — forberedt, ikke aktiveret:** `src/lib/conversion/syncRoute.ts` (ren handler:
+auth → production-værn → secrets → `runConversionSync` → kategorisk svar) bag
+`src/app/api/internal/conversion/sync/route.ts`. Admin-wire'en har `lastRun` (seneste
+`conversion_sync_runs`-række: status, tider, fejlkode, observeret total med small-cell), vist af
+`LastRunNotice`. Cron (`vercel.json`) findes bevidst ikke endnu — se runbooken § Gate D.
 
 ---
 
