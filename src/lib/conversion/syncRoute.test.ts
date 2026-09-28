@@ -221,6 +221,25 @@ describe("fail-closed kilder og samtidighed — aldrig delvis commit", () => {
     expect(s.p.getSyncRuns().filter((x) => x.status === "SUCCEEDED")).toHaveLength(1);
   });
 
+  it("D6: Vercel Cron leverer samme planlagte kørsel to gange i træk ⇒ anden kørsel er idempotent", async () => {
+    // Vercel-dokumentation: levering er best effort og kan invokere samme kørsel mere end én gang.
+    const s = setup();
+    await run(s); // baseline
+    s.setClock(T1);
+    s.deps.createAdapter = () => createFixtureHubSpotAdapter({ deals: deals(12, STAGE.quote) });
+    expect((await run(s)).body).toMatchObject({ result: "SUCCEEDED", baseline: false });
+    const afterFirst = new Map(s.p.getAllCohortRows());
+    s.setClock(new Date(T1.getTime() + 60_000)); // dublet ét minut senere
+    expect((await run(s)).body).toMatchObject({ result: "SUCCEEDED", baseline: false, observed: 12 });
+    const afterSecond = s.p.getAllCohortRows();
+    expect(afterSecond.size).toBe(afterFirst.size);
+    for (const [k, before] of afterFirst) {
+      const after = afterSecond.get(k)!;
+      // Kun last_observed_at flytter sig; kohortestart, eksponering og status er uændrede.
+      expect({ ...after, lastObservedAt: before.lastObservedAt }).toEqual(before);
+    }
+  });
+
   it("forældet generation / udløbet lease ved commit ⇒ FAILED COMMIT_REJECTED, kohorten urørt", async () => {
     let now = T0;
     const s = setup({ clock: () => now });

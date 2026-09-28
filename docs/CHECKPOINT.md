@@ -3,36 +3,30 @@
 > Kort hand-off til næste session — **overskrives** ved meningsfulde milepæle (se `docs/WORKING_MODE.md` §5).
 > Ikke en anmodning om godkendelse. Operationel status (hvad er live) står i `docs/STATUS.md`.
 
-**Sidst opdateret:** 2026-09-28 (Gate D forberedt, Issue #89)
+**Sidst opdateret:** 2026-09-28 (Gate D: D0–D5 gennemført, D6 cron-PR i review — Issue #89)
 
 ## Branch / HEAD
 
-- **Production `main`:** `a1dd164509700d7d692ceffeadaba0105e21a5f6` (merge af PR #88), deploy success.
-- **Gate D:** branch `feat/gate-d-activation-89` fra `a1dd164`. Head-SHA og CI står i PR'en. **Ikke merget.**
+- **Production `main`:** `0722653d022bfbf3c0c739c1f497064df0aeb379` (merge af PR #90), deploy success.
+- **D6:** branch `feat/gate-d6-cron-89` fra `0722653`. Head-SHA og CI står i PR'en. **Ikke merget.**
 
-## Production-tilstand (uændret i Gate D)
+## Production-tilstand (efter D5)
 
-Migration 013 + 014 anvendt; 0/0/0 rækker; ingen singleton-række; `contract_version`-default 3;
-ingen conversion-secrets, ingen cron. Admin viser "Målingen er ikke startet".
+`conversion_measurement_state`: `ACTIVE`, kontrakt 3, `measurement_started_at` = `last_successful_sync_at`
+= 2026-09-28T15:36:05.111Z, `sync_generation` 1. Én `SUCCEEDED` baseline-kørsel (2.690 observeret,
+0 optaget). Kohorte 2.690 rækker (2.522 `PRE_START_EXISTING`, 168 `ELIGIBLE_PENDING`). Ingen cron endnu.
+Detaljer og verifikation: kommentarerne på Issue #89.
 
-## Færdigt (Gate D, kode + docs)
+## D6 (denne PR)
 
-- `src/lib/conversion/syncRoute.ts` + `src/app/api/internal/conversion/sync/route.ts`: GET, Bearer
-  `CRON_SECRET` (genbrugt konstant-tids-helper fra Analytics Bridge), kun `VERCEL_ENV=production`,
-  secrets før I/O, `runConversionSync`, kun kategorisk svar/log, `maxDuration` 300.
-- `scripts/operator/Invoke-ConversionSync.ps1`: SecureString, ét kald, kun kategorisk output.
-- Admin: `lastRun` i wire-DTO'en (status, tider, fejlkode, observeret total — 1–9 skjult) og
-  `LastRunNotice` (fejlboks ved FAILED, også mens målingen afventer baseline).
-- Tests: `syncRoute.test.ts` (36), admin-tests for seneste kørsel, pglite-test af hele
-  aktiveringssekvensen (seed → ACTIVE → mislykket baseline → dobbelt begin → baseline → PAUSED).
-- Runbook § Gate D (D0–D6, stopbetingelser, rollback, forventet admin, 30/60/90 + privacy).
-
-## Udestående (KRÆVER RICKO, i rækkefølge)
-
-D0 merge → D1 secrets (Production) → D2 preflight → D3 seed → D4 `ACTIVE` → D5 baseline via
-wrapperen → D6 cron-PR (`vercel.json`). Se runbooken.
+- `vercel.json`: én cron, GET `/api/internal/conversion/sync`, `0 3 * * *` (UTC; Hobby: 03:00–03:59).
+- `cronConfig.test.ts`: kun én cron, rigtig route med CRON_SECRET-handler, Hobby-gyldigt dagligt udtryk,
+  STALE (36 t) > værste rettidige afstand (25 t) og < én udeblevet kørsel (48 t).
+- `syncRoute.test.ts`: dublet-levering efter hinanden er idempotent.
+- Runbook D6: Vercel-fakta, kontrol efter merge, overvågning, opdagelse af manglende sync, pause
+  (Disable Cron Jobs / `PAUSED`; Instant Rollback stopper ikke cron).
 
 ## Næste handling
 
-Afvent Rickos review af Gate D-PR'en. Ingen secrets, seed, `ACTIVE`, baseline, cron, production-write
-eller merge før hvert trin er eksplicit godkendt.
+Afvent Rickos review af D6-PR'en. Efter merge: read-only kontrol af Cron Jobs i Vercel og af første
+daglige kørsel næste morgen. Ingen manuel sync, ingen dataændring uden eksplicit godkendelse.
