@@ -197,6 +197,9 @@ Rå output er ikke gemt; kun ovenstående sanitiserede aggregater.
 
 ## 6. Stadig ikke aktiveret
 
+> **Opdatering 2026-09-28:** PR #85 er merget (`487fa64`) efter Codex-godkendelse. Migration 014 er
+> leveret som fil i Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)), ikke anvendt. Listen nedenfor gælder fortsat for production.
+
 Ingen Vercel-secrets · ingen singleton-seed · ingen cron · ingen DB-write · ingen officiel
 baseline-sync · ingen status `ACTIVE` · ingen Gate D · ingen merge. Production-DB'ens
 `contract_version` er fortsat 2.

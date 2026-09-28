@@ -71,8 +71,10 @@ Den oprindelige procedure (bevaret som reference):
 > og versionsløftet af production-DB'ens `contract_version` (2 → 3) er **ikke** en del af C1.
 > **Aktiveringsforudsætning fra C1:** migration 014 (kolonner + CHECK + frys-trigger for
 > efterfølgende udelukkelse: `BOOKED_OTHER_REFERENCE_UNRESOLVED`/`INVALIDATED_DUPLICATE_OR_TEST`)
-> skal være reviewet og anvendt, før nogen non-dry-run; indtil da afviser Supabase-adapteren enhver
-> commit med en markering.
+> skal være reviewet og anvendt, før nogen non-dry-run. **Leveret som fil i Gate C2 (Issue #86) —
+> se § Gate C2 nedenfor.**
+>
+> **PR #85 (Gate C1) er merget** (`487fa64`, 2026-09-25).
 
 1. **Udfyld stage-kontrakten (forudsætning).** Operatøren (Ricko) henter pipeline `754595640`'s
    komplette stage-liste read-only (samme operatør-kørte mønster som Gate A — agenten ser aldrig
@@ -100,6 +102,35 @@ Den oprindelige procedure (bevaret som reference):
    Den gør intet før Gate D (status `NOT_STARTED` ⇒ `NOT_ACTIVE`, ingen skrivning).
 7. Rollback: fjern cronnen; secrets kan fjernes uden datatab.
 
+## Gate C2 — migration 014 og databasekontrakt v3 (Issue #86) — FIL, IKKE ANVENDT
+
+Leveret: `supabase/014_conversion_post_enrollment_v3.sql`, rollback-SQL i
+`supabase/rollback/014_conversion_post_enrollment_v3_rollback.sql`, v3-skrivevej i
+`persistence.ts` (`conversion_commit_sync_run_v3`), fælles kolonneliste (`COHORT_COLUMNS`) for
+sync-motor og admin-loader, og `src/lib/conversion/migration014.sql.test.ts` (pglite, kører i CI).
+Detaljer: `supabase/README.md` § Migration 014.
+
+**Vigtigt om rækkefølgen:** efter merge af Gate C2-PR'en kalder koden v3-RPC'en og læser de nye
+kolonner. Mod production (013) betyder det: en commit fejler lukket (`COMMIT_REJECTED`, RPC findes
+ikke) og en kohortelæsning fejler lukket (ukendt kolonne ⇒ `SOURCE_READ_FAILED`). Den write-free
+operatør-dry-run fra C1 kan derfor først køres igen, når 014 er anvendt. Admin-visningen påvirkes
+ikke, så længe der ikke findes en singleton-række (den læser ikke kohorten før målingsstart).
+
+### Procedure for anvendelse (separat, eksplicit go — ikke en del af C2)
+
+1. **Drift-kontrol FØRST:** `node scripts/check-schema-drift.mjs` mod production skal give exit 0
+   (ingen uforklaret drift). Fejler den, stop.
+2. Preflight read-only: 0 rækker (eller: ingen startet måling), migrationshistorik 1:1, ingen cron.
+3. Anvend `014_conversion_post_enrollment_v3.sql` præcis én gang via Supabase MCP `apply_migration`.
+4. Post-verifikation read-only: de to kolonner, 5 CHECKs (validated), to nye triggere, v3-RPC'erne
+   SECURITY INVOKER med fast `search_path` og EXECUTE kun `service_role`, 013's commit/parse uden
+   EXECUTE for `service_role`, table grants uændrede (kun `service_role` SELECT/INSERT/UPDATE),
+   `contract_version`-default = 3, rækketal uændret.
+5. `node scripts/check-schema-drift.mjs --update-baseline` og commit baselinen (kun 014-objekter).
+6. Stadig ingen seed/secrets/cron/`ACTIVE` — det er Gate C-aktivering/Gate D.
+
+Rollback: se `supabase/README.md` § Migration 014 (blokerer med vilje, hvis markeringer findes).
+
 ## Gate D — officiel start (separat, eksplicit go)
 
 1. Ricko godkender eksplicit, at målingen må starte.
@@ -119,7 +150,8 @@ Den oprindelige procedure (bevaret som reference):
 
 Udelukkelsesårsager i kohorten: `MISSING_BOOKING_NO`, `INVALID_BOOKING_NO_FORMAT`,
 `SHARED_BOOKING_REFERENCE`, `CLOSED_BEFORE_QUALIFIED_OBSERVATION`,
-`BOOKED_BEFORE_QUALIFIED_OBSERVATION`.
+`BOOKED_BEFORE_QUALIFIED_OBSERVATION`. Efterfølgende udelukkelse af en optaget deal (migration 014,
+ikke anvendt endnu): `BOOKED_OTHER_REFERENCE_UNRESOLVED`, `INVALIDATED_DUPLICATE_OR_TEST`.
 
 `conversion_sync_runs.error_code` er en af: `CONFIG_INVALID`, `NOT_ACTIVE`,
 `CONTRACT_VERSION_MISMATCH`, `CONTRACT_INCOMPLETE`, `CONTRACT_DRIFT`, `HTTP_401/403/429/5XX`,
