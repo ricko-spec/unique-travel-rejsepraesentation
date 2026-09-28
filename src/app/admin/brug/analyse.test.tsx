@@ -108,6 +108,32 @@ describe("salgsoversigtens to tilstande (samme komponent, samme DTO)", () => {
     expect(markup).not.toContain("Aktivér");
   });
 
+  it("Codex-review 5343143339: Kundeadfærd har KUN Detaljer — ingen Åbn, Kopiér link, Sammenlign eller Aktivér/Deaktivér", () => {
+    const markup = html(createElement(SalesOverviewTable, { mode: "behavior", overview: OVERVIEW }));
+    // Handlingscellen for hver række: præcis ét link, og det er Detaljer.
+    const actionCells = Array.from(markup.matchAll(/<div class="admin-row-actions">([\s\S]*?)<\/div>/g), (m) => m[1]);
+    expect(actionCells).toHaveLength(OVERVIEW.trips.length);
+    for (const [i, cell] of actionCells.entries()) {
+      const labels = Array.from(cell.matchAll(/>([^<>]+)<\/(?:a|button)>/g), (m) => m[1].trim());
+      expect(labels).toEqual(["Detaljer"]);
+      expect(cell).toContain(`href="/admin/trips/${OVERVIEW.trips[i].id}"`);
+      expect(cell).not.toContain(`href="/${OVERVIEW.trips[i].slug}"`); // Åbn (kundens præsentation)
+      expect(cell).not.toContain("/admin/qa/"); // Sammenlign
+    }
+    for (const forbidden of [">Åbn<", "Kopiér link", "Sammenlign", "Deaktivér", "Aktivér"]) expect(markup).not.toContain(forbidden);
+    expect(markup).not.toContain("<button"); // ingen skrivende eller kopierende handlinger overhovedet
+  });
+
+  it("admin-forsiden har fortsat alle fem handlinger pr. række, inkl. Åbn til kundens præsentation", () => {
+    const markup = html(createElement(SalesOverviewTable, { mode: "admin", overview: OVERVIEW, onCopyLink: noop, onToggleActive: noop }));
+    const actionCells = Array.from(markup.matchAll(/<div class="admin-row-actions">([\s\S]*?)<\/div>/g), (m) => m[1]);
+    for (const [i, cell] of actionCells.entries()) {
+      const labels = Array.from(cell.matchAll(/>([^<>]+)<\/(?:a|button)>/g), (m) => m[1].trim());
+      expect(labels).toEqual(["Kopiér link", "Åbn", "Detaljer", "Sammenlign", "Deaktivér"]);
+      expect(cell).toContain(`href="/${OVERVIEW.trips[i].slug}"`);
+    }
+  });
+
   it("Kundeadfærd: en fejlet kilde vises som 'Kunne ikke hentes' med bemærkning — aldrig som ingen aktivitet", () => {
     const degraded: SalesOverview = {
       ...OVERVIEW,

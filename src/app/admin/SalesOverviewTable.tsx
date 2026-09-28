@@ -41,8 +41,8 @@ import type { SalesOverview, SalesOverviewRow } from "@/lib/sales-overview-types
 //    og handlingerne Kopiér link, Åbn, Detaljer, Sammenlign, Aktivér/Deaktivér.
 //    INGEN adfærdskolonner eller aktivitetsfilter (de bor under Analyse).
 //  - "behavior" (Analyse → Kundeadfærd): Åbnet, Set, Kontakt, Seneste aktivitet med
-//    aktivitetsfilter, sortering, pagination, degraderingsbemærkning og Detaljer-link.
-//    Ingen skrivende handlinger.
+//    aktivitetsfilter, sortering, pagination, degraderingsbemærkning og KUN Detaljer-
+//    linket som handling (ingen Åbn, Kopiér link, Sammenlign eller Aktivér/Deaktivér).
 
 export type SalesOverviewMode = "admin" | "behavior";
 
@@ -309,29 +309,29 @@ export function SalesOverviewTable(props: Props) {
                   </td>
                   <td>
                     <div className="admin-row-actions">
-                      {props.mode === "admin" && (
-                        <button
-                          className="admin-btn admin-btn-secondary"
-                          onClick={() => props.onCopyLink(t.slug)}
-                          style={{ borderColor: "rgba(0,78,80,0.5)", color: "var(--rainforest)" }}
-                        >
-                          Kopiér link
-                        </button>
-                      )}
-                      <a
-                        href={`/${t.slug}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="admin-btn admin-btn-secondary"
-                        style={{ borderColor: "rgba(0,78,80,0.5)", color: "var(--rainforest)" }}
-                      >
-                        Åbn
-                      </a>
-                      <Link href={`/admin/trips/${t.id}`} className="admin-btn admin-btn-secondary">
-                        Detaljer
-                      </Link>
-                      {props.mode === "admin" && (
+                      {/* Kundeadfærd (behavior) har KUN Detaljer; alle øvrige handlinger — også Åbn —
+                          hører til administrationslisten på forsiden (Issue #92, løsning A). */}
+                      {props.mode === "admin" ? (
                         <>
+                          <button
+                            className="admin-btn admin-btn-secondary"
+                            onClick={() => props.onCopyLink(t.slug)}
+                            style={{ borderColor: "rgba(0,78,80,0.5)", color: "var(--rainforest)" }}
+                          >
+                            Kopiér link
+                          </button>
+                          <a
+                            href={`/${t.slug}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="admin-btn admin-btn-secondary"
+                            style={{ borderColor: "rgba(0,78,80,0.5)", color: "var(--rainforest)" }}
+                          >
+                            Åbn
+                          </a>
+                          <Link href={`/admin/trips/${t.id}`} className="admin-btn admin-btn-secondary">
+                            Detaljer
+                          </Link>
                           <Link href={`/admin/qa/${t.slug}`} className="admin-btn admin-btn-secondary">
                             Sammenlign
                           </Link>
@@ -342,6 +342,10 @@ export function SalesOverviewTable(props: Props) {
                             {t.active ? "Deaktivér" : "Aktivér"}
                           </button>
                         </>
+                      ) : (
+                        <Link href={`/admin/trips/${t.id}`} className="admin-btn admin-btn-secondary">
+                          Detaljer
+                        </Link>
                       )}
                     </div>
                   </td>
