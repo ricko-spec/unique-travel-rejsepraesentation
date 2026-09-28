@@ -35,6 +35,24 @@ import type { SalesOverview, SalesOverviewRow } from "@/lib/sales-overview-types
 // PRINCIPPER (docs/VISION-3.0-PHASE-4-PLAN.md §3-§4): kun observerede fakta — ingen
 // fortolkning. En fejlet kilde eller ukendt vurdering vises med egen tekst
 // ("Kunne ikke hentes"/"Kunne ikke vurderes"), aldrig som "Ingen registreret".
+//
+// TO TILSTANDE af samme komponent og samme DTO (Issue #92, løsning A):
+//  - "admin" (admin-forsiden): administrationslisten — søg, "mine", "vis inaktive"
+//    og handlingerne Kopiér link, Åbn, Detaljer, Sammenlign, Aktivér/Deaktivér.
+//    INGEN adfærdskolonner eller aktivitetsfilter (de bor under Analyse).
+//  - "behavior" (Analyse → Kundeadfærd): Åbnet, Set, Kontakt, Seneste aktivitet med
+//    aktivitetsfilter, sortering, pagination, degraderingsbemærkning og Detaljer-link.
+//    Ingen skrivende handlinger.
+
+export type SalesOverviewMode = "admin" | "behavior";
+
+const INITIAL_VIEW: Record<SalesOverviewMode, SalesViewState> = {
+  // Uden adfærdskolonner giver "seneste aktivitet" ingen synlig mening — nyeste først.
+  admin: { ...DEFAULT_VIEW, sort: "created" },
+  behavior: DEFAULT_VIEW,
+};
+
+const BEHAVIOR_TITLE = "Kundeadfærd pr. rejseplan";
 
 const MUTED = { color: "var(--grey-text)" } as const;
 
@@ -81,17 +99,20 @@ function ContactCell({ row }: { row: SalesOverviewRow }) {
   );
 }
 
-export function SalesOverviewTable({
-  overview,
-  onCopyLink,
-  onToggleActive,
-}: {
-  overview: SalesOverview;
-  onCopyLink: (slug: string) => void;
-  onToggleActive: (id: string, currentlyActive: boolean) => void;
-}) {
+type Props =
+  | {
+      mode: "admin";
+      overview: SalesOverview;
+      onCopyLink: (slug: string) => void;
+      onToggleActive: (id: string, currentlyActive: boolean) => void;
+    }
+  | { mode: "behavior"; overview: SalesOverview };
+
+export function SalesOverviewTable(props: Props) {
+  const { mode, overview } = props;
+  const behavior = mode === "behavior";
   const { trips, viewer, degraded } = overview;
-  const [view, setView] = useState<SalesViewState>(DEFAULT_VIEW);
+  const [view, setView] = useState<SalesViewState>(INITIAL_VIEW[mode]);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   function updateView(patch: Partial<SalesViewState>) {
@@ -117,7 +138,7 @@ export function SalesOverviewTable({
           marginBottom: 16,
         }}
       >
-        <h2 style={{ marginBottom: 0 }}>{COPY.title}</h2>
+        <h2 style={{ marginBottom: 0 }}>{behavior ? BEHAVIOR_TITLE : COPY.title}</h2>
         {trips.length > 0 && (
           <input
             type="search"
@@ -141,6 +162,7 @@ export function SalesOverviewTable({
             marginBottom: 14,
           }}
         >
+          {behavior && (
           <label style={{ fontSize: 12, ...MUTED }}>
             <span style={{ display: "block", marginBottom: 4 }}>{COPY.filters.activity}</span>
             <select
@@ -156,6 +178,7 @@ export function SalesOverviewTable({
               ))}
             </select>
           </label>
+          )}
 
           {viewer.mineAvailable && (
             <label style={{ fontSize: 12, ...MUTED }}>
@@ -175,6 +198,7 @@ export function SalesOverviewTable({
             </label>
           )}
 
+          {behavior && (
           <label style={{ fontSize: 12, ...MUTED }}>
             <span style={{ display: "block", marginBottom: 4 }}>{COPY.filters.sort}</span>
             <select
@@ -190,6 +214,7 @@ export function SalesOverviewTable({
               ))}
             </select>
           </label>
+          )}
 
           <label
             style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, paddingBottom: 8 }}
@@ -204,7 +229,7 @@ export function SalesOverviewTable({
         </div>
       )}
 
-      {degraded.length > 0 && (
+      {behavior && degraded.length > 0 && (
         <div
           role="status"
           style={{
@@ -233,10 +258,14 @@ export function SalesOverviewTable({
                 <th>{COPY.columns.destination}</th>
                 <th>{COPY.columns.customer}</th>
                 <th>{COPY.columns.created}</th>
-                <th>{COPY.columns.opened}</th>
-                <th>{COPY.columns.sections}</th>
-                <th>{COPY.columns.contact}</th>
-                <th>{COPY.columns.lastActivity}</th>
+                {behavior && (
+                  <>
+                    <th>{COPY.columns.opened}</th>
+                    <th>{COPY.columns.sections}</th>
+                    <th>{COPY.columns.contact}</th>
+                    <th>{COPY.columns.lastActivity}</th>
+                  </>
+                )}
                 <th>{COPY.columns.status}</th>
                 <th>{COPY.columns.actions}</th>
               </tr>
@@ -255,18 +284,22 @@ export function SalesOverviewTable({
                       <div style={{ fontSize: 11, marginTop: 2 }}>{t.created_by_name}</div>
                     )}
                   </td>
-                  <td style={{ fontSize: 12 }}>
-                    <OpenedCell row={t} />
-                  </td>
-                  <td style={{ fontSize: 12 }}>
-                    <SectionsCell row={t} />
-                  </td>
-                  <td style={{ fontSize: 12 }}>
-                    <ContactCell row={t} />
-                  </td>
-                  <td style={{ fontSize: 12, ...(t.lastActivityAt ? {} : MUTED) }}>
-                    {lastActivityText(t.lastActivityAt)}
-                  </td>
+                  {behavior && (
+                    <>
+                      <td style={{ fontSize: 12 }}>
+                        <OpenedCell row={t} />
+                      </td>
+                      <td style={{ fontSize: 12 }}>
+                        <SectionsCell row={t} />
+                      </td>
+                      <td style={{ fontSize: 12 }}>
+                        <ContactCell row={t} />
+                      </td>
+                      <td style={{ fontSize: 12, ...(t.lastActivityAt ? {} : MUTED) }}>
+                        {lastActivityText(t.lastActivityAt)}
+                      </td>
+                    </>
+                  )}
                   <td>
                     {t.active ? (
                       <span className="admin-status-active">Aktiv</span>
@@ -276,13 +309,15 @@ export function SalesOverviewTable({
                   </td>
                   <td>
                     <div className="admin-row-actions">
-                      <button
-                        className="admin-btn admin-btn-secondary"
-                        onClick={() => onCopyLink(t.slug)}
-                        style={{ borderColor: "rgba(0,78,80,0.5)", color: "var(--rainforest)" }}
-                      >
-                        Kopiér link
-                      </button>
+                      {props.mode === "admin" && (
+                        <button
+                          className="admin-btn admin-btn-secondary"
+                          onClick={() => props.onCopyLink(t.slug)}
+                          style={{ borderColor: "rgba(0,78,80,0.5)", color: "var(--rainforest)" }}
+                        >
+                          Kopiér link
+                        </button>
+                      )}
                       <a
                         href={`/${t.slug}`}
                         target="_blank"
@@ -295,15 +330,19 @@ export function SalesOverviewTable({
                       <Link href={`/admin/trips/${t.id}`} className="admin-btn admin-btn-secondary">
                         Detaljer
                       </Link>
-                      <Link href={`/admin/qa/${t.slug}`} className="admin-btn admin-btn-secondary">
-                        Sammenlign
-                      </Link>
-                      <button
-                        className="admin-btn admin-btn-danger"
-                        onClick={() => onToggleActive(t.id, t.active)}
-                      >
-                        {t.active ? "Deaktivér" : "Aktivér"}
-                      </button>
+                      {props.mode === "admin" && (
+                        <>
+                          <Link href={`/admin/qa/${t.slug}`} className="admin-btn admin-btn-secondary">
+                            Sammenlign
+                          </Link>
+                          <button
+                            className="admin-btn admin-btn-danger"
+                            onClick={() => props.onToggleActive(t.id, t.active)}
+                          >
+                            {t.active ? "Deaktivér" : "Aktivér"}
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -324,7 +363,7 @@ export function SalesOverviewTable({
               </button>
             </div>
           )}
-          <p style={{ fontSize: 12, marginTop: 16, ...MUTED }}>{COPY.footnote}</p>
+          {behavior && <p style={{ fontSize: 12, marginTop: 16, ...MUTED }}>{COPY.footnote}</p>}
         </div>
       )}
     </>

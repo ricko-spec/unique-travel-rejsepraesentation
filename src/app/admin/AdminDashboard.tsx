@@ -8,11 +8,14 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Trip } from "@/lib/types";
 import { SalesOverviewTable } from "./SalesOverviewTable";
-import { ConversionMeasurement } from "./ConversionMeasurement";
 import type { SalesOverview } from "@/lib/sales-overview-types";
+import { fetchSalesOverview } from "@/lib/sales-overview-client";
 
-// Vision 3.0 Fase 4 (Issue #76): listen er nu salgsoversigten — et kompakt DTO fra
+// Vision 3.0 Fase 4 (Issue #76): listen er salgsoversigten — et kompakt DTO fra
 // GET /admin/api/trips (src/lib/sales-overview*.ts), vist af SalesOverviewTable.
+// Issue #92: forsiden viser den i tilstanden "admin" (administrationslisten med
+// handlinger, uden adfærdskolonner); kundeadfærd og konvertering bor under
+// Analyse (/admin/brug).
 // Hele listen (også deaktiverede) hentes; filtre/sortering/pagination sker
 // klient-side. Dashboardet bruger listen til at genkende et eksisterende
 // bookingnummer ved upload ("findes allerede") — derfor holdes ALLE rækker her.
@@ -66,23 +69,15 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
       setListError(null);
     }
     try {
-      const res = await fetch("/admin/api/trips");
-      if (!res.ok) {
+      // Fælles læsevej (også brugt af Analyse → Kundeadfærd). Både 4xx/5xx og
+      // netværksfejl giver { ok: false } — samme rolige fejltilstand, aldrig en tom liste.
+      const result = await fetchSalesOverview();
+      if (!result.ok) {
         if (silent) showToast("Listen kunne ikke opdateres");
         else setListError("Rejseplanerne kunne ikke hentes lige nu.");
         return;
       }
-      const j = await res.json();
-      setOverview({
-        trips: j.trips ?? [],
-        viewer: { mineAvailable: !!j.viewer?.mineAvailable },
-        degraded: Array.isArray(j.degraded) ? j.degraded : [],
-      });
-    } catch {
-      // Netværksfejl kaster fra fetch() selv (i modsætning til et 4xx/5xx-svar,
-      // som håndteres via !res.ok ovenfor) — samme rolige fejltilstand for begge.
-      if (silent) showToast("Listen kunne ikke opdateres");
-      else setListError("Rejseplanerne kunne ikke hentes lige nu.");
+      setOverview(result.overview);
     } finally {
       if (!silent) setLoadingList(false);
     }
@@ -244,9 +239,9 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
             {userEmail && (
               <span style={{ fontSize: 12, color: "var(--grey-text)" }}>{userEmail}</span>
             )}
-            <a className="admin-btn admin-btn-secondary" href="/admin/brug">
-              Brugsoverblik
-            </a>
+            <Link className="admin-btn admin-btn-secondary" href="/admin/brug">
+              Analyse
+            </Link>
             <a className="admin-btn admin-btn-secondary" href="/admin/profil">
               Min profil
             </a>
@@ -440,14 +435,23 @@ export function AdminDashboard({ userEmail }: { userEmail?: string }) {
               </button>
             </div>
           ) : (
-            <SalesOverviewTable
-              overview={overview}
-              onCopyLink={copyLink}
-              onToggleActive={toggleActive}
-            />
+            <>
+              <SalesOverviewTable
+                mode="admin"
+                overview={overview}
+                onCopyLink={copyLink}
+                onToggleActive={toggleActive}
+              />
+              <p style={{ fontSize: 12, color: "var(--grey-text)", marginTop: 16 }} data-analyse-link>
+                Kundeadfærd (åbnet, set, kontakt, seneste aktivitet), intern brug og konvertering finder du under{" "}
+                <Link href="/admin/brug?visning=kunder" style={{ color: "var(--rainforest)" }}>
+                  Analyse
+                </Link>
+                .
+              </p>
+            </>
           )}
         </div>
-        <ConversionMeasurement />
       </div>
 
       {toast && <div className="admin-toast">{toast}</div>}
