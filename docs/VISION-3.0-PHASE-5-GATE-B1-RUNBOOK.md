@@ -102,6 +102,10 @@ Den oprindelige procedure (bevaret som reference):
    Den gør intet før Gate D (status `NOT_STARTED` ⇒ `NOT_ACTIVE`, ingen skrivning).
 7. Rollback: fjern cronnen; secrets kan fjernes uden datatab.
 
+> **Trin 3, 4 og 6 er konkretiseret i § Gate D nedenfor** (Issue #89): routen er
+> `GET /api/internal/conversion/sync` med `CRON_SECRET`; rækkefølgen er secrets → preflight → seed →
+> `ACTIVE` → operatørstyret baseline → cron som separat aktiverings-PR.
+
 ## Gate C2 — migration 014 og databasekontrakt v3 (Issue #86) — ✅ ANVENDT 2026-09-28T10:32:48Z
 
 **Resultat:** PR #87 merget (`a11516a`); drift-kontrol BESTÅET (MCP-ækvivalent, 287/287,
@@ -139,20 +143,134 @@ ikke, så længe der ikke findes en singleton-række (den læser ikke kohorten f
 
 Rollback: se `supabase/README.md` § Migration 014 (blokerer med vilje, hvis markeringer findes).
 
-## Gate D — officiel start (separat, eksplicit go)
+## Gate D — kontrolleret aktivering (Issue #89) — forberedt, IKKE aktiveret
 
-1. Ricko godkender eksplicit, at målingen må starte.
-2. Operatøren sætter `update conversion_measurement_state set status = 'ACTIVE';`
-   (`measurement_started_at` forbliver `NULL` — triggeren tillader ikke at operatøren sætter den).
-3. Næste sync er **baseline-kørslen**: `conversion_commit_sync_run` sætter
-   `measurement_started_at` = kørslens `observed_at` (én gang, uforanderlig). Alle deals i
-   `QUOTE_OR_LATER`/`CLOSED_AMBIGUOUS` bliver `PRE_START_EXISTING`; åbne `PRE_QUOTE`-deals bliver
-   `ELIGIBLE_PENDING`. Ingen historik bruges.
-4. Dokumentér kun AGGREGEREDE baseline-tal (fra `conversion_sync_runs`) i `docs/STATUS.md`.
-5. Admin-smoke-test: `/admin` → "Konverteringsmåling" viser målingsstart og "Ikke nok data endnu"
-   (korrekt, forventet i de første måneder).
-6. Pause: `update conversion_measurement_state set status = 'PAUSED';` — begin afviser, intet
-   tabes. Genstart kræver samme godkendelsesniveau.
+> Leveret i Gate D-PR'en (Issue #89): sync-routen `GET /api/internal/conversion/sync`
+> (`src/app/api/internal/conversion/sync/route.ts` + `src/lib/conversion/syncRoute.ts`), operatør-
+> wrapperen `scripts/operator/Invoke-ConversionSync.ps1` og visning af seneste sync-kørsel i admin.
+> **Intet er aktiveret.** Hvert trin nedenfor kræver Rickos eksplicitte, separate go og udføres i
+> præcis denne rækkefølge. Stop ved første afvigelse — ingen retry-loop, ingen "reparation" med writes.
+
+### Hvad routen gør (uændret motor)
+
+Rækkefølge (fail-closed): (1) `Authorization: Bearer $CRON_SECRET` (konstant-tid; manglende server-
+secret ⇒ 401), (2) kun `VERCEL_ENV=production` (preview deler production-DB ⇒ 403), (3) HubSpot-token
+og de to HMAC-secrets ⇒ ellers `CONFIG_INVALID` uden læsning/skrivning, (4) `runConversionSync`.
+Uden singleton-række eller med `NOT_STARTED`/`PAUSED` gør den intet (`200 SKIPPED NOT_ACTIVE`).
+
+| HTTP | `result` | Betydning |
+|---|---|---|
+| 200 | `SUCCEEDED` | Commit gennemført (`baseline` true/false, `observed` = total, 1–9 skjult) |
+| 200 | `SKIPPED` | Målingen er ikke ACTIVE — intet læst fra HubSpot, intet skrevet |
+| 401 / 403 | `REJECTED` | Forkert/manglende `CRON_SECRET` / ikke production |
+| 409 | `FAILED` | `SYNC_ALREADY_RUNNING` — en anden kørsel holder leasen |
+| 500 | `FAILED` | `CONFIG_INVALID` — manglende/ugyldige secrets |
+| 502 | `FAILED` | Alt andet (HubSpot, kontraktdrift, paginering, Supabase, commit) — FAILED-run med kode |
+
+Svaret og loggen (`[conversion-sync] result=… code=…`) er kun kategoriske.
+
+### Secrets (Vercel, KUN miljøet "Production")
+
+| Navn | Status | Indhold |
+|---|---|---|
+| `BOOKING_MATCH_SECRET` | Findes (Analytics Bridge, Issue #45) — bekræft at den er sat for Production | Uændret |
+| `HUBSPOT_PRIVATE_APP_TOKEN` | **Ny** | Private App-token, kun `crm.objects.deals.read` + `crm.schemas.deals.read` |
+| `HUBSPOT_DEAL_KEY_SECRET` | **Ny** | `openssl rand -hex 32` — ALDRIG lig `BOOKING_MATCH_SECRET`. **Må aldrig roteres efter baseline** (deal-nøglerne ville ændre sig, og kohorten kunne ikke genkendes). Gem den i password-manageren |
+| `CRON_SECRET` | **Ny** | `openssl rand -hex 32` — Vercel Cron sender den automatisk som Bearer |
+
+Ingen af dem må sættes for Preview/Development. Env-ændringer kræver et nyt production-deploy.
+
+### Aktiveringsrækkefølge
+
+**D0. Merge Gate D-PR'en** (Rickos OK) → production-deploy READY.
+Kontrol (read-only): `GET /api/internal/conversion/sync` uden header ⇒ **401**.
+
+**D1. Secrets** (Ricko i Vercel, se tabellen) → redeploy production.
+Kontrol: `Invoke-ConversionSync.ps1` ⇒ **200 `SKIPPED` `NOT_ACTIVE`**. Det beviser auth, production-
+værnet og at token + HMAC-secrets er brugbare, uden at HubSpot kaldes eller noget skrives.
+*Stop hvis:* 401 (forkert `CRON_SECRET`), 403 (ikke production), 500 `CONFIG_INVALID`.
+
+**D2. Preflight (read-only)** umiddelbart før seed:
+- drift-kontrol PASS (script eller MCP-ækvivalent, se Gate C2);
+- 0/0/0 rækker, ingen singleton-række, 15 migrationer (senest `20260928103248`), ingen cron-schema;
+- production-deploy af den mergede Gate D-kode READY.
+- Valgfrit: C1's write-free operatør-dry-run igen (stagekontrakt MATCH med den skærpede
+  label/displayOrder/archived-verifikation — den er endnu ikke kørt live).
+*Stop hvis:* drift, rækker ≠ 0, kontrakt ≠ MATCH.
+
+**D3. Singleton-seed** (Rickos go, via Supabase MCP):
+`insert into public.conversion_measurement_state (id) values (1);`
+Kontrol: `status = NOT_STARTED`, `contract_version = 3`, `measurement_started_at` NULL, `sync_generation` 0.
+Admin viser fortsat "Målingen er ikke startet".
+
+**D4. ACTIVE** (Rickos Gate D-go, via Supabase MCP):
+`update public.conversion_measurement_state set status = 'ACTIVE' where id = 1;`
+Kontrol: `measurement_started_at` stadig NULL. Admin: "aktiveret og afventer den første officielle
+baseline-synkronisering". (Findes der allerede en daglig cron, kan den nu køre baseline — derfor
+kommer cron først i D6.)
+
+**D5. Første baseline** — Ricko kører `scripts/operator/Invoke-ConversionSync.ps1`.
+Forventet: **200 `SUCCEEDED` `baseline=True`**, `observed` ≈ antal deals i pipelinen (C1: 2.652).
+Kontrol (read-only): `measurement_started_at` = kørslens tidspunkt, `sync_generation` 1, én
+`SUCCEEDED`-kørsel med `is_baseline = true`, kohorterækker = observeret, **0 `ENROLLED`**.
+*Stop hvis:* andet end 200 `SUCCEEDED`. Kør IKKE igen i blinde: læs `conversion_sync_runs.error_code`.
+En mislykket baseline lader `measurement_started_at` være NULL og kan genkøres sikkert, når årsagen
+er forstået (bevist i `syncRoute.test.ts` og `migration014.sql.test.ts`). `COMMIT_REJECTED` på
+baseline kan skyldes batchstørrelsen (~2.650 rækker i ét RPC-kald, kendt begrænsning) ⇒ stop og
+vurdér. Ved gentagne fejl: `PAUSED` (se rollback).
+
+**D6. Daglig scheduler** — separat aktiverings-PR (Rickos OK) med præcis denne `vercel.json`:
+
+```json
+{
+  "crons": [{ "path": "/api/internal/conversion/sync", "schedule": "0 3 * * *" }]
+}
+```
+
+(03:00 UTC ≈ 05:00 dansk sommertid; Vercel Hobby kan afvige inden for timen.) Kontrol efter merge:
+cronnen er listet i Vercel → Settings → Cron Jobs; næste morgen viser admin "Seneste synkronisering
+gennemført" og ingen STALE-advarsel.
+
+### Rollback og pause
+
+| Situation | Handling | Konsekvens |
+|---|---|---|
+| Stop kørsler | `update public.conversion_measurement_state set status = 'PAUSED' where id = 1;` | `begin` afviser; routen svarer `SKIPPED`; intet data tabes. Genstart = `ACTIVE` (samme godkendelse) |
+| Stop scheduler | Revert af D6-PR'en (eller slå cron fra i Vercel) | Ingen kald; data urørt |
+| Træk adgang tilbage | Fjern `CRON_SECRET` / HubSpot-token i Vercel + redeploy | Routen svarer 401 / 500 `CONFIG_INVALID` |
+| Mislykket baseline | Intet at rulle tilbage (kun en FAILED-revisionsrække) | Kan genkøres, når årsagen er forstået |
+| Efter gennemført baseline | `measurement_started_at` er uforanderlig (trigger) | Nulstilling kræver sletning af data = destruktivt, separat beslutning (KRÆVER RICKO) |
+
+### Fejlalarmering
+
+- **Admin** (`/admin` → Konverteringsmåling): seneste kørsel (tid, status, observeret total) og en
+  rød fejlboks med fejlkode ved `FAILED`; rød STALE-advarsel, når seneste succesfulde sync er > 36 t.
+- **Vercel-logs**: `[conversion-sync] result=FAILED code=…` (console.error) og ikke-2xx-status på cron-
+  kaldet. Ingen e-mail-/Slack-alarm i denne gate (kræver ny integration — separat beslutning).
+
+### Hvad admin viser efter første baseline
+
+- Målingsstart = baseline-tidspunktet; "Seneste baseline-synkronisering gennemført … · N deals observeret".
+- Begge grupper: **0 optagne** — baseline optager ingen deals (alle eksisterende er
+  `PRE_START_EXISTING` eller `ELIGIBLE_PENDING`), så "Ikke nok data endnu til en sammenligning".
+- Datakvalitet: observeret i alt, `ELIGIBLE_PENDING` og `PRE_START_EXISTING` (C1-dry-run: 163 /
+  2.489 — tallene kan have flyttet sig), øvrige tal enten 0 eller "skjult (lille tal)".
+- Fra næste daglige kørsel optages nye deals og `ELIGIBLE_PENDING`-deals, der for første gang ses i
+  "Tilbud sendt"/"Opdateret tilbud" (kohortestart = den kørsels tidspunkt), med frosset eksponering
+  ONLINE/PDF_ONLY. `PRE_START_EXISTING` optages aldrig.
+
+### Hvornår tal bliver synlige (30/60/90 dage og privacy)
+
+- En deal er moden for vinduet W, når W dage er gået siden dens kohortestart. Rater for 30/60/90
+  dage kan tidligst vises 30/60/90 dage efter, at de første deals er optaget (dvs. efter første
+  daglige kørsel efter baseline).
+- En celle publiceres kun, når nævner n, bookede b og ikke-bookede n−b **alle er ≥ 10** i begge
+  grupper, og kun i lukkede, hierarkiske publiceringsblokke (ingen lille celle eller komplement kan
+  udledes — heller ikke dag for dag eller mellem 30/60/90). Tal 1–9 vises aldrig ("skjult").
+- Konsekvens: realistisk går der flere måneder, før en 30-dages-sammenligning vises; 90-dages-
+  tallet kræver mindst 90 dage plus nok bookede OG ikke-bookede deals i begge grupper. Hvor hurtigt
+  afhænger alene af, hvor mange nye tilbud der sendes efter målingsstart.
+- Tallene er en observeret sammenhæng mellem eksponering og booking, ikke bevist årsag.
 
 ## Drift: fejlkoder og crash
 

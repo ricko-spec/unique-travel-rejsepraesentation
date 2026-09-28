@@ -39,6 +39,8 @@ export function fakeAdminSupabase(options: {
   cohortRows?: Record<string, unknown>[];
   cohortError?: { message: string } | null;
   serverMaxRows?: number;
+  lastRun?: Record<string, unknown> | null;
+  lastRunError?: { code?: string; message: string } | null;
 }) {
   const client = {
     from(table: string) {
@@ -67,6 +69,16 @@ export function fakeAdminSupabase(options: {
             return q;
           },
         };
+      }
+      if (table === "conversion_sync_runs") {
+        const q = {
+          select: () => q,
+          order: () => q,
+          limit: () => q,
+          maybeSingle: () =>
+            Promise.resolve(options.lastRunError ? { data: null, error: options.lastRunError } : { data: options.lastRun ?? null, error: null }),
+        };
+        return q;
       }
       throw new Error(`uventet tabel i fake: ${table}`);
     },

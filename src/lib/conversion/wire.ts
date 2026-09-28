@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import type { ConversionAggregate } from "./aggregate";
+import { SYNC_RUN_ERROR_CODES } from "./types";
 
 const nullableCount = z.number().int().nonnegative().nullable();
 
@@ -41,6 +42,22 @@ const isoOrNull = z
   .refine((s) => !Number.isNaN(new Date(s).getTime()), "ugyldig ISO-dato")
   .nullable();
 
+/**
+ * Seneste sync-kørsel (Gate D, Issue #89) — til fejlalarmering i admin. Kun
+ * status, tidspunkter, kategorisk fejlkode og det observerede TOTAL (1–9
+ * undertrykkes server-side). Aldrig per-kørsel-tal for optagne/bookede deals.
+ */
+const lastRunSchema = z.object({
+  status: z.enum(["RUNNING", "SUCCEEDED", "FAILED"]),
+  startedAt: z.string().refine((s) => !Number.isNaN(new Date(s).getTime()), "ugyldig ISO-dato"),
+  finishedAt: isoOrNull,
+  errorCode: z.enum(SYNC_RUN_ERROR_CODES).nullable(),
+  isBaseline: z.boolean().nullable(),
+  observed: nullableCount,
+});
+
+export type LastSyncRunWire = z.infer<typeof lastRunSchema>;
+
 export const conversionWireSchema = z.object({
   measurement: z.object({
     status: z.enum(["NOT_STARTED", "ACTIVE", "PAUSED"]),
@@ -71,13 +88,15 @@ export const conversionWireSchema = z.object({
     lostObserved: nullableCount,
     outcomeConflicts: nullableCount,
   }),
+  lastRun: lastRunSchema.nullable().default(null),
 });
 
 export type ConversionWire = z.infer<typeof conversionWireSchema>;
 
-export function toConversionWire(agg: ConversionAggregate): ConversionWire {
+export function toConversionWire(agg: ConversionAggregate, lastRun: LastSyncRunWire | null = null): ConversionWire {
   return {
     ...agg,
+    lastRun,
     measurement: {
       status: agg.measurement.status,
       contractVersion: agg.measurement.contractVersion,

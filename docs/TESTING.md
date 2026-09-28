@@ -460,6 +460,24 @@ pglite indgår ikke i server-bundlet: 0 filer i `.next/server`, og den importere
 **Ikke kørt (kræver production-adgang):** fuld schema-drift-kontrol mod production. Den er en
 forudsætning for at anvende 014, se runbooken § Gate C2.
 
+**Gate D (Issue #89):**
+- `syncRoute.test.ts` (36 tests) kører gennem den rigtige motor, stagekontrakt v3, fixture-HubSpot
+  og in-memory persistence. Den dækker:
+  - adgang: header, forkert/manglende/tom `CRON_SECRET` ⇒ 401; preview/development/uden `VERCEL_ENV` ⇒ 403;
+  - secrets: manglende/tomt/ugyldigt token og manglende/korte/ens HMAC-secrets ⇒ `CONFIG_INVALID`
+    uden lease og kohorte;
+  - tilstand: ingen singleton/NOT_STARTED/PAUSED ⇒ `SKIPPED`; DB-kontrakt 2 ⇒ `CONTRACT_VERSION_MISMATCH`;
+  - kørsler: baseline, daglig optagelse, 1–9 skjult, mislykket baseline ⇒ nulpunkt tomt + sikker genkørsel;
+  - fejl uden delvis commit: kontraktdrift (ny og omdøbt stage), HubSpot 401/429, ufuldstændig
+    paginering, Supabase-læsefejl, dobbeltkørsel ⇒ 409, udløbet lease ⇒ `COMMIT_REJECTED`, kast før lease;
+  - sikkerhed: svaret indeholder aldrig token, secrets, deal-id'er eller bookingnumre.
+- Admin: mislykket baseline vises med fejlkode; gennemført kørsel viser total (1–9 skjult);
+  igangværende kørsel vises; ugyldig kørselsrække eller læsefejl ⇒ degraded; uden singleton læses
+  kørsler ikke.
+- pglite: hele aktiveringssekvensen på 013 + 014 — runbookens seed ⇒ NOT_STARTED v3 → `ACTIVE` →
+  begin → dobbelt begin afvist → FAILED (nulpunkt NULL, generation 0, ingen kohorte) → baseline
+  gennemført → `PAUSED` blokerer begin.
+
 ## Efter enhver testrunde
 
 Rapportér resultater ærligt (også røde), opdatér `docs/STATUS.md`, og ryd test-data op.
