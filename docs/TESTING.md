@@ -478,6 +478,12 @@ forudsætning for at anvende 014, se runbooken § Gate C2.
   begin → dobbelt begin afvist → FAILED (nulpunkt NULL, generation 0, ingen kohorte) → baseline
   gennemført → `PAUSED` blokerer begin.
 
+**Gate D6 (Issue #89):** `cronConfig.test.ts` (4 tests) låser `vercel.json` til præcis én cron (ingen andre
+projektnøgler), stien til den eksisterende GET-route med `CRON_SECRET`-handleren, et Hobby-gyldigt dagligt
+udtryk (`0 3 * * *`, kun tal, ingen navne), og at `STALE_AFTER_HOURS` (36) er større end værste rettidige
+Hobby-afstand (25 t) og mindre end afstanden ved én udeblevet kørsel (48 t). `syncRoute.test.ts` (37):
+ny test af Vercels dublet-levering — to kørsler efter hinanden ændrer kun `last_observed_at`.
+
 ## Efter enhver testrunde
 
 Rapportér resultater ærligt (også røde), opdatér `docs/STATUS.md`, og ryd test-data op.

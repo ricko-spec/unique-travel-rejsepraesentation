@@ -57,10 +57,12 @@
   post-verifikation grøn; **0 rækker i alle tre tabeller, ingen singleton-række** — DB-default for
   `contract_version` er nu 3. Baseline opdateret fra det verificerede skema (kun 014-objekter).
   **Intet aktiveret:** ingen secrets, seed, cron, sync, `ACTIVE` eller Gate D.
-- **Aktivt: Gate D** ([Issue #89](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/89)) — aktiveringen er **forberedt, ikke udført**: sync-route
-  `GET /api/internal/conversion/sync` (Bearer `CRON_SECRET`, kun production, fail-closed),
-  operatør-wrapper til første baseline, seneste kørsel/fejl i admin, aktiveringsrækkefølge D0–D6 i
-  runbooken. Ingen secrets, seed, `ACTIVE`, baseline-sync, cron eller production-writes.
+- **Gate D ([Issue #89](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/89)) — målingen er STARTET i production 2026-09-28.** PR #90 merget (`0722653`); D1
+  secrets (Production) ⇒ route 200 `SKIPPED`; D2 preflight BESTÅET (ingen drift, fingerprint
+  `939d1c90…41d6`); D3 seed + D4 `ACTIVE` (15:29 UTC); **D5 baseline 15:36:05 UTC**: 2.690 deals
+  observeret (2.522 `PRE_START_EXISTING`, 168 `ELIGIBLE_PENDING`, 0 optaget), `sync_generation` 1, én
+  `SUCCEEDED`-kørsel. **D6 (daglig cron 03:00 UTC via `vercel.json`) i review** — indtil den er merget,
+  sker der ingen nye kørsler.
 - **Kendt driftsopfølgning (ikke en blocker):** production UI-smoketest af Fase 1C, 2, 3 og 4 er
   udsat (Ricko kan ikke teste lige nu).
 
@@ -98,9 +100,9 @@ Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/u
 
 ## Næste handling
 
-**Gate D forberedt** ([Issue #89](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/89)). Næste: review og merge af Gate D-PR'en. Derefter følger
-aktiveringen runbookens § Gate D trin for trin (D1 secrets → D2 preflight → D3 seed → D4 `ACTIVE` →
-D5 operatørstyret baseline → D6 cron-PR), hver med Rickos separate godkendelse.
+**Målingen er startet** (baseline 2026-09-28, [Issue #89](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/89)). Næste: review og merge af D6-cron-PR'en
+(Rickos OK). Derefter kontrol næste morgen efter 04:00 UTC: ny `SUCCEEDED`-kørsel, `sync_generation` 2,
+ingen STALE — se runbooken § Gate D, D6.
 
 Kapitlet i øvrigt: [Issue #41](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/41) — Vision 3.0: Customer Engagement & Sales Intelligence.
 Master-issue/produktkapitel, IKKE én stor PR. Fase 5 (prospektiv konverteringsmåling) er placeret i

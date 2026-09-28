@@ -139,7 +139,8 @@ eller GitHub Issues.
   `docs/VISION-3.0-PHASE-5-GATE-C1.md`. **Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)) gennemført:** PR #87 merget, drift-kontrol
   bestået og migration 014 anvendt i production (`20260928103248_conversion_post_enrollment_v3`), 0 rækker, intet aktiveret.
   **Gate D ([Issue #89](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/89)) forberedt, ikke aktiveret:** sync-route, operatør-wrapper, admin-fejlvisning,
-  runbook D0–D6. KRÆVER RICKO, hver for sig: merge → secrets → seed → `ACTIVE` → baseline → cron-PR. Udfaldsdefinitionen er
+  runbook D0–D6. **D0–D5 gennemført 2026-09-28 — målingen er startet (baseline 2.690 deals, 0 optaget).**
+  D6 (daglig cron) i review (KRÆVER RICKO). Udfaldsdefinitionen er
   fastlagt fra Gate A (kun `unique_travel_dealstatus` ⇒ Booket; `hs_is_closed_won` aldrig).
 - **Vision 3.0 retention — aktivering af `010b_trip_visits_retention.sql`/pg_cron.**
   Separat fra Fase 1B/1C/2; kræver egen, eksplicit godkendelse (inkl. evt. aktivering af

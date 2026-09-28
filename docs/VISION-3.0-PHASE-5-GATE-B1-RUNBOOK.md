@@ -143,7 +143,13 @@ ikke, så længe der ikke findes en singleton-række (den læser ikke kohorten f
 
 Rollback: se `supabase/README.md` § Migration 014 (blokerer med vilje, hvis markeringer findes).
 
-## Gate D — kontrolleret aktivering (Issue #89) — forberedt, IKKE aktiveret
+## Gate D — kontrolleret aktivering (Issue #89) — D0–D5 GENNEMFØRT, D6 i review
+
+> **Status 2026-09-28:** D0 (PR #90 merget, `0722653`), D1 (secrets; wrapper ⇒ 200 `SKIPPED`), D2
+> (preflight BESTÅET), D3 + D4 (seed 15:29:27 UTC, `ACTIVE` 15:29:38 UTC) og D5 (baseline 15:36:05 UTC:
+> 200 `SUCCEEDED`, 2.690 observeret, 0 optaget, `sync_generation` 1) er gennemført og verificeret —
+> se kommentarerne på [Issue #89](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/89). **D6 (daglig cron) leveres i en separat PR** og er først aktiv, når den er
+> merget og deployet til production.
 
 > Leveret i Gate D-PR'en (Issue #89): sync-routen `GET /api/internal/conversion/sync`
 > (`src/app/api/internal/conversion/sync/route.ts` + `src/lib/conversion/syncRoute.ts`), operatør-
@@ -219,34 +225,75 @@ er forstået (bevist i `syncRoute.test.ts` og `migration014.sql.test.ts`). `COMM
 baseline kan skyldes batchstørrelsen (~2.650 rækker i ét RPC-kald, kendt begrænsning) ⇒ stop og
 vurdér. Ved gentagne fejl: `PAUSED` (se rollback).
 
-**D6. Daglig scheduler** — separat aktiverings-PR (Rickos OK) med præcis denne `vercel.json`:
+**D6. Daglig scheduler** — separat aktiverings-PR (Rickos OK). `vercel.json` i repo-roden:
 
 ```json
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [{ "path": "/api/internal/conversion/sync", "schedule": "0 3 * * *" }]
 }
 ```
 
-(03:00 UTC ≈ 05:00 dansk sommertid; Vercel Hobby kan afvige inden for timen.) Kontrol efter merge:
-cronnen er listet i Vercel → Settings → Cron Jobs; næste morgen viser admin "Seneste synkronisering
-gennemført" og ingen STALE-advarsel.
+Fakta fra Vercels dokumentation (tjekket 2026-09-28: `/docs/cron-jobs`, `/docs/cron-jobs/manage-cron-jobs`,
+`/docs/cron-jobs/usage-and-pricing`):
+
+- Vercel kalder **GET** på **production-deploymentets** URL med user-agent `vercel-cron/1.0` og
+  headeren `x-vercel-cron-schedule`. `CRON_SECRET` sendes **automatisk** som
+  `Authorization: Bearer <CRON_SECRET>` — routen bruger den eksisterende konstant-tids-kontrol; ingen nye
+  secrets.
+- Tidszonen er altid **UTC**. 03:00 UTC = 05:00 dansk sommertid / 04:00 vintertid.
+- **Hobby:** højst én kørsel pr. døgn (hyppigere udtryk fejler ved deploy) og præcision pr. time:
+  `0 3 * * *` kan køre når som helst **mellem 03:00:00 og 03:59:59 UTC**.
+- Levering er **best effort**: en kørsel kan udeblive (så findes ingen log) eller leveres **to gange**.
+  Vercel **prøver ikke igen** ved fejl. Omdirigeringer følges ikke.
+- Nyt deploy afbryder ikke en igangværende kørsel. **Instant Rollback opdaterer IKKE crons** — de kører
+  videre, indtil de slås fra eller ændres i et nyt deploy.
+
+Sådan håndterer målingen det: dublet samtidig ⇒ lease ⇒ 409 `SYNC_ALREADY_RUNNING`, intet skrevet;
+dublet efter hinanden ⇒ idempotent genobservation (kun `last_observed_at` flytter sig); udeblevet
+kørsel ⇒ næste kørsel læser hele pipelinen igen (fuld snapshot, intet tabes — kun deals, der når at
+passere "Tilbud sendt" og videre til en senere fase mellem to kørsler, kan blive udelukket som i dag);
+fejl ⇒ FAILED-run med kode, ingen delvis commit, næste dag forsøges igen.
+
+**Kontrol efter merge (read-only):**
+1. Production-deploy READY; Vercel → Settings → **Cron Jobs** viser `/api/internal/conversion/sync`,
+   `0 3 * * *`, ikke disabled.
+2. Næste morgen efter 04:00 UTC: én ny `conversion_sync_runs`-række med `SUCCEEDED`,
+   `is_baseline = false`; `sync_generation` 2; admin viser "Seneste synkronisering gennemført" og
+   ingen STALE-advarsel.
+3. Vercel → Cron Jobs → **View Logs** (runtime-logs filtreret på `requestPath:/api/internal/conversion/sync`):
+   linjen `[conversion-sync] result=SUCCEEDED …`.
+*Stop hvis:* kørslen mangler (se "Opdagelse af manglende sync"), 401/403 (cron når ikke routen med
+secret/production — fx deployment protection eller forkert miljø), eller `FAILED`.
 
 ### Rollback og pause
 
 | Situation | Handling | Konsekvens |
 |---|---|---|
 | Stop kørsler | `update public.conversion_measurement_state set status = 'PAUSED' where id = 1;` | `begin` afviser; routen svarer `SKIPPED`; intet data tabes. Genstart = `ACTIVE` (samme godkendelse) |
-| Stop scheduler | Revert af D6-PR'en (eller slå cron fra i Vercel) | Ingen kald; data urørt |
+| Stop scheduler | Vercel → Settings → Cron Jobs → **Disable Cron Jobs** (øjeblikkeligt), og/eller revert af D6-PR'en + production-deploy. **Instant Rollback alene stopper ikke cronnen** | Ingen kald; data urørt |
 | Træk adgang tilbage | Fjern `CRON_SECRET` / HubSpot-token i Vercel + redeploy | Routen svarer 401 / 500 `CONFIG_INVALID` |
 | Mislykket baseline | Intet at rulle tilbage (kun en FAILED-revisionsrække) | Kan genkøres, når årsagen er forstået |
 | Efter gennemført baseline | `measurement_started_at` er uforanderlig (trigger) | Nulstilling kræver sletning af data = destruktivt, separat beslutning (KRÆVER RICKO) |
 
-### Fejlalarmering
+### Fejlalarmering og overvågning
 
 - **Admin** (`/admin` → Konverteringsmåling): seneste kørsel (tid, status, observeret total) og en
   rød fejlboks med fejlkode ved `FAILED`; rød STALE-advarsel, når seneste succesfulde sync er > 36 t.
 - **Vercel-logs**: `[conversion-sync] result=FAILED code=…` (console.error) og ikke-2xx-status på cron-
-  kaldet. Ingen e-mail-/Slack-alarm i denne gate (kræver ny integration — separat beslutning).
+  kaldet (Cron Jobs → View Logs). Ingen e-mail-/Slack-alarm i denne gate (kræver ny integration —
+  separat beslutning).
+
+**Opdagelse af manglende daglig sync.** Med `0 3 * * *` på Hobby ligger to rettidige kørsler højst
+~25 t fra hinanden. STALE-grænsen på **36 t** (`STALE_AFTER_HOURS`) giver derfor ingen falsk alarm ved
+en sen kørsel, men **én helt udeblevet kørsel** gør admin STALE 36 t efter seneste succes (seneste succes
+03:xx UTC ⇒ STALE ca. 15:xx UTC samme dag som den manglende kørsel, dvs. ca. kl. 17–18 dansk sommertid /
+16–17 vintertid). Sammenhængen er låst af
+`cronConfig.test.ts`. Tjek ved STALE, i denne rækkefølge: (1) admin "Seneste kørsel" — FAILED med kode
+eller ingen ny kørsel? (2) Vercel → Cron Jobs: er cronnen listet og ikke disabled? (3) View Logs: findes
+en invokation (ingen log = ikke leveret)? (4) `conversion_sync_runs` read-only. Én udeblevet kørsel
+kræver ingen handling (næste kørsel indhenter fuldt snapshot); en manuel kørsel med
+`Invoke-ConversionSync.ps1` er mulig efter Rickos OK. Gentagne FAILED ⇒ `PAUSED` og fejlsøg.
 
 ### Hvad admin viser efter første baseline
 
