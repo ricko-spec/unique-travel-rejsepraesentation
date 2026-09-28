@@ -78,6 +78,30 @@ describe("loadConversionAdminOverview — aktiv måling", () => {
     });
   });
 
+  it("Gate C2: markerede deals (migration 014) læses med og publiceres aldrig", async () => {
+    const at = "2027-01-10T03:00:00Z";
+    const rows = [
+      ...Array.from({ length: 12 }, (_, i) => cohortRawRow(i + 1)),
+      ...Array.from({ length: 12 }, (_, i) =>
+        cohortRawRow(i + 100, { post_enrollment_exclusion_reason: "INVALIDATED_DUPLICATE_OR_TEST", post_enrollment_excluded_at: at }),
+      ),
+      ...Array.from({ length: 12 }, (_, i) =>
+        cohortRawRow(i + 200, { post_enrollment_exclusion_reason: "BOOKED_OTHER_REFERENCE_UNRESOLVED", post_enrollment_excluded_at: at }),
+      ),
+    ];
+    const r = await loadConversionAdminOverview(fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: rows }), ASOF);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.wire.groups.ONLINE.totalEnrolled).toBe(12);
+    expect(r.wire.dataQuality.postEnrollmentExcluded).toEqual({ BOOKED_OTHER_REFERENCE_UNRESOLVED: 12, INVALIDATED_DUPLICATE_OR_TEST: 12 });
+  });
+
+  it("Gate C2: en kohorterække uden 014-kolonnerne (013-skema) ⇒ degraded, aldrig 'ingen markering'", async () => {
+    const { post_enrollment_exclusion_reason: _r, post_enrollment_excluded_at: _a, ...pre014 } = cohortRawRow(1);
+    const r = await loadConversionAdminOverview(fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: [pre014] }), ASOF);
+    expect(r).toEqual({ ok: false, reason: "degraded" });
+  });
+
   it("en ugyldig kohorterække ⇒ degraded", async () => {
     const r = await loadConversionAdminOverview(
       fakeAdminSupabase({ stateRow: ACTIVE, cohortRows: [cohortRawRow(1, { outcome_status: "MAYBE" })] }),

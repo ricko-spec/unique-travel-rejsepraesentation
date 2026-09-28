@@ -12,7 +12,13 @@ import { reduceDealCohort, validateObservation, type ReduceDealCohortInput } fro
 import { fixtureObservation, createFixtureHubSpotAdapter } from "./hubspotAdapter";
 import { buildConversionAggregate, type CohortAggregateRow } from "./aggregate";
 import { runConversionSync } from "./syncEngine";
-import { createInMemoryConversionPersistence, supabaseConversionPersistence, cohortRowViolation, cohortTransitionViolation } from "./persistence";
+import {
+  createInMemoryConversionPersistence,
+  supabaseConversionPersistence,
+  cohortRowViolation,
+  cohortTransitionViolation,
+  commitBatchViolation,
+} from "./persistence";
 import { computeDealKey } from "./dealKey";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CohortState } from "./types";
@@ -202,10 +208,18 @@ describe("publicering — ekskluderede deals er hverken i tæller, nævner eller
   });
 });
 
-describe("persistence — ingen DB-ændring i C1: markeringen kan ikke committes før migration 014", () => {
-  it("Supabase-adapteren afviser en commit med markering (COMMIT_REJECTED) UDEN at kalde RPC'en", async () => {
-    const calls: string[] = [];
-    const client = { rpc: (fn: string) => (calls.push(fn), Promise.resolve({ data: null, error: null })) } as unknown as SupabaseClient;
+describe("persistence — Gate C2: markeringen persisteres via migration 014's v3-skrivevej", () => {
+  it("Supabase-adapteren sender markeringen til conversion_commit_sync_run_v3 (aldrig 013's commit)", async () => {
+    const calls: { fn: string; args: Record<string, unknown> }[] = [];
+    const client = {
+      rpc: (fn: string, args: Record<string, unknown>) => (
+        calls.push({ fn, args }),
+        Promise.resolve({
+          data: [{ observed_count: 1, enrolled_count: 1, excluded_count: 0, booked_count: 0, conflict_count: 0, post_enrollment_excluded_count: 1 }],
+          error: null,
+        })
+      ),
+    } as unknown as SupabaseClient;
     const flagged = step(STAGE.dubletter, T2, step(STAGE.quote, T1, null));
     const r = await supabaseConversionPersistence(client).commitSyncRun({
       runId: "r",
@@ -215,8 +229,60 @@ describe("persistence — ingen DB-ændring i C1: markeringen kan ikke committes
       isBaseline: false,
       rows: [{ ...flagged, dealKey: "d".repeat(64) }],
     });
-    expect(r).toEqual({ ok: false, code: "COMMIT_REJECTED" });
-    expect(calls).toEqual([]);
+    expect(r).toMatchObject({ ok: true });
+    expect(calls.map((c) => c.fn)).toEqual(["conversion_commit_sync_run_v3"]);
+    expect((calls[0].args.p_rows as Record<string, unknown>[])[0]).toMatchObject({
+      post_enrollment_exclusion_reason: "INVALIDATED_DUPLICATE_OR_TEST",
+      post_enrollment_excluded_at: T2.toISOString(),
+      first_qualified_observation_at: T1.toISOString(),
+    });
+  });
+
+  it("mod et 013-skema (v3-RPC findes ikke) ⇒ COMMIT_REJECTED, intet skrevet", async () => {
+    const client = {
+      rpc: () => Promise.resolve({ data: null, error: { message: "Could not find the function public.conversion_commit_sync_run_v3" } }),
+    } as unknown as SupabaseClient;
+    const flagged = step(STAGE.dubletter, T2, step(STAGE.quote, T1, null));
+    expect(
+      await supabaseConversionPersistence(client).commitSyncRun({
+        runId: "r",
+        syncGeneration: 0,
+        contractVersion: CONTRACT_VERSION,
+        observedAt: T2,
+        isBaseline: false,
+        rows: [{ ...flagged, dealKey: "d".repeat(64) }],
+      }),
+    ).toEqual({ ok: false, code: "COMMIT_REJECTED" });
+  });
+
+  it("en NY markering skal bære kørslens observedAt; en eksisterende markering må ikke flyttes", () => {
+    const enrolled = step(STAGE.quote, T1, null);
+    const flagged = step(STAGE.dubletter, T2, enrolled);
+    const req = (row: CohortState, observedAt: Date) => ({
+      runId: "r",
+      syncGeneration: 0,
+      contractVersion: CONTRACT_VERSION,
+      observedAt,
+      isBaseline: false,
+      rows: [{ ...row, dealKey: "d".repeat(64) }],
+    });
+    const existing = new Map([["d".repeat(64), enrolled]]);
+    expect(commitBatchViolation(req(flagged, T2), existing)).toBeNull();
+    // Historisk tidspunkt på en ny markering (kohortestart i stedet for kørslen):
+    expect(commitBatchViolation(req({ ...flagged, postEnrollmentExcludedAt: T1 }, T2), existing)).toBe("post_enrollment_at_not_observed_at");
+    // Senere kørsel: eksisterende markering bevares uændret — tilladt; flyttet — afvist.
+    const later = { ...flagged, lastObservedAt: T3 };
+    const withFlag = new Map([["d".repeat(64), flagged]]);
+    expect(commitBatchViolation(req(later, T3), withFlag)).toBeNull();
+    expect(commitBatchViolation(req({ ...later, postEnrollmentExcludedAt: T3 }, T3), withFlag)).toBe("post_enrollment_frozen");
+  });
+
+  it("række-invarianter spejler 014's CHECKs: tidspunkt i [kohortestart, last_observed_at], kun kontrakt ≥ 3", () => {
+    const flagged = step(STAGE.dubletter, T2, step(STAGE.quote, T1, null));
+    expect(cohortRowViolation(flagged)).toBeNull();
+    expect(cohortRowViolation({ ...flagged, postEnrollmentExcludedAt: new Date(T1.getTime() - 1) })).toBe("post_enrollment_order");
+    expect(cohortRowViolation({ ...flagged, postEnrollmentExcludedAt: new Date(T2.getTime() + 1) })).toBe("post_enrollment_order");
+    expect(cohortRowViolation({ ...flagged, contractVersion: 2 })).toBe("post_enrollment_contract");
   });
 });
 

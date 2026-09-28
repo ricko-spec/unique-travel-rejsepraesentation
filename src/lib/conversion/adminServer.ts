@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { readAllRows, type PageRequest, type PageResponse } from "../paged-read";
 import { buildConversionAggregate, type CohortAggregateRow } from "./aggregate";
 import { CONTRACT_VERSION } from "./contract";
-import { parseCohortRow } from "./persistence";
+import { COHORT_COLUMNS, parseCohortRow, type CohortRawRow } from "./persistence";
 import type { MeasurementState } from "./types";
 import { toConversionWire, type ConversionWire } from "./wire";
 
@@ -79,14 +79,13 @@ export async function loadConversionAdminOverview(
     return { ok: true, wire: toConversionWire(buildConversionAggregate([], measurement, asOf)) };
   }
 
-  type Raw = Parameters<typeof parseCohortRow>[0];
+  type Raw = CohortRawRow;
   const page = (req: PageRequest) =>
     supabase
       .from("conversion_deal_cohort")
-      .select(
-        "deal_key, booking_match_key, first_seen_at, last_observed_at, first_qualified_observation_at, exposure_group, exposure_frozen_at, eligibility_status, exclusion_reason, booking_conflict_detected_at, outcome_status, first_booked_at, lost_observed_at, outcome_conflict_observed_at, contract_version",
-        req.withCount ? { count: "exact" } : undefined,
-      )
+      // Samme kolonneliste som sync-motoren (inkl. migration 014's markering):
+      // en markeret deal kan aldrig læses uden markeringen og dermed publiceres.
+      .select(COHORT_COLUMNS, req.withCount ? { count: "exact" } : undefined)
       .order("deal_key", { ascending: true })
       .range(req.from, req.to) as unknown as PromiseLike<PageResponse<Raw>>;
 

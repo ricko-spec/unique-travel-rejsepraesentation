@@ -22,6 +22,8 @@ export function cohortRawRow(i: number, overrides: Record<string, unknown> = {})
     eligibility_status: "ENROLLED",
     exclusion_reason: null,
     booking_conflict_detected_at: null,
+    post_enrollment_exclusion_reason: null,
+    post_enrollment_excluded_at: null,
     outcome_status: "NOT_BOOKED",
     first_booked_at: null,
     lost_observed_at: null,

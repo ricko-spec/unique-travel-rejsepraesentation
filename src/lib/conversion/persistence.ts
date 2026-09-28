@@ -10,7 +10,9 @@
 //                       indeks + advisory lock), markerer forældede RUNNING-
 //                       kørsler ABANDONED og returnerer state'ens
 //                       sync_generation (optimistisk samtidighedsværn).
-//   2. commitSyncRun  — RPC conversion_commit_sync_run: ÉN transaktion der
+//   2. commitSyncRun  — RPC conversion_commit_sync_run_v3 (migration 014,
+//                       Gate C2; persisterer også efterfølgende udelukkelse —
+//                       013's conversion_commit_sync_run kaldes aldrig): ÉN transaktion der
 //                       validerer lease/generation/kontraktversion/baseline,
 //                       skriver hele kohortebatchen (DB-triggeren afviser
 //                       enhver ændring af frosne felter), afslutter kørslen
@@ -30,7 +32,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeBookingMatchKey } from "../analytics-bridge";
 import { readAllRows, type PageRequest, type PageResponse } from "../paged-read";
-import { EXCLUSION_REASONS } from "./types";
+import { EXCLUSION_REASONS, POST_ENROLLMENT_EXCLUSION_REASONS } from "./types";
 import type {
   ClassifiedDealResult,
   CohortState,
@@ -39,6 +41,7 @@ import type {
   ExposureGroup,
   MeasurementState,
   OutcomeStatus,
+  PostEnrollmentExclusionReason,
   SyncRunErrorCode,
   TravelPlanIndex,
 } from "./types";
@@ -121,6 +124,17 @@ export function cohortRowViolation(r: CohortState): string | null {
   if (r.bookingConflictDetectedAt !== null && r.eligibilityStatus !== "ENROLLED") return "conflict_requires_enrolled";
   if ((r.postEnrollmentExclusionReason === null) !== (r.postEnrollmentExcludedAt === null)) return "post_enrollment_pair";
   if (r.postEnrollmentExclusionReason !== null && r.eligibilityStatus !== "ENROLLED") return "post_enrollment_requires_enrolled";
+  if (r.postEnrollmentExcludedAt !== null) {
+    // Migration 014: markeringen ligger mellem kohortestart og seneste observation.
+    if (
+      r.firstQualifiedObservationAt === null ||
+      r.postEnrollmentExcludedAt.getTime() < r.firstQualifiedObservationAt.getTime() ||
+      r.postEnrollmentExcludedAt.getTime() > r.lastObservedAt.getTime()
+    ) {
+      return "post_enrollment_order";
+    }
+  }
+  if (r.postEnrollmentExclusionReason !== null && r.contractVersion < 3) return "post_enrollment_contract";
   if ((r.outcomeStatus === "BOOKED") !== (r.firstBookedAt !== null)) return "booked_pair";
   return null;
 }
@@ -185,6 +199,10 @@ export function commitBatchViolation(
         return "cohort_start_not_observed_at";
       }
     }
+    // Migration 014: en NY markering bærer præcis kørslens observedAt (aldrig historisk).
+    if (r.postEnrollmentExclusionReason !== null && (old === null || old.postEnrollmentExclusionReason === null)) {
+      if (!sameTime(r.postEnrollmentExcludedAt, req.observedAt)) return "post_enrollment_at_not_observed_at";
+    }
     if (old !== null) {
       const t = cohortTransitionViolation(old, r);
       if (t) return t;
@@ -198,10 +216,16 @@ export function commitBatchViolation(
 // Supabase-implementering
 // ----------------------------------------------------------------------------
 
-const COHORT_COLUMNS =
-  "deal_key, booking_match_key, first_seen_at, last_observed_at, first_qualified_observation_at, exposure_group, exposure_frozen_at, eligibility_status, exclusion_reason, booking_conflict_detected_at, outcome_status, first_booked_at, lost_observed_at, outcome_conflict_observed_at, contract_version";
+/**
+ * Kolonnerne i conversion_deal_cohort efter migration 014. Deles af sync-
+ * motorens læsning og admin-loaderen, så en markeret deal aldrig kan læses
+ * uden sin markering (og dermed fejlagtigt publiceres). Mod et 013-skema
+ * fejler læsningen (ukendt kolonne) — fail-closed, aldrig en stille NULL.
+ */
+export const COHORT_COLUMNS =
+  "deal_key, booking_match_key, first_seen_at, last_observed_at, first_qualified_observation_at, exposure_group, exposure_frozen_at, eligibility_status, exclusion_reason, booking_conflict_detected_at, post_enrollment_exclusion_reason, post_enrollment_excluded_at, outcome_status, first_booked_at, lost_observed_at, outcome_conflict_observed_at, contract_version";
 
-type CohortRawRow = {
+export type CohortRawRow = {
   deal_key: string;
   booking_match_key: string | null;
   first_seen_at: string;
@@ -212,6 +236,8 @@ type CohortRawRow = {
   eligibility_status: string;
   exclusion_reason: string | null;
   booking_conflict_detected_at: string | null;
+  post_enrollment_exclusion_reason: string | null;
+  post_enrollment_excluded_at: string | null;
   outcome_status: string;
   first_booked_at: string | null;
   lost_observed_at: string | null;
@@ -235,16 +261,25 @@ export function parseCohortRow(raw: CohortRawRow): { dealKey: string; state: Coh
     firstQualifiedObservationAt: parseDate(raw.first_qualified_observation_at),
     exposureFrozenAt: parseDate(raw.exposure_frozen_at),
     bookingConflictDetectedAt: parseDate(raw.booking_conflict_detected_at),
+    postEnrollmentExcludedAt: parseDate(raw.post_enrollment_excluded_at),
     firstBookedAt: parseDate(raw.first_booked_at),
     lostObservedAt: parseDate(raw.lost_observed_at),
     outcomeConflictObservedAt: parseDate(raw.outcome_conflict_observed_at),
   };
+  // `undefined` (kolonnen findes ikke, fx et 013-skema) er en fejl — aldrig "ingen markering".
+  if (raw.post_enrollment_exclusion_reason === undefined || raw.post_enrollment_excluded_at === undefined) return null;
   if (Object.values(dates).some((d) => d === "invalid")) return null;
   if (dates.firstSeenAt === null || dates.lastObservedAt === null) return null;
   if (typeof raw.deal_key !== "string" || raw.deal_key.length === 0) return null;
   if (!ELIGIBILITY.includes(raw.eligibility_status as EligibilityStatus)) return null;
   if (raw.exclusion_reason !== null && !EXCLUSION_REASONS.includes(raw.exclusion_reason as ExclusionReason)) return null;
   if (raw.exposure_group !== null && raw.exposure_group !== "ONLINE" && raw.exposure_group !== "PDF_ONLY") return null;
+  if (
+    raw.post_enrollment_exclusion_reason !== null &&
+    !POST_ENROLLMENT_EXCLUSION_REASONS.includes(raw.post_enrollment_exclusion_reason as PostEnrollmentExclusionReason)
+  ) {
+    return null;
+  }
   if (raw.outcome_status !== "BOOKED" && raw.outcome_status !== "NOT_BOOKED") return null;
   if (!Number.isInteger(raw.contract_version)) return null;
   return {
@@ -255,9 +290,8 @@ export function parseCohortRow(raw: CohortRawRow): { dealKey: string; state: Coh
       firstQualifiedObservationAt: dates.firstQualifiedObservationAt as Date | null,
       exposureFrozenAt: dates.exposureFrozenAt as Date | null,
       bookingConflictDetectedAt: dates.bookingConflictDetectedAt as Date | null,
-      // Migration 013 har ingen kolonner til efterfølgende udelukkelse (kommer med migration 014).
-      postEnrollmentExclusionReason: null,
-      postEnrollmentExcludedAt: null,
+      postEnrollmentExclusionReason: raw.post_enrollment_exclusion_reason as PostEnrollmentExclusionReason | null,
+      postEnrollmentExcludedAt: dates.postEnrollmentExcludedAt as Date | null,
       firstBookedAt: dates.firstBookedAt as Date | null,
       lostObservedAt: dates.lostObservedAt as Date | null,
       outcomeConflictObservedAt: dates.outcomeConflictObservedAt as Date | null,
@@ -313,6 +347,8 @@ export function serializeCohortRow(r: ClassifiedDealResult) {
     eligibility_status: r.eligibilityStatus,
     exclusion_reason: r.exclusionReason,
     booking_conflict_detected_at: toIso(r.bookingConflictDetectedAt),
+    post_enrollment_exclusion_reason: r.postEnrollmentExclusionReason,
+    post_enrollment_excluded_at: toIso(r.postEnrollmentExcludedAt),
     outcome_status: r.outcomeStatus,
     first_booked_at: toIso(r.firstBookedAt),
     lost_observed_at: toIso(r.lostObservedAt),
@@ -401,12 +437,10 @@ export function supabaseConversionPersistence(
     },
 
     async commitSyncRun(req) {
-      // Fail-closed indtil migration 014: en markering kan ikke persisteres i 013-skemaet,
-      // så en commit, der ville bære den, afvises FØR noget sendes til databasen.
-      if (req.rows.some((r) => r.postEnrollmentExclusionReason !== null || r.postEnrollmentExcludedAt !== null)) {
-        return { ok: false, code: "COMMIT_REJECTED" };
-      }
-      const { data, error } = await supabase.rpc("conversion_commit_sync_run", {
+      // Migration 014: v3-skrivevejen persisterer markeringen. Mod et 013-skema
+      // findes RPC'en ikke ⇒ fejl ⇒ COMMIT_REJECTED, intet skrevet (fail-closed);
+      // 013's commit (som ikke kender markeringen) kaldes aldrig.
+      const { data, error } = await supabase.rpc("conversion_commit_sync_run_v3", {
         p_run_id: req.runId,
         p_sync_generation: req.syncGeneration,
         p_contract_version: req.contractVersion,

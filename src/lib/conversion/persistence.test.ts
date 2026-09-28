@@ -141,6 +141,8 @@ function rawCohortRow(i: number) {
     eligibility_status: "ELIGIBLE_PENDING",
     exclusion_reason: null,
     booking_conflict_detected_at: null,
+    post_enrollment_exclusion_reason: null as string | null,
+    post_enrollment_excluded_at: null as string | null,
     outcome_status: "NOT_BOOKED",
     first_booked_at: null,
     lost_observed_at: null,
@@ -164,6 +166,31 @@ describe("loadAllCohortStates — hele kohorten pagineret, ingen .in(...) over d
     const rows = Array.from({ length: 5 }, (_, i) => rawCohortRow(i + 1));
     const { client } = fakeSupabase({ pageFor: (_t, from) => ({ data: from === 0 ? rows : [], error: null, count: 6 }) });
     expect(await supabaseConversionPersistence(client).loadAllCohortStates()).toEqual({ ok: false, code: "SOURCE_READ_FAILED" });
+  });
+
+  it("migration 014: markeringen læses med — og et 013-skema uden kolonnerne fejler lukket", async () => {
+    const marked = {
+      ...rawCohortRow(1),
+      eligibility_status: "ENROLLED",
+      booking_match_key: hex("a"),
+      first_qualified_observation_at: T0.toISOString(),
+      exposure_group: "ONLINE",
+      exposure_frozen_at: T0.toISOString(),
+      last_observed_at: T1.toISOString(),
+      post_enrollment_exclusion_reason: "BOOKED_OTHER_REFERENCE_UNRESOLVED",
+      post_enrollment_excluded_at: T1.toISOString(),
+    };
+    const ok = fakeSupabase({ pageFor: () => ({ data: [marked], error: null, count: 1 }) });
+    const res = await supabaseConversionPersistence(ok.client).loadAllCohortStates();
+    expect(res.ok && res.states.get(marked.deal_key)).toMatchObject({
+      postEnrollmentExclusionReason: "BOOKED_OTHER_REFERENCE_UNRESOLVED",
+      postEnrollmentExcludedAt: T1,
+    });
+    const { post_enrollment_exclusion_reason: _r, post_enrollment_excluded_at: _a, ...pre014 } = marked;
+    for (const bad of [[pre014], [{ ...marked, post_enrollment_exclusion_reason: "NOGET_ANDET" }], [{ ...marked, post_enrollment_excluded_at: "x" }]]) {
+      const { client } = fakeSupabase({ pageFor: () => ({ data: bad, error: null, count: 1 }) });
+      expect(await supabaseConversionPersistence(client).loadAllCohortStates()).toEqual({ ok: false, code: "SOURCE_READ_FAILED" });
+    }
   });
 
   it("ugyldig værdi eller dublet-deal_key i DB ⇒ SOURCE_READ_FAILED (aldrig en stille default)", async () => {
@@ -216,7 +243,7 @@ describe("RPC-fejl ignoreres aldrig (fund 2)", () => {
       rows: [row],
     });
     expect(res).toEqual({ ok: true, counts: { observed: 1, enrolled: 1, excluded: 0, booked: 0, conflicts: 0 } });
-    expect(calls).toEqual(["rpc.conversion_commit_sync_run"]);
+    expect(calls).toEqual(["rpc.conversion_commit_sync_run_v3"]);
     expect(captured!.p_rows).toEqual([serializeCohortRow(row)]);
     expect(captured!.p_observed_at).toBe(T1.toISOString());
   });
