@@ -231,6 +231,40 @@ describe("normalizeTrip — flerdages safari vs. endagsudflugt (Issue #94)", () 
   });
 });
 
+describe("normalizeTrip — generisk programtitel med flere safaripakker (Issue #94, review)", () => {
+  const safariNord = { ...safariHotel, name: "Safari Nord", included: ["Game drives nord"], notIncluded: ["Drikkepenge"] };
+  const safariSyd = { ...safariHotel, name: "Safari Syd", included: ["Game drives syd"], notIncluded: ["Visum"] };
+
+  it("titlen 'Safari' matcher ikke flere pakker: begge pakkers lister bevares", () => {
+    const trip = makeTrip({ itinerary: [safariProgram], hotels: [safariNord, safariSyd] });
+    const [nord, syd] = normalizeTrip(trip).hotels;
+    expect(nord.included).toEqual(["Game drives nord"]);
+    expect(nord.notIncluded).toEqual(["Drikkepenge"]);
+    expect(syd.included).toEqual(["Game drives syd"]);
+    expect(syd.notIncluded).toEqual(["Visum"]);
+  });
+
+  it("en generisk titel matcher heller ikke i omvendt retning (pakken hedder blot 'Safari', programmet 'Safari Nord')", () => {
+    const trip = makeTrip({
+      itinerary: [{ ...safariProgram, title: "Safari Nord" }],
+      hotels: [{ ...safariHotel, name: "Safari" }, safariSyd],
+    });
+    const [generisk, syd] = normalizeTrip(trip).hotels;
+    expect(generisk.included).toEqual(["Game drives", "Parkgebyrer"]);
+    expect(syd.included).toEqual(["Game drives syd"]);
+  });
+
+  it("et entydigt, specifikt titelmatch fjerner stadig kun den matchende pakkes liste", () => {
+    const trip = makeTrip({
+      itinerary: [{ ...safariProgram, title: "Safari Nord" }],
+      hotels: [safariNord, safariSyd],
+    });
+    const [nord, syd] = normalizeTrip(trip).hotels;
+    expect(nord.included).toEqual([]);
+    expect(syd.included).toEqual(["Game drives syd"]);
+  });
+});
+
 describe("SYSTEM_PROMPT — pakke-rejse-kontrakten (Issue #94)", () => {
   it("beder ikke længere om at pakker KUN lægges i hotels[] 'i stedet for' rejseplanen", () => {
     expect(SYSTEM_PROMPT).not.toMatch(/i stedet for itinerary/i);

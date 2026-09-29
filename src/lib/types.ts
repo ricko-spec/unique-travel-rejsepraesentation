@@ -580,7 +580,9 @@ export function normalizeTrip(trip: Trip): Trip {
   // rejseplanen, bevares listen, så intet indhold tabes. En endagsudflugt med
   // expandKind 'program' er IKKE pakkens program og udløser ikke fjernelsen (Issue #94:
   // safariens indhold forsvandt helt, fordi en endagsudflugt blev talt som dens program).
-  const packageCount = (trip.hotels ?? []).filter((h) => h.isPackage).length;
+  const packageNames = (trip.hotels ?? [])
+    .filter((h) => h.isPackage)
+    .map((h) => normalizeLocationLabel(pickStr(h.name, (h as Record<string, unknown>).navn)));
   const hotels = (trip.hotels ?? []).map((h) => {
     const anyH = h as Record<string, unknown>;
     const { alternatives, notes } = collectAlternatives(h);
@@ -610,7 +612,7 @@ export function normalizeTrip(trip: Trip): Trip {
       // ovenfor) hvis feltet mangler eller ikke validerer.
       website: sanitizeHotelWebsite(h.website) ?? "",
     };
-    if (h.isPackage && findPackageProgram(normalized.name, itinerary, packageCount)) {
+    if (h.isPackage && findPackageProgram(normalized.name, itinerary, packageNames)) {
       return { ...normalized, included: [], notIncluded: [] };
     }
     return normalized;
