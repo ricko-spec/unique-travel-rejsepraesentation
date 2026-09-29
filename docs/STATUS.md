@@ -2,7 +2,7 @@
 
 > Læs denne før hver arbejdsrunde. Kort og operationel — fuld PR-historik står i GitHub
 > (lukkede PR'er, commits, diffs), ikke her. Opdatér ved hvert milepæl.
-> Sidst opdateret: **2026-09-28**
+> Sidst opdateret: **2026-09-29**
 
 ## Nu
 
@@ -68,14 +68,15 @@
 
 ## Seneste 3 relevante ændringer
 
-1. **[Issue #92](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/92), 2026-09-28 (i review):** `/admin/brug` er samlet analyseområde med fanerne Kundeadfærd,
+1. **[Issue #94](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/94), 2026-09-29 (i review):** flerdages safari/rundrejse med underhoteller forsvandt fra
+   dagsprogrammet. To årsager rettet: SYSTEM_PROMPT (pakke nu i både `hotels[]` og `itinerary`, uden opfundne dage) og
+   `normalizeTrip` (endagsudflugt tæller ikke som pakkens program). Berørte rejseplaner skal genbehandles manuelt efter deploy.
+2. **[Issue #92](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/92), 2026-09-28 (i review):** `/admin/brug` er samlet analyseområde med fanerne Kundeadfærd,
    Intern brug og Konvertering (`?visning=…`). Forsiden beholder administrationslisten med handlinger
    (løsning A: samme `SalesOverviewTable`/DTO i to tilstande); konverteringsvisningen findes kun i fanen.
    Ingen ændring af tracking, data eller adgang.
-2. **Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)), 2026-09-28:** PR #87 merget (`a11516a`); migration 014 anvendt i production
+3. **Gate C2 ([Issue #86](https://github.com/ricko-spec/unique-travel-rejsepraesentation/issues/86)), 2026-09-28:** PR #87 merget (`a11516a`); migration 014 anvendt i production
    (`20260928103248_conversion_post_enrollment_v3`) efter bestået drift-kontrol; 0 rækker, intet aktiveret. Baseline + docs i separat PR.
-3. **[PR #85](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pull/85) — Issue #84: Gate C1, 2026-09-25.**
-   Stagekontrakt v3, snæver read-only HubSpot-adapter, write-free dry-run PASS. Merge-commit `487fa64`.
 
 Fuld historik: [lukkede/merged PR'er på GitHub](https://github.com/ricko-spec/unique-travel-rejsepraesentation/pulls?q=is%3Apr+is%3Amerged).
 

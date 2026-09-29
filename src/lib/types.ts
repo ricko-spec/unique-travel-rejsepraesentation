@@ -3,6 +3,7 @@ import { collectAlternatives } from "./hotel-alternatives";
 import { normalizeLocationLabel } from "./location-label";
 import { stripRedundantTransferChips } from "./transfer-chips";
 import { sanitizeHotelWebsite } from "./hotel-website";
+import { findPackageProgram } from "./multi-day-program";
 
 // ----- helpers -----
 // Accept null/undefined/anything coercible to string; default to "".
@@ -569,15 +570,19 @@ export function normalizeTrip(trip: Trip): Trip {
     trip.itinerary.map((item, i) => normalizeItineraryItem(item, i, departure)),
   );
 
-  // En rundrejse/pakke vises to steder: som "L\u00e6s om udflugten" (expandKind 'program')
+  // En rundrejse/pakke vises to steder: som flerdages-program (expandKind 'program')
   // i rejseplanen med hele dag-for-dag-programmet og dets inklusioner, OG som et
-  // pakke-hotel-kort nede i hotelomr\u00e5det. Pakke-kortets 'included'/'notIncluded' er
-  // programmets inklusioner (safarier, tempelbes\u00f8g, togtur \u2026) \u2014 ikke hotel-info \u2014 og
-  // gentager dermed rejseplanen. N\u00e5r programmet allerede ligger i rejseplanen, fjernes
-  // den lange dobbeltvisning fra hotel-kortet, s\u00e5 det holder sig til hoteller, v\u00e6relse,
-  // m\u00e5ltider, datoer, sub-hoteller og hotel-noter. Findes programmet IKKE i rejseplanen
-  // (nogle pakker parses uden 'program'-item), bevares listen, s\u00e5 intet indhold tabes.
-  const hasProgramInItinerary = itinerary.some((it) => it.expandKind === "program");
+  // pakke-hotel-kort nede i hotelområdet. Pakke-kortets 'included'/'notIncluded' er
+  // programmets inklusioner (safarier, tempelbesøg, togtur …) — ikke hotel-info — og
+  // gentager dermed rejseplanen. Når PAKKENS program allerede ligger i rejseplanen,
+  // fjernes den lange dobbeltvisning fra hotel-kortet, så det holder sig til hoteller,
+  // værelse, måltider, datoer, sub-hoteller og hotel-noter. Findes programmet IKKE i
+  // rejseplanen, bevares listen, så intet indhold tabes. En endagsudflugt med
+  // expandKind 'program' er IKKE pakkens program og udløser ikke fjernelsen (Issue #94:
+  // safariens indhold forsvandt helt, fordi en endagsudflugt blev talt som dens program).
+  const packageNames = (trip.hotels ?? [])
+    .filter((h) => h.isPackage)
+    .map((h) => normalizeLocationLabel(pickStr(h.name, (h as Record<string, unknown>).navn)));
   const hotels = (trip.hotels ?? []).map((h) => {
     const anyH = h as Record<string, unknown>;
     const { alternatives, notes } = collectAlternatives(h);
@@ -607,7 +612,7 @@ export function normalizeTrip(trip: Trip): Trip {
       // ovenfor) hvis feltet mangler eller ikke validerer.
       website: sanitizeHotelWebsite(h.website) ?? "",
     };
-    if (h.isPackage && hasProgramInItinerary) {
+    if (h.isPackage && findPackageProgram(normalized.name, itinerary, packageNames)) {
       return { ...normalized, included: [], notIncluded: [] };
     }
     return normalized;
