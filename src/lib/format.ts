@@ -1,6 +1,9 @@
 // Rene display-/formaterings-helpers til kundevisningen. Ingen data- eller
 // schema-logik her — den bor i src/lib/types.ts.
 import { parseFlexibleDate } from "./types";
+import { isMultiDayProgram } from "./multi-day-program";
+
+export { isMultiDayProgram };
 
 // Format dato som '3. oktober 2026' (dansk langform uden ugedag) — til hero-pillen.
 // Falder tilbage til original streng hvis input ikke kan parses (fx allerede dansk fritekst).
@@ -63,24 +66,6 @@ export function splitRoomAllocation(alloc: string): { label: string; rest: strin
   const label = alloc.slice(0, idx).trim();
   if (!ROOM_LABEL.test(label)) return { label: "", rest: alloc.trim() };
   return { label, rest: alloc.slice(idx + 1).trim() };
-}
-
-// expandKind 'program' dækker to vidt forskellige ting: endagsudflugter og
-// flerdagsforløb (safari, rundrejse, turprogram, krydstogt, trekking). For de
-// sidste er "udflugten" misvisende — de har overnatninger.
-//
-// Skillelinjen læses af typeLabel, ikke af antallet af blokke i expand.days:
-// parseren bruger nemlig også days til at dele ÉN dag op i "Formiddag" og
-// "Eftermiddag", så 2 blokke kan sagtens være én udflugt. typeLabel siger
-// derimod enten "DAG 11" (én dag) eller "DAG 7–8" / "3 DAGE / 2 NÆTTER".
-// Målt på production (sep. 2026, 218 program-items) rammer de to mønstre 81
-// flerdagsforløb og 137 endagsture uden en eneste fejlklassifikation.
-const DAY_RANGE = /dag\s*\d+\s*[–—-]\s*\d+/i;
-const DAY_COUNT = /\d+\s*(dage|nætter|nat)\b/i;
-
-export function isMultiDayProgram(typeLabel: string | null | undefined): boolean {
-  const s = typeLabel ?? "";
-  return DAY_RANGE.test(s) || DAY_COUNT.test(s);
 }
 
 // Etiketten på tidslinjens udfold-knap. "Programmet" frem for "rundrejsen",

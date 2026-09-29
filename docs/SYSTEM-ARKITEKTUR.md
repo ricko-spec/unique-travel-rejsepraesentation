@@ -811,10 +811,11 @@ Ud over de fire basisfelter: `roomAllocations` (værelsesfordeling), `alternativ
 
 ### `normalizeTrip` — reparations-laget (`types.ts:360-536`)
 
-Kaldes både efter parse og ved **hver** render af kundesiden. Tre opgaver:
+Kaldes både efter parse og ved **hver** render af kundesiden. Fire opgaver:
 1. **Legacy-mapping** (`normalizeItineraryItem`, `:364-468`): ældre rejser i DB har felt-navne fra tidligere prompt-versioner (`times`, `summary`, `timeLabel`, `info`, sibling-objekter `flight`/`turprogram`/`aktivitet`). De mappes til de kanoniske felter så gamle rækker renderes uden re-parse. Hotel-felter på dansk (`navn`, `lokation`, `nætter`, `værelse`, `måltider`, `checkInd`/`checkUd`) mappes tilsvarende (`:517-529`).
 2. **Dato-labels** (`computeDateLabel`, `:340-358`): mangler `dateLabel`, beregnes den ud fra "DAG N"-mønstret i `typeLabel` + afrejsedatoen, med korrekt dansk ugedag og månedskifte-håndtering.
 3. **Destination-omklassificering** (`reclassifyDestination`, `:492-513`): en ren Zanzibar-strandrejse parses som "Tanzania" (det står i PDF'en). Markør-lister (`ZANZIBAR_MARKERS`/`SAFARI_MARKERS`, `:473-490`) tjekker subtitle + hotelnavne (inkl. subHotels): Zanzibar-markører uden safari-markører → destination omdøbes "Zanzibar" så det rigtige hero-billede vises. Kombi-rejser beholder "Tanzania".
+4. **Pakke-dobbeltvisning** (`findPackageProgram`, `multi-day-program.ts`; Issue #94): en pakke/rundrejse/safari med underhoteller ligger både i `hotels[]` (`isPackage` + `subHotels`) og som ét flerdages `program`-item i `itinerary`. Kun når pakkens EGET flerdagsprogram findes i rejseplanen (`isMultiDayProgram(typeLabel)` + titel-match, eller netop ét program og én pakke), tømmes pakke-kortets `included`/`notIncluded`. En endagsudflugt med `expandKind: 'program'` tæller ikke. Ved tvivl bevares listen — dobbeltvisning er bedre end tabt indhold. Normalizeren opfinder aldrig dage: mangler programmet, ligger inklusionerne fortsat på pakke-kortet.
 
 ---
 
@@ -922,7 +923,10 @@ For itinerary items gælder (BRUG DISSE EKSAKTE FELT-NAVNE — ingen andre):
      ['Flynummer','EK152'], ['Selskab','Emirates Air'], ['Afgang','Copenhagen (CPH) · lørdag 6. februar 2027 kl. 14:45'], ['Ankomst','Dubai (DXB) · søndag 7. februar 2027 kl. 00:10'], ['Varighed','6 timer, 25 min'], evt. ['Mellemlanding','Dubai (DXB), 2 timer 50 min stop'], evt. ['Bagage','20 kg pr. person (standard)'], evt. ['Note','(PG) Denne flyvning opereres af Bangkok Airways' / '*Betjenes af SAS' / '(TR) Denne flyvning opereres af Scoot'].
 
   b) expandKind: "program" → for udflugter/safari/rundrejser som ÉN aktivitet med flere dages program. expand: { days: [{label, text, meal?}], included: [string] }.
-     VIGTIGT: hvis aktiviteten er en pakke-rejse med sub-hoteller (Sri Lanka rundrejse, Halong Cruise, Sumatra-tur etc. med 'X dage/Y nætter (KODE)' og navngivne overnatningssteder), placér den i hotels[] med isPackage=true i stedet for itinerary.
+     VIGTIGT — pakke-rejse med sub-hoteller (Sri Lanka rundrejse, Safari, Halong Cruise, Sumatra-tur etc. med 'X dage/Y nætter (KODE)' og navngivne overnatningssteder): placér den BÅDE i hotels[] (isPackage=true + subHotels, til hoteloversigten) OG i itinerary som ÉN activity med expandKind 'program' på sin plads i den kronologiske rækkefølge. Den må aldrig kun ligge i hotels[] — så mangler pakkens dage i rejseplanen og kunden ser et hul.
+     * typeLabel skal vise flerdages-forløbet, fx 'SAFARI · 4 DAGE / 3 NÆTTER · DAG 3–6', og dateLabel dækker hele perioden.
+     * expand.days og expand.included må KUN udfyldes med det der står i PDF'ens program for pakken. Opfind aldrig dage, aktiviteter eller inklusioner. Er der intet konkret dagsprogram i PDF'en, så sæt expandKind og expand til null på itemet (titel, typeLabel og dateLabel står stadig i rejseplanen) og lad 'Inkluderet'-listen blive på pakke-kortet i hotels[].
+     * En separat endagsudflugt før eller efter pakken er sin egen activity med eget dag-typeLabel (fx 'DAG 3'). Brug den aldrig som titel for eller erstatning af pakkens flerdages-program, og slå den ikke sammen med pakken.
 
   c) expandKind: "activities" → for udflugts-blokke med flere uafhængige aktiviteter at vælge mellem. expand: { activities: [{title, desc}] }.
 
