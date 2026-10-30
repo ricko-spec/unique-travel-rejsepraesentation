@@ -33,14 +33,84 @@ describe("formatAlternativePriceLine", () => {
     );
   });
 
-  it("ren beløbs-streng får fortsat Besparelse-etiket", () => {
-    expect(formatAlternativePriceLine("ca. 12.000 kr.")).toBe("Besparelse: ca. 12.000 kr.");
-    expect(formatAlternativePriceLine("ca. 30.000 kr.")).toBe("Besparelse: ca. 30.000 kr.");
+  // Issue #96: en ren beløbs-streng siger intet om retningen. Den må ikke længere
+  // antages at være en besparelse — den neutrale etiket bruges i stedet.
+  it("ren beløbs-streng uden retning får neutral Prisforskel-etiket", () => {
+    expect(formatAlternativePriceLine("ca. 12.000 kr.")).toBe("Prisforskel: ca. 12.000 kr.");
+    expect(formatAlternativePriceLine("ca. 30.000 kr.")).toBe("Prisforskel: ca. 30.000 kr.");
   });
 
   it("tom streng giver tom streng (kortet uden pris-linje er uændret)", () => {
     expect(formatAlternativePriceLine("")).toBe("");
     expect(formatAlternativePriceLine("   ")).toBe("");
+  });
+});
+
+// Issue #96: regressionen hvor en dyrere sammenligning blev vist som besparelse.
+// Strengene er anonyme og generiske — ingen bookinger, hoteller eller kundedata.
+describe("formatAlternativePriceLine — prisretning (Issue #96)", () => {
+  it("'mere end'-sammenligning vises som Merpris og aldrig som Besparelse", () => {
+    const out = formatAlternativePriceLine("Ca. 4.300 kr. mere end nuværende valg");
+    expect(out).toBe("Merpris: Ca. 4.300 kr. mere end nuværende valg");
+    expect(out).not.toMatch(/besparelse/i);
+  });
+
+  it("'dyrere'/'tillæg'-formuleringer vises som Merpris", () => {
+    expect(formatAlternativePriceLine("ca. 2.000 kr. dyrere i alt")).toBe(
+      "Merpris: ca. 2.000 kr. dyrere i alt",
+    );
+    expect(formatAlternativePriceLine("Tillæg ca. 900 kr. pr. person")).toBe(
+      "Merpris: Tillæg ca. 900 kr. pr. person",
+    );
+  });
+
+  it("pluspræfiks vises som Merpris", () => {
+    expect(formatAlternativePriceLine("+1.500 kr. i alt")).toBe("Merpris: +1.500 kr. i alt");
+  });
+
+  it("'billigere'/'mindre end'/'spar'-formuleringer vises som Besparelse", () => {
+    expect(formatAlternativePriceLine("Ca. 3.100 kr. billigere end nuværende valg")).toBe(
+      "Besparelse: Ca. 3.100 kr. billigere end nuværende valg",
+    );
+    expect(formatAlternativePriceLine("ca. 1.200 kr. mindre end nuværende valg")).toBe(
+      "Besparelse: ca. 1.200 kr. mindre end nuværende valg",
+    );
+    expect(formatAlternativePriceLine("I sparer ca. 800 kr. i alt")).toBe(
+      "Besparelse: I sparer ca. 800 kr. i alt",
+    );
+  });
+
+  it("eksplicitte etiketter bevares uden dobbelt etiket", () => {
+    expect(formatAlternativePriceLine("Merpris: ca. 4.300 kr. i alt")).toBe(
+      "Merpris: ca. 4.300 kr. i alt",
+    );
+    expect(formatAlternativePriceLine("Besparelse: ca. 2.000 kr. i alt")).toBe(
+      "Besparelse: ca. 2.000 kr. i alt",
+    );
+    expect(formatAlternativePriceLine("Prisforskel: ca. 500 kr.")).toBe("Prisforskel: ca. 500 kr.");
+  });
+
+  it("modstridende eller negerede retningsord giver Prisforskel frem for et gæt", () => {
+    expect(formatAlternativePriceLine("ca. 1.000 kr. mere for værelset, men billigere i alt")).toBe(
+      "Prisforskel: ca. 1.000 kr. mere for værelset, men billigere i alt",
+    );
+    expect(formatAlternativePriceLine("ikke dyrere end nuværende valg")).toBe(
+      "Prisforskel: ikke dyrere end nuværende valg",
+    );
+    expect(formatAlternativePriceLine("+ca. 700 kr. men billigere pr. nat")).toBe(
+      "Prisforskel: +ca. 700 kr. men billigere pr. nat",
+    );
+  });
+
+  it("uklar prisforskel får neutral Prisforskel-etiket", () => {
+    expect(formatAlternativePriceLine("ca. 4.300 kr. i forhold til nuværende valg")).toBe(
+      "Prisforskel: ca. 4.300 kr. i forhold til nuværende valg",
+    );
+  });
+
+  it("tom tekst giver tom streng", () => {
+    expect(formatAlternativePriceLine("")).toBe("");
+    expect(formatAlternativePriceLine(" 	 ")).toBe("");
   });
 });
 
