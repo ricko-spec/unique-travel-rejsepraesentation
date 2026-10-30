@@ -20,14 +20,30 @@ export function formatMediumDateDK(s: string | null | undefined): string {
 }
 
 // Parseren gemmer både merpris OG besparelse i samme 'savings'-felt, så etiketten kan
-// ikke hardkodes: ordet 'merpris' i strengen eller et '+'-præfiks betyder at alternativet
-// koster MERE end det valgte hotel (verificeret mod TravelWire-kilden, booking 35385).
+// ikke hardkodes. Klassifikationen er bevidst konservativ (Issue #96): kun en entydig
+// retning giver 'Merpris:'/'Besparelse:' — uklar, modstridende eller negeret tekst får
+// den neutrale 'Prisforskel:' frem for et gæt. En dyrere mulighed må aldrig vises som
+// besparelse. Tekst der allerede bærer en etiket vises uændret (ingen dobbelt etiket).
+const PRICE_LABEL_RE = /merpris|besparelse|prisforskel/i;
+// Ordgrænser via \p{L}, fordi  ikke kender æøå (fx 'tillæg').
+const MORE_EXPENSIVE_RE = /(?<!\p{L})(?:mere end|dyrere|tillæg|merbetaling)(?!\p{L})/iu;
+const CHEAPER_RE = /(?<!\p{L})(?:mindre end|billigere|sparer|spare|sparet)(?!\p{L})/iu;
+const NEGATION_RE = /(?<!\p{L})ikke(?!\p{L})/iu;
+// Løse 'mere'/'mindre' afgør ikke retningen alene ('mere plads'), men de blokerer den
+// modsatte etiket: 'ca. 1.000 kr. mere …, men billigere …' er uklar → Prisforskel.
+const HINT_MORE_RE = /(?<!\p{L})mere(?!\p{L})/iu;
+const HINT_LESS_RE = /(?<!\p{L})mindre(?!\p{L})/iu;
+
 export function formatAlternativePriceLine(savings: string): string {
   const s = savings.trim();
   if (!s) return "";
-  if (/merpris|besparelse/i.test(s)) return s;
-  if (s.startsWith("+")) return `Merpris: ${s}`;
-  return `Besparelse: ${s}`;
+  if (PRICE_LABEL_RE.test(s)) return s;
+  if (NEGATION_RE.test(s)) return `Prisforskel: ${s}`;
+  const more = s.startsWith("+") || MORE_EXPENSIVE_RE.test(s);
+  const cheaper = CHEAPER_RE.test(s);
+  if (more && !cheaper && !HINT_LESS_RE.test(s)) return `Merpris: ${s}`;
+  if (cheaper && !more && !HINT_MORE_RE.test(s)) return `Besparelse: ${s}`;
+  return `Prisforskel: ${s}`;
 }
 
 // 'sub-hoteller' er parserens interne sprog og optræder i room-feltet på pakke-rejser —
