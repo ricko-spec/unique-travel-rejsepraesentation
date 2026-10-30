@@ -26,7 +26,7 @@ const LABELLED_ALT_RE = /^\s*alternativ(?:t)?\s+(?:hotel|resort)\b\s*:\s*(.+)$/i
 const NAME_DASH_RE = /\s+[—–-]\s+/;
 const MAX_ALT_NAME_LEN = 60;
 // Som SAVINGS_RE, men uden ^ — bruges til at finde prisdelen inde i en sætning.
-const SAVINGS_ANYWHERE_RE = /(?:merpris|besparelse)\b/i;
+const SAVINGS_ANYWHERE_RE = /(?:merpris|besparelse|prisforskel)\b/i;
 
 // "Alternativt hotel: NAVN — beskrivelse. Merpris …" → struktureret alternativ.
 // Returnerer null ved alt der ikke sikkert kan tolkes, så noten bevares.
@@ -60,7 +60,9 @@ function parseLabelledAlternativeNote(note: string): AlternativeHotel | null {
   return { name, description, nights, meals, savings };
 }
 const NIGHTS_RE = /^(\d+)\s*n[æa]tter\b\s*(?:inkl\.?|inklusive|med)?\s*(.*)$/i;
-const SAVINGS_RE = /^(?:merpris|besparelse)\b/i;
+// 'Prisforskel' er den neutrale etiket fra Issue #96 og afslutter et alternativ
+// ligesom Merpris/Besparelse.
+const SAVINGS_RE = /^(?:merpris|besparelse|prisforskel)\b/i;
 
 function splitSegments(text: string): string[] {
   return text
