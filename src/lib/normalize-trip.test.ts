@@ -276,3 +276,12 @@ describe("SYSTEM_PROMPT — pakke-rejse-kontrakten (Issue #94)", () => {
     expect(SYSTEM_PROMPT).toMatch(/endagsudflugt[\s\S]*egen activity/);
   });
 });
+
+describe("SYSTEM_PROMPT — prisretning på hotelalternativer (Issue #96)", () => {
+  it("instruerer i eksplicit Merpris:/Besparelse: uden at ændre beløb eller betydning", () => {
+    expect(SYSTEM_PROMPT).toMatch(/savings[\s\S]*'Merpris: '[\s\S]*dyrere/);
+    expect(SYSTEM_PROMPT).toMatch(/'Besparelse: '[\s\S]*billigere/);
+    expect(SYSTEM_PROMPT).toMatch(/'Prisforskel: '/);
+    expect(SYSTEM_PROMPT).toMatch(/Ændr aldrig beløbet/);
+  });
+});
