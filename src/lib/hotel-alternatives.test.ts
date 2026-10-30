@@ -203,3 +203,44 @@ describe("collectAlternatives — 35917-casen", () => {
     expect(res.notes).toEqual(notes);
   });
 });
+
+// Codex-review PR #97: den neutrale 'Prisforskel:' (Issue #96) skal afslutte og løfte
+// et alternativ på samme måde som Merpris/Besparelse. Anonyme, generiske strenge.
+describe("parseAlternativeNote — Prisforskel-prislinje (Issue #96)", () => {
+  it("'Alternativt hotel: … — … Prisforskel: …' splittes i beskrivelse og savings", () => {
+    const [alt, ...rest] = parseAlternativeNote(
+      "Alternativt hotel: Eksempel Resort — Garden Villa, 7 nætter, inkl. Morgenmad. Prisforskel: ca. 1.000 kr.",
+    );
+    expect(rest).toHaveLength(0);
+    expect(alt).toEqual({
+      name: "Eksempel Resort",
+      description: "Garden Villa, 7 nætter, inkl. Morgenmad",
+      nights: 7,
+      meals: "Morgenmad",
+      savings: "Prisforskel: ca. 1.000 kr.",
+    });
+  });
+
+  it("segmenteret note med Prisforskel grupperes og løftes som alternativer", () => {
+    const alts = parseAlternativeNote(
+      "Eksempel Hotel A · Deluxe værelse · 5 nætter inkl. Halvpension · Prisforskel: ca. 1.000 kr. · " +
+        "Eksempel Hotel B · Suite · 5 nætter inkl. Morgenmad · Prisforskel: ca. 2.000 kr.",
+    );
+    expect(alts).toEqual([
+      {
+        name: "Eksempel Hotel A",
+        description: "Deluxe værelse",
+        nights: 5,
+        meals: "Halvpension",
+        savings: "Prisforskel: ca. 1.000 kr.",
+      },
+      {
+        name: "Eksempel Hotel B",
+        description: "Suite",
+        nights: 5,
+        meals: "Morgenmad",
+        savings: "Prisforskel: ca. 2.000 kr.",
+      },
+    ]);
+  });
+});
